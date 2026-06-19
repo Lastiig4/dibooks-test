@@ -307,14 +307,15 @@ function BookPageReader({
           : Math.floor(Math.min(viewportWidth - 32, 820));
       const singlePageHeight = Math.floor(viewportHeight - 32);
 
-      const usableWidth = Math.max(280, singlePageWidth - 118);
-      const usableHeight = Math.max(240, singlePageHeight - 210);
-      const averageCharacterWidth = viewportWidth < 700 ? 10.4 : 11.2;
-      const lineHeight = viewportWidth < 700 ? 36 : 40;
+      const usableWidth = Math.max(260, singlePageWidth - (viewportWidth < 700 ? 74 : 118));
+      const usableHeight = Math.max(220, singlePageHeight - (viewportWidth < 700 ? 260 : 210));
+      const averageCharacterWidth = viewportWidth < 700 ? 9.8 : 11.2;
+      const lineHeight = viewportWidth < 700 ? 32 : 40;
 
       const charactersPerLine = Math.max(22, Math.floor(usableWidth / averageCharacterWidth));
       const linesPerPage = Math.max(6, Math.floor(usableHeight / lineHeight));
-      const maxCharacters = Math.floor(charactersPerLine * linesPerPage * 0.52);
+      const density = viewportWidth < 700 ? 0.38 : 0.52;
+      const maxCharacters = Math.floor(charactersPerLine * linesPerPage * density);
 
       const nextPages = paginateHtml(html, maxCharacters);
       setPages(nextPages);
@@ -337,7 +338,7 @@ function BookPageReader({
   const visiblePages = pages.slice(pageIndex, pageIndex + visiblePageCount);
 
   return (
-    <div className="mx-auto flex h-full w-full flex-col px-3 py-3 sm:px-6">
+    <div className="mx-auto flex h-full w-full flex-col px-2 py-2 sm:px-6 sm:py-3">
       <div ref={viewportRef} className="min-h-0 flex-1 overflow-hidden">
         <div
           className={
@@ -349,10 +350,10 @@ function BookPageReader({
           {visiblePages.map((pageHtml, index) => (
             <article
               key={`${pageIndex}-${index}`}
-              className="h-full overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/95 px-8 pb-20 pt-8 shadow-inner sm:px-12 sm:pb-24 sm:pt-10 md:px-16"
+              className="h-full overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/95 px-5 pb-16 pt-5 shadow-inner sm:px-12 sm:pb-24 sm:pt-10 md:px-16"
             >
               <div
-                className="dibooks-reader-content prose prose-invert max-w-none text-[18px] leading-8 sm:text-[20px] sm:leading-9 [&_p]:mb-6 [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0"
+                className="dibooks-reader-content prose prose-invert max-w-none text-[16px] leading-7 sm:text-[20px] sm:leading-9 [&_p]:mb-5 sm:[&_p]:mb-6 [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0"
                 dangerouslySetInnerHTML={{ __html: pageHtml }}
               />
             </article>
@@ -765,7 +766,7 @@ export default function ReaderOnlyPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-950 p-6 text-white">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-neutral-950 p-4 text-white sm:p-6">
         <div className="rounded-3xl border border-neutral-800 bg-neutral-900 p-8 text-center shadow-2xl">
           <p className="text-sm font-black uppercase tracking-widest text-neutral-500">DiBooks Reader</p>
           <h1 className="mt-3 text-3xl font-black">Boek laden...</h1>
@@ -776,7 +777,7 @@ export default function ReaderOnlyPage() {
 
   if (loadError || !currentNode) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-950 p-6 text-white">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-neutral-950 p-4 text-white sm:p-6">
         <div className="max-w-xl rounded-3xl border border-red-900 bg-red-950/40 p-8 shadow-2xl">
           <p className="text-sm font-black uppercase tracking-widest text-red-300">Reader fout</p>
           <h1 className="mt-3 text-3xl font-black">Boek niet gevonden</h1>
@@ -791,7 +792,7 @@ export default function ReaderOnlyPage() {
 
   if (!started) {
     return (
-      <main className="flex min-h-screen items-center justify-center overflow-hidden bg-neutral-950 p-6 text-white">
+      <main className="flex min-h-[100dvh] items-center justify-center overflow-hidden bg-neutral-950 p-4 text-white sm:p-6">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_35%),radial-gradient(circle_at_bottom,rgba(147,51,234,0.12),transparent_35%)]" />
         <div className="relative max-w-3xl rounded-3xl border border-neutral-800 bg-neutral-950/90 p-8 text-center shadow-2xl sm:p-12">
           <p className="text-sm font-black uppercase tracking-[0.35em] text-neutral-500">DiBooks Reader</p>
@@ -814,11 +815,11 @@ export default function ReaderOnlyPage() {
   }
 
   return (
-    <main className="fixed inset-0 flex min-h-screen flex-col bg-neutral-950 text-white">
-      <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-6">
+    <main className="fixed inset-0 flex h-[100dvh] min-h-[100dvh] flex-col overflow-hidden bg-neutral-950 text-white">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-800 px-3 py-2 sm:px-6 sm:py-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">Reader mode</p>
-          <h2 className="text-xl font-black sm:text-2xl">
+          <h2 className="line-clamp-1 text-base font-black sm:text-2xl">
             {currentNode.data.type === "text" || currentNode.data.type === "special"
               ? bookTitle
               : currentNode.data.label}
@@ -830,13 +831,13 @@ export default function ReaderOnlyPage() {
             setStarted(false);
             goToNode(startNodeId);
           }}
-          className="rounded-xl bg-neutral-800 px-4 py-2 font-black text-white hover:bg-neutral-700"
+          className="shrink-0 rounded-xl bg-neutral-800 px-3 py-2 text-sm font-black text-white hover:bg-neutral-700 sm:px-4 sm:text-base"
         >
           Terug naar start
         </button>
       </div>
 
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {(currentNode.data.type === "text" || currentNode.data.type === "special") && (
           <BookPageReader
             html={textChain.html}
@@ -848,13 +849,13 @@ export default function ReaderOnlyPage() {
         )}
 
         {currentNode.data.type === "cutscene" && (
-          <div className="flex h-full items-center justify-center bg-black p-4 sm:p-6">
+          <div className="flex h-full min-h-0 items-center justify-center overflow-y-auto bg-black p-2 sm:p-6">
             {currentNode.data.videoUrl ? (
-              <div className="w-full max-w-6xl">
-                <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div className="flex max-h-full w-full max-w-6xl flex-col">
+                <div className="mb-2 flex shrink-0 flex-wrap items-end justify-between gap-2 sm:mb-3">
                   <div>
                     <p className="text-xs font-black uppercase tracking-widest text-green-400">Cutscene</p>
-                    <h1 className="text-2xl font-black">{currentNode.data.label}</h1>
+                    <h1 className="text-lg font-black sm:text-2xl">{currentNode.data.label}</h1>
                   </div>
                   <p className="text-sm font-bold text-neutral-400">
                     Max 12 sec{currentNode.data.videoDuration ? ` • ${currentNode.data.videoDuration.toFixed(1)} sec` : ""}
@@ -866,7 +867,7 @@ export default function ReaderOnlyPage() {
                   controls
                   playsInline
                   autoPlay
-                  className="max-h-[76vh] w-full rounded-2xl bg-black object-contain shadow-2xl"
+                  className="max-h-[52dvh] w-full rounded-xl bg-black object-contain shadow-2xl sm:max-h-[70dvh] sm:rounded-2xl"
                 />
               </div>
             ) : (
@@ -878,7 +879,7 @@ export default function ReaderOnlyPage() {
         )}
 
         {currentNode.data.type === "choice" && (
-          <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 p-6">
+          <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 overflow-y-auto p-4 sm:p-6">
             <div className="rounded-2xl bg-neutral-900 p-8">
               <p className="text-sm font-bold uppercase tracking-widest text-orange-400">Keuze moment</p>
               <h1 className="mt-2 text-3xl font-black">{currentNode.data.label}</h1>
@@ -947,7 +948,7 @@ export default function ReaderOnlyPage() {
                 }}
               />
             ) : (
-              <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 p-6">
+              <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 overflow-y-auto p-4 sm:p-6">
                 <p className="text-xl font-bold">Mini game</p>
                 <div className="rounded-xl bg-purple-950/50 p-5 text-purple-200">
                   Dit minigame type is nog niet gebouwd: {currentNode.data.miniGameType || "niet ingesteld"}
@@ -958,18 +959,18 @@ export default function ReaderOnlyPage() {
         )}
       </div>
 
-      <div className="shrink-0 border-t border-neutral-800 px-4 py-3 sm:px-6">
+      <div className="shrink-0 border-t border-neutral-800 bg-neutral-950/95 px-3 py-2 sm:px-6 sm:py-3">
         {(currentNode.data.type === "text" || currentNode.data.type === "special") && (
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
             <button
               onClick={() => setPageIndex((current) => Math.max(0, current - visiblePageCount))}
               disabled={pageIndex === 0}
-              className="rounded-xl bg-neutral-800 px-4 py-3 font-black text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl bg-neutral-800 px-3 py-2 text-sm font-black text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:py-3 sm:text-base"
             >
               Vorige pagina
             </button>
 
-            <div className="text-center text-sm font-bold text-neutral-400">
+            <div className="min-w-[110px] flex-1 text-center text-xs font-bold text-neutral-400 sm:text-sm">
               <div>
                 {visiblePageCount === 2 && pageIndex + 1 < pageCount
                   ? `Pagina ${pageIndex + 1}–${Math.min(pageIndex + 2, pageCount)} van ${pageCount}`
@@ -981,7 +982,7 @@ export default function ReaderOnlyPage() {
             {pageIndex < pageCount - visiblePageCount && (
               <button
                 onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + visiblePageCount))}
-                className="rounded-xl bg-blue-600 px-4 py-3 font-black text-white hover:bg-blue-500"
+                className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-black text-white hover:bg-blue-500 sm:px-4 sm:py-3 sm:text-base"
               >
                 Volgende pagina
               </button>
@@ -990,7 +991,7 @@ export default function ReaderOnlyPage() {
             {pageIndex >= pageCount - visiblePageCount && textChain.nextNodeAfterChain && (
               <button
                 onClick={() => goToNode(textChain.nextNodeAfterChain!.id)}
-                className="rounded-xl bg-emerald-600 px-4 py-3 font-black text-white hover:bg-emerald-500"
+                className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-black text-white hover:bg-emerald-500 sm:px-4 sm:py-3 sm:text-base"
               >
                 Ga verder naar {textChain.nextNodeAfterChain.data.type === "minigame" ? "mini game" : textChain.nextNodeAfterChain.data.label}
               </button>
@@ -1007,7 +1008,7 @@ export default function ReaderOnlyPage() {
                       <button
                         key={edge.id}
                         onClick={() => goToNode(edge.target)}
-                        className="rounded-xl bg-emerald-600 px-4 py-3 text-left font-black text-white hover:bg-emerald-500"
+                        className="rounded-xl bg-emerald-600 px-3 py-2 text-left text-sm font-black text-white hover:bg-emerald-500 sm:px-4 sm:py-3 sm:text-base"
                       >
                         {edge.label
                           ? `${edge.label}: `
