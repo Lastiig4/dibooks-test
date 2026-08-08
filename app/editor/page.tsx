@@ -23,7 +23,8 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { Extension } from "@tiptap/core";
-import { useDemoAuth } from "@/lib/auth";
+import AuthModal from "@/components/AuthModal";
+import { canAccessOwnedResource, getOwnedResourceFields, useDemoAuth } from "@/lib/auth";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -1633,7 +1634,8 @@ export default function Home() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(true);
   const [editorDarkMode, setEditorDarkMode] = useState(false);
-  const { isLoggedIn, permissions, login, logout } = useDemoAuth();
+  const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout, user, role } = useDemoAuth();
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false);
   const [dashboardBookId, setDashboardBookId] = useState<string | null>(null);
   const [dashboardSaveForm, setDashboardSaveForm] = useState<DashboardSaveForm>(defaultDashboardSaveForm);
@@ -1675,6 +1677,11 @@ export default function Home() {
       const dashboardBook = dashboardBooks.find((book) => book.id === bookId);
       if (!dashboardBook) return;
 
+      if (!canAccessOwnedResource(user, dashboardBook.ownerId)) {
+        alert("Je kunt dit dashboardboek niet openen, omdat het niet van jouw account is.");
+        return;
+      }
+
       setDashboardBookId(dashboardBook.id);
       setDashboardSaveForm({
         title: dashboardBook.title ?? "",
@@ -1700,7 +1707,7 @@ export default function Home() {
     } catch (error) {
       console.error("Kon dashboard boek niet openen in de editor", error);
     }
-  }, [setEdges, setNodes]);
+  }, [setEdges, setNodes, user]);
 
   const previewNode = nodes.find((node) => node.id === previewNodeId);
 
@@ -1927,7 +1934,7 @@ export default function Home() {
   }
 
   function handleDemoLogin() {
-    login();
+    setAuthModalMode("login");
   }
 
   function handleDemoLogout() {
@@ -1970,9 +1977,20 @@ export default function Home() {
         counter += 1;
       }
 
+      const existingBook = dashboardBookId
+        ? dashboardBooks.find((book: any) => book.id === dashboardBookId)
+        : null;
+
+      if (existingBook && !canAccessOwnedResource(user, existingBook.ownerId)) {
+        alert("Je kunt dit dashboardboek niet overschrijven, omdat het niet van jouw account is.");
+        return;
+      }
+
       const theme = dashboardColorThemes[dashboardSaveForm.colorTheme] ?? dashboardColorThemes.blue;
       const now = new Date().toISOString();
       const projectData = getCurrentProjectData();
+
+      const ownerFields = user ? getOwnedResourceFields(user) : {};
 
       const nextBook = {
         id: nextId,
@@ -1994,8 +2012,9 @@ export default function Home() {
         featured: false,
         mostRead: false,
         source: "dashboard",
+        ...ownerFields,
         projectData,
-        createdAt: dashboardBooks.find((book: any) => book.id === nextId)?.createdAt ?? now,
+        createdAt: existingBook?.createdAt ?? now,
         updatedAt: now,
       };
 
@@ -2752,10 +2771,23 @@ export default function Home() {
                       ? "bg-blue-500/15 text-blue-200 hover:bg-blue-500/25"
                       : "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20"
                 }`}
-                title={isLoggedIn ? "Uitloggen" : "Demo-login"}
+                title={isLoggedIn ? "Uitloggen" : "Login"}
               >
                 {isLoggedIn ? "Uitloggen" : "Login"}
               </button>
+              {!isLoggedIn && (
+                <button
+                  onClick={() => setAuthModalMode("register")}
+                  className={`rounded-full px-3 py-1 transition ${
+                    editorDarkMode
+                      ? "bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25"
+                      : "bg-cyan-600/10 text-cyan-700 hover:bg-cyan-600/20"
+                  }`}
+                  title="Registreer"
+                >
+                  Registreer
+                </button>
+              )}
               <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
                 {nodes.length} nodes
               </span>
@@ -3400,6 +3432,15 @@ export default function Home() {
           onSaveDashboard={saveCurrentBookToDashboard}
           onDownloadProject={downloadProjectFile}
           onDownloadReaderStory={downloadReaderStoryFile}
+        />
+      )}
+      {authModalMode && (
+        <AuthModal
+          mode={authModalMode}
+          onModeChange={setAuthModalMode}
+          onClose={() => setAuthModalMode(null)}
+          onLogin={loginWithCredentials}
+          onRegister={registerWithCredentials}
         />
       )}
       {previewOpen && previewNode && (

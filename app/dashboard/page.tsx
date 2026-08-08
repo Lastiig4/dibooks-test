@@ -9,10 +9,14 @@ import {
   type BookStatus,
   type DiBook,
 } from "@/lib/books";
-import { useDemoAuth } from "@/lib/auth";
+import AuthModal from "@/components/AuthModal";
+import { canAccessOwnedResource, getOwnedResourceFields, useDemoAuth } from "@/lib/auth";
 
 type DashboardBook = DiBook & {
   source?: "library" | "dashboard";
+  ownerId?: string;
+  ownerName?: string;
+  ownerEmail?: string;
   createdAt?: string;
   updatedAt?: string;
   publishedAt?: string;
@@ -566,33 +570,53 @@ function NewBookModal({
 }
 
 export default function DashboardPage() {
-  const { permissions, login, logout, user } = useDemoAuth();
+  const { permissions, loginWithCredentials, registerWithCredentials, logout, user, role } = useDemoAuth();
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [draftDashboardBooks, setDraftDashboardBooks] = useState<DashboardBook[]>([]);
   const [newBookOpen, setNewBookOpen] = useState(false);
   const [form, setForm] = useState<NewBookForm>(defaultForm);
 
   useEffect(() => {
+    if (!user) return;
+
     try {
       const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
       if (!savedBooks) return;
 
       const parsedBooks = JSON.parse(savedBooks) as DashboardBook[];
-      if (Array.isArray(parsedBooks)) {
-        setDraftDashboardBooks(parsedBooks);
-      }
+      if (!Array.isArray(parsedBooks)) return;
+
+      // Migratie voor boeken die vóór ownership zijn gemaakt:
+      // koppel ze aan de huidige demo-auteur, zodat ze straks niet "zweven".
+      const migratedBooks = parsedBooks.map((book) =>
+        book.ownerId
+          ? book
+          : {
+              ...book,
+              ownerId: user.id,
+              ownerName: user.name,
+              ownerEmail: user.email,
+            },
+      );
+
+      setDraftDashboardBooks(migratedBooks);
     } catch (error) {
       console.error("Kon dashboard boeken niet laden", error);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     window.localStorage.setItem(DASHBOARD_BOOKS_STORAGE_KEY, JSON.stringify(draftDashboardBooks));
   }, [draftDashboardBooks]);
 
+  const visibleDashboardBooks = useMemo<DashboardBook[]>(() => {
+    return draftDashboardBooks.filter((book) => canAccessOwnedResource(user, book.ownerId));
+  }, [draftDashboardBooks, user]);
+
   const allBooks = useMemo<DashboardBook[]>(() => {
     const staticBooks: DashboardBook[] = books.map((book) => ({ ...book, source: "library" }));
-    return [...draftDashboardBooks, ...staticBooks];
-  }, [draftDashboardBooks]);
+    return [...visibleDashboardBooks, ...staticBooks];
+  }, [visibleDashboardBooks]);
 
   const liveBooks = allBooks.filter((book) => book.published);
   const draftBooks = allBooks.filter((book) => !book.published);
@@ -641,6 +665,7 @@ export default function DashboardPage() {
       featured: false,
       mostRead: false,
       source: "dashboard",
+      ...(user ? getOwnedResourceFields(user) : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -654,6 +679,18 @@ export default function DashboardPage() {
   function publishBookToLibrary(bookId: string) {
     const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
     if (!targetBook) return;
+    if (!canAccessOwnedResource(user, targetBook.ownerId)) {
+      alert("Je kunt alleen je eigen dashboardboeken beheren.");
+      return;
+    }
+    if (!canAccessOwnedResource(user, targetBook.ownerId)) {
+      alert("Je kunt alleen je eigen dashboardboeken beheren.");
+      return;
+    }
+    if (!canAccessOwnedResource(user, targetBook.ownerId)) {
+      alert("Je kunt alleen je eigen dashboardboeken beheren.");
+      return;
+    }
 
     const confirmed = window.confirm(
       `Weet je zeker dat je "${targetBook.title}" naar de Library wilt publiceren?\n\nNa publicatie wordt dit boek vergrendeld. Je kunt het dan niet meer aanpassen zolang het live staat.`,
@@ -729,14 +766,20 @@ export default function DashboardPage() {
           <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Auteur Dashboard</p>
           <h1 className="mt-4 text-4xl font-black sm:text-6xl">Login nodig</h1>
           <p className="mt-5 text-base font-semibold leading-7 text-neutral-300">
-            Je kunt zonder account wel schrijven in de Auteur Studio en lokaal opslaan. Dashboard-opslag, boekbeheer en publiceren zijn alleen beschikbaar voor ingelogde auteurs.
+            Je kunt zonder account wel schrijven in de Auteur Studio en lokaal opslaan. Dashboard-opslag, boekbeheer en publiceren zijn alleen beschikbaar voor ingelogde auteurs. Boeken worden straks gekoppeld aan jouw account.
           </p>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
             <button
-              onClick={login}
+              onClick={() => setAuthModalMode("login")}
               className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500"
             >
-              Demo-login als auteur
+              Login als auteur
+            </button>
+            <button
+              onClick={() => setAuthModalMode("register")}
+              className="rounded-2xl border border-blue-400/35 bg-blue-500/10 px-5 py-3 text-sm font-black text-blue-100 hover:bg-blue-500/20"
+            >
+              Registreer als auteur
             </button>
             <Link
               href="/editor"
@@ -752,6 +795,15 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
+        {authModalMode && (
+          <AuthModal
+            mode={authModalMode}
+            onModeChange={setAuthModalMode}
+            onClose={() => setAuthModalMode(null)}
+            onLogin={loginWithCredentials}
+            onRegister={registerWithCredentials}
+          />
+        )}
       </main>
     );
   }
@@ -847,6 +899,15 @@ export default function DashboardPage() {
           setForm={setForm}
           onClose={() => setNewBookOpen(false)}
           onSave={saveNewBook}
+        />
+      )}
+      {authModalMode && (
+        <AuthModal
+          mode={authModalMode}
+          onModeChange={setAuthModalMode}
+          onClose={() => setAuthModalMode(null)}
+          onLogin={loginWithCredentials}
+          onRegister={registerWithCredentials}
         />
       )}
     </main>

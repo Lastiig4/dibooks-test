@@ -1,8 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type UserRole = "guest" | "author" | "admin";
+
+export type AuthActionResult = { ok: boolean; message?: string };
+
+export type LoginCredentials = {
+  email: string;
+  password: string;
+};
+
+export type RegisterCredentials = {
+  name: string;
+  email: string;
+  password: string;
+};
 
 export type DemoAuthUser = {
   id: string;
@@ -24,19 +39,29 @@ export type AuthPermissions = {
   canManageUsers: boolean;
 };
 
-export const DEMO_AUTH_STORAGE_KEY = "dibooks-demo-authenticated";
-export const DEMO_USER_STORAGE_KEY = "dibooks-demo-user";
 export const DIBOOKS_AUTH_CHANGED_EVENT = "dibooks-auth-changed";
 
-const defaultAuthorUser: DemoAuthUser = {
-  id: "demo-author-giovanni",
-  name: "Giovanni",
-  email: "giovanni@dibooks.local",
-  role: "author",
+export type OwnedResourceFields = {
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
 };
 
-function hasBrowserStorage() {
-  return typeof window !== "undefined" && !!window.localStorage;
+export function getOwnedResourceFields(user: DemoAuthUser): OwnedResourceFields {
+  return {
+    ownerId: user.id,
+    ownerName: user.name,
+    ownerEmail: user.email,
+  };
+}
+
+export function canAccessOwnedResource(
+  user: DemoAuthUser | null,
+  resourceOwnerId?: string,
+) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return !resourceOwnerId || resourceOwnerId === user.id;
 }
 
 function broadcastAuthChange() {
@@ -44,22 +69,34 @@ function broadcastAuthChange() {
   window.dispatchEvent(new Event(DIBOOKS_AUTH_CHANGED_EVENT));
 }
 
-export function getDemoAuthUser(): DemoAuthUser | null {
-  if (!hasBrowserStorage()) return null;
+function mapSupabaseUser(user: User | null): DemoAuthUser | null {
+  if (!user) return null;
 
-  const legacyLogin = window.localStorage.getItem(DEMO_AUTH_STORAGE_KEY) === "true";
-  const savedUser = window.localStorage.getItem(DEMO_USER_STORAGE_KEY);
+  const metadata = user.user_metadata ?? {};
+  const appMetadata = user.app_metadata ?? {};
+  const metadataRole = metadata.role || appMetadata.role;
+  const role: Exclude<UserRole, "guest"> =
+    metadataRole === "admin" ? "admin" : "author";
 
-  if (savedUser) {
-    try {
-      const parsedUser = JSON.parse(savedUser) as DemoAuthUser;
-      if (parsedUser?.id && parsedUser?.role) return parsedUser;
-    } catch (error) {
-      console.error("Kon demo gebruiker niet laden.", error);
-    }
+  return {
+    id: user.id,
+    name:
+      String(metadata.full_name || metadata.name || user.email?.split("@")[0] || "Auteur"),
+    email: user.email ?? "",
+    role,
+  };
+}
+
+function getSupabaseOrAlert() {
+  try {
+    return createSupabaseBrowserClient();
+  } catch (error) {
+    console.error(error);
+    alert(
+      "Supabase is nog niet ingesteld. Check je .env.local met NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY of NEXT_PUBLIC_SUPABASE_ANON_KEY. Herstart daarna npm run dev.",
+    );
+    return null;
   }
-
-  return legacyLogin ? defaultAuthorUser : null;
 }
 
 export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
@@ -81,44 +118,178 @@ export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
   };
 }
 
-export function demoLoginAsAuthor() {
-  if (!hasBrowserStorage()) return;
-  window.localStorage.setItem(DEMO_AUTH_STORAGE_KEY, "true");
-  window.localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(defaultAuthorUser));
-  broadcastAuthChange();
+async function promptForLogin() {
+  const email = window.prompt("E-mailadres voor DiBooks login:");
+  if (!email) return null;
+
+  const password = window.prompt("Wachtwoord:");
+  if (!password) return null;
+
+  return { email: email.trim(), password };
 }
 
-export function demoLogout() {
-  if (!hasBrowserStorage()) return;
-  window.localStorage.removeItem(DEMO_AUTH_STORAGE_KEY);
-  window.localStorage.removeItem(DEMO_USER_STORAGE_KEY);
-  broadcastAuthChange();
+async function promptForRegistration() {
+  const name = window.prompt("Naam / auteursnaam:")?.trim() || "Auteur";
+  const email = window.prompt("E-mailadres voor je DiBooks account:");
+  if (!email) return null;
+
+  const password = window.prompt("Kies een wachtwoord, minimaal 6 tekens:");
+  if (!password) return null;
+
+  if (password.length < 6) {
+    alert("Gebruik een wachtwoord van minimaal 6 tekens.");
+    return null;
+  }
+
+  return { name, email: email.trim(), password };
 }
 
 export function useDemoAuth() {
   const [user, setUser] = useState<DemoAuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const refreshAuth = () => setUser(getDemoAuthUser());
+    let mounted = true;
+    const supabase = getSupabaseOrAlert();
 
-    refreshAuth();
-    window.addEventListener("storage", refreshAuth);
-    window.addEventListener(DIBOOKS_AUTH_CHANGED_EVENT, refreshAuth);
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (!mounted) return;
+
+      if (error) {
+        console.warn("Supabase getUser gaf geen actieve gebruiker.", error.message);
+      }
+
+      setUser(mapSupabaseUser(data.user));
+      setLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setUser(mapSupabaseUser(session?.user ?? null));
+      setLoading(false);
+      broadcastAuthChange();
+    });
 
     return () => {
-      window.removeEventListener("storage", refreshAuth);
-      window.removeEventListener(DIBOOKS_AUTH_CHANGED_EVENT, refreshAuth);
+      mounted = false;
+      listener.subscription.unsubscribe();
     };
   }, []);
 
   const permissions = useMemo(() => getAuthPermissions(user), [user]);
 
+  async function loginWithCredentials(credentials: LoginCredentials): Promise<AuthActionResult> {
+    const supabase = getSupabaseOrAlert();
+    if (!supabase) return { ok: false, message: "Supabase is nog niet ingesteld." };
+
+    const email = credentials.email.trim();
+    if (!email || !credentials.password) {
+      return { ok: false, message: "Vul je e-mailadres en wachtwoord in." };
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: credentials.password,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    setUser(mapSupabaseUser(data.user));
+    broadcastAuthChange();
+    return { ok: true };
+  }
+
+  async function registerWithCredentials(credentials: RegisterCredentials): Promise<AuthActionResult> {
+    const supabase = getSupabaseOrAlert();
+    if (!supabase) return { ok: false, message: "Supabase is nog niet ingesteld." };
+
+    const name = credentials.name.trim() || "Auteur";
+    const email = credentials.email.trim();
+
+    if (!email || !credentials.password) {
+      return { ok: false, message: "Vul je naam, e-mailadres en wachtwoord in." };
+    }
+
+    if (credentials.password.length < 6) {
+      return { ok: false, message: "Gebruik een wachtwoord van minimaal 6 tekens." };
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: credentials.password,
+      options: {
+        data: {
+          full_name: name,
+          name,
+          role: "author",
+        },
+      },
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    if (data.user && !data.session) {
+      return {
+        ok: true,
+        message: "Account aangemaakt. Check je e-mail om je account te bevestigen, of zet e-mailbevestiging tijdelijk uit in Supabase tijdens testen.",
+      };
+    }
+
+    setUser(mapSupabaseUser(data.user));
+    broadcastAuthChange();
+    return { ok: true, message: "Account aangemaakt en ingelogd." };
+  }
+
+  async function login() {
+    const credentials = await promptForLogin();
+    if (!credentials) return;
+
+    const result = await loginWithCredentials(credentials);
+    if (!result.ok) alert(`Login mislukt: ${result.message}`);
+  }
+
+  async function register() {
+    const credentials = await promptForRegistration();
+    if (!credentials) return;
+
+    const result = await registerWithCredentials(credentials);
+    if (!result.ok) alert(`Registreren mislukt: ${result.message}`);
+    else if (result.message) alert(result.message);
+  }
+
+  async function logout() {
+    const supabase = getSupabaseOrAlert();
+    if (!supabase) return;
+
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      alert(`Uitloggen mislukt: ${error.message}`);
+      return;
+    }
+
+    setUser(null);
+    broadcastAuthChange();
+  }
+
   return {
     user,
     role: user?.role ?? "guest",
     isLoggedIn: !!user,
+    loading,
     permissions,
-    login: demoLoginAsAuthor,
-    logout: demoLogout,
+    login,
+    register,
+    loginWithCredentials,
+    registerWithCredentials,
+    logout,
   };
 }

@@ -8,6 +8,7 @@ import {
   getBookReadPath,
   type DiBook,
 } from "@/lib/books";
+import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
 
 type DashboardBook = DiBook & {
@@ -156,7 +157,8 @@ function makeGenreRows(allBooks: DashboardBook[]) {
 
 export default function LibraryPage() {
   const [dashboardBooks, setDashboardBooks] = useState<DashboardBook[]>([]);
-  const { isLoggedIn, permissions, login, logout } = useDemoAuth();
+  const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
 
   useEffect(() => {
     const loadDashboardBooks = () => setDashboardBooks(getPublishedDashboardBooks());
@@ -205,13 +207,13 @@ export default function LibraryPage() {
             {!isLoggedIn ? (
               <>
                 <button
-                  onClick={login}
+                  onClick={() => setAuthModalMode("login")}
                   className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:bg-white/10"
                 >
                   Login
                 </button>
                 <button
-                  onClick={login}
+                  onClick={() => setAuthModalMode("register")}
                   className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500"
                 >
                   Registreer
@@ -326,6 +328,16 @@ export default function LibraryPage() {
           </div>
         </div>
       </section>
+
+      {authModalMode && (
+        <AuthModal
+          mode={authModalMode}
+          onModeChange={setAuthModalMode}
+          onClose={() => setAuthModalMode(null)}
+          onLogin={loginWithCredentials}
+          onRegister={registerWithCredentials}
+        />
+      )}
 
       <footer className="border-t border-white/5 px-5 py-8 text-sm font-bold text-neutral-500 sm:px-8 lg:px-10">
         DiBooks Library • {allBooks.length} boeken in catalogus • {dashboardBooks.length} dashboard publicaties
