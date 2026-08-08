@@ -24,7 +24,11 @@ import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { Extension } from "@tiptap/core";
 import AuthModal from "@/components/AuthModal";
-import { canAccessOwnedResource, getOwnedResourceFields, useDemoAuth } from "@/lib/auth";
+import { canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
+import {
+  fetchDashboardBookFromSupabase,
+  saveDashboardBookToSupabase,
+} from "@/lib/supabase/dashboardBooks";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -1663,50 +1667,55 @@ export default function Home() {
 
 
   useEffect(() => {
-    try {
+    let cancelled = false;
+
+    async function openDashboardBook() {
       const params = new URLSearchParams(window.location.search);
       const bookId = params.get("book");
-      if (!bookId) return;
+      if (!bookId || !user) return;
 
-      const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
-      if (!savedBooks) return;
+      try {
+        const dashboardBook = await fetchDashboardBookFromSupabase(bookId);
+        if (cancelled || !dashboardBook) return;
 
-      const dashboardBooks = JSON.parse(savedBooks) as any[];
-      if (!Array.isArray(dashboardBooks)) return;
+        if (!canAccessOwnedResource(user, dashboardBook.ownerId)) {
+          alert("Je kunt dit dashboardboek niet openen, omdat het niet van jouw account is.");
+          return;
+        }
 
-      const dashboardBook = dashboardBooks.find((book) => book.id === bookId);
-      if (!dashboardBook) return;
+        setDashboardBookId(dashboardBook.id);
+        setDashboardSaveForm({
+          title: dashboardBook.title ?? "",
+          author: dashboardBook.author ?? user.name ?? "Giovanni",
+          subtitle: dashboardBook.subtitle ?? "",
+          description: dashboardBook.description ?? "",
+          genres: Array.isArray(dashboardBook.genres) && dashboardBook.genres.length > 0 ? dashboardBook.genres : ["Interactief"],
+          genreInput: "",
+          primaryGenre: dashboardBook.primaryGenre ?? dashboardBook.genres?.[0] ?? "Interactief",
+          status: dashboardBook.status ?? "Concept",
+          ageRating: dashboardBook.ageRating ?? "12+",
+          readTime: dashboardBook.readTime ?? "Concept",
+          colorTheme: dashboardBook.colorTheme ?? "blue",
+        });
 
-      if (!canAccessOwnedResource(user, dashboardBook.ownerId)) {
-        alert("Je kunt dit dashboardboek niet openen, omdat het niet van jouw account is.");
-        return;
+        const projectData = dashboardBook.projectData;
+        if (projectData?.type === "dibooks-project") {
+          setNodes(projectData.nodes ?? []);
+          setEdges(projectData.edges ?? []);
+          setStartNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? "");
+          setSelectedNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? null);
+        }
+      } catch (error) {
+        console.error("Kon dashboard boek niet openen in de editor", error);
+        alert(error instanceof Error ? `Kon dashboardboek niet openen: ${error.message}` : "Kon dashboardboek niet openen.");
       }
-
-      setDashboardBookId(dashboardBook.id);
-      setDashboardSaveForm({
-        title: dashboardBook.title ?? "",
-        author: dashboardBook.author ?? "Giovanni",
-        subtitle: dashboardBook.subtitle ?? "",
-        description: dashboardBook.description ?? "",
-        genres: Array.isArray(dashboardBook.genres) && dashboardBook.genres.length > 0 ? dashboardBook.genres : ["Interactief"],
-        genreInput: "",
-        primaryGenre: dashboardBook.primaryGenre ?? dashboardBook.genres?.[0] ?? "Interactief",
-        status: dashboardBook.status ?? "Concept",
-        ageRating: dashboardBook.ageRating ?? "12+",
-        readTime: dashboardBook.readTime ?? "Concept",
-        colorTheme: dashboardBook.colorTheme ?? "blue",
-      });
-
-      const projectData = dashboardBook.projectData;
-      if (projectData?.type === "dibooks-project") {
-        setNodes(projectData.nodes ?? []);
-        setEdges(projectData.edges ?? []);
-        setStartNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? "");
-        setSelectedNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? null);
-      }
-    } catch (error) {
-      console.error("Kon dashboard boek niet openen in de editor", error);
     }
+
+    void openDashboardBook();
+
+    return () => {
+      cancelled = true;
+    };
   }, [setEdges, setNodes, user]);
 
   const previewNode = nodes.find((node) => node.id === previewNodeId);
@@ -1947,9 +1956,10 @@ export default function Home() {
     logout();
   }
 
-  function saveCurrentBookToDashboard() {
-    if (!permissions.canSaveToDashboard) {
+  async function saveCurrentBookToDashboard() {
+    if (!permissions.canSaveToDashboard || !user) {
       alert("Je moet ingelogd zijn als auteur om op te slaan in je Dashboard. Download je werkbestand lokaal of log eerst in.");
+      setAuthModalMode("login");
       return;
     }
 
@@ -1965,37 +1975,13 @@ export default function Home() {
     }
 
     try {
-      const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
-      const parsedBooks = savedBooks ? JSON.parse(savedBooks) : [];
-      const dashboardBooks = Array.isArray(parsedBooks) ? parsedBooks : [];
-      const existingIds = new Set(dashboardBooks.map((book: any) => book.id));
-
-      let nextId = dashboardBookId || slugifyDashboardBook(title);
-      let counter = 2;
-      while (!dashboardBookId && existingIds.has(nextId)) {
-        nextId = `${slugifyDashboardBook(title)}-${counter}`;
-        counter += 1;
-      }
-
-      const existingBook = dashboardBookId
-        ? dashboardBooks.find((book: any) => book.id === dashboardBookId)
-        : null;
-
-      if (existingBook && !canAccessOwnedResource(user, existingBook.ownerId)) {
-        alert("Je kunt dit dashboardboek niet overschrijven, omdat het niet van jouw account is.");
-        return;
-      }
-
       const theme = dashboardColorThemes[dashboardSaveForm.colorTheme] ?? dashboardColorThemes.blue;
-      const now = new Date().toISOString();
       const projectData = getCurrentProjectData();
 
-      const ownerFields = user ? getOwnedResourceFields(user) : {};
-
-      const nextBook = {
-        id: nextId,
+      const savedBook = await saveDashboardBookToSupabase(user, {
+        id: dashboardBookId,
         title,
-        author: dashboardSaveForm.author.trim() || "Onbekende auteur",
+        author: dashboardSaveForm.author.trim() || user.name || "Onbekende auteur",
         subtitle: dashboardSaveForm.subtitle.trim() || "Nieuw interactief boek in concept.",
         description: dashboardSaveForm.description.trim() || "Nog geen beschrijving ingevuld.",
         genres: dashboardSaveForm.genres,
@@ -2011,23 +1997,18 @@ export default function Home() {
         published: false,
         featured: false,
         mostRead: false,
-        source: "dashboard",
-        ...ownerFields,
         projectData,
-        createdAt: existingBook?.createdAt ?? now,
-        updatedAt: now,
-      };
+      });
 
-      const nextBooks = [nextBook, ...dashboardBooks.filter((book: any) => book.id !== nextId)];
-      window.localStorage.setItem(DASHBOARD_BOOKS_STORAGE_KEY, JSON.stringify(nextBooks));
-      setDashboardBookId(nextId);
+      setDashboardBookId(savedBook.id);
       setSaveDashboardOpen(false);
-      alert("Boek opgeslagen in je dashboard.");
+      alert("Boek opgeslagen in Supabase Dashboard.");
     } catch (error) {
       console.error(error);
-      alert("Er ging iets mis met opslaan in je dashboard.");
+      alert(error instanceof Error ? `Opslaan in Supabase mislukt: ${error.message}` : "Opslaan in Supabase mislukt.");
     }
   }
+
 
   function loadProject(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

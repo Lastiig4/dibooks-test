@@ -10,7 +10,14 @@ import {
   type DiBook,
 } from "@/lib/books";
 import AuthModal from "@/components/AuthModal";
-import { canAccessOwnedResource, getOwnedResourceFields, useDemoAuth } from "@/lib/auth";
+import { canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
+import {
+  deleteDashboardBookFromSupabase,
+  fetchDashboardBooksFromSupabase,
+  publishDashboardBookInSupabase,
+  removeDashboardBookFromLibraryInSupabase,
+  saveDashboardBookToSupabase,
+} from "@/lib/supabase/dashboardBooks";
 
 type DashboardBook = DiBook & {
   source?: "library" | "dashboard";
@@ -576,38 +583,35 @@ export default function DashboardPage() {
   const [newBookOpen, setNewBookOpen] = useState(false);
   const [form, setForm] = useState<NewBookForm>(defaultForm);
 
-  useEffect(() => {
-    if (!user) return;
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+
+  async function refreshDashboardBooks() {
+    if (!user) {
+      setDraftDashboardBooks([]);
+      return;
+    }
+
+    setDashboardLoading(true);
+    setDashboardError(null);
 
     try {
-      const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
-      if (!savedBooks) return;
-
-      const parsedBooks = JSON.parse(savedBooks) as DashboardBook[];
-      if (!Array.isArray(parsedBooks)) return;
-
-      // Migratie voor boeken die vóór ownership zijn gemaakt:
-      // koppel ze aan de huidige demo-auteur, zodat ze straks niet "zweven".
-      const migratedBooks = parsedBooks.map((book) =>
-        book.ownerId
-          ? book
-          : {
-              ...book,
-              ownerId: user.id,
-              ownerName: user.name,
-              ownerEmail: user.email,
-            },
-      );
-
-      setDraftDashboardBooks(migratedBooks);
+      const supabaseBooks = await fetchDashboardBooksFromSupabase();
+      setDraftDashboardBooks(supabaseBooks as DashboardBook[]);
     } catch (error) {
-      console.error("Kon dashboard boeken niet laden", error);
+      console.error("Kon dashboard boeken niet laden uit Supabase", error);
+      setDashboardError(
+        error instanceof Error ? error.message : "Kon dashboard boeken niet laden uit Supabase.",
+      );
+    } finally {
+      setDashboardLoading(false);
     }
-  }, [user]);
+  }
 
   useEffect(() => {
-    window.localStorage.setItem(DASHBOARD_BOOKS_STORAGE_KEY, JSON.stringify(draftDashboardBooks));
-  }, [draftDashboardBooks]);
+    void refreshDashboardBooks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const visibleDashboardBooks = useMemo<DashboardBook[]>(() => {
     return draftDashboardBooks.filter((book) => canAccessOwnedResource(user, book.ownerId));
@@ -621,7 +625,12 @@ export default function DashboardPage() {
   const liveBooks = allBooks.filter((book) => book.published);
   const draftBooks = allBooks.filter((book) => !book.published);
 
-  function saveNewBook() {
+  async function saveNewBook() {
+    if (!user) {
+      setAuthModalMode("login");
+      return;
+    }
+
     const title = form.title.trim();
     if (!title) {
       alert("Geef je boek eerst een titel.");
@@ -633,60 +642,59 @@ export default function DashboardPage() {
       return;
     }
 
-    const baseId = slugify(title.normalize("NFD"));
-    const existingIds = new Set(allBooks.map((book) => book.id));
-    let nextId = baseId;
-    let counter = 2;
-
-    while (existingIds.has(nextId)) {
-      nextId = `${baseId}-${counter}`;
-      counter += 1;
-    }
-
     const theme = colorThemes[form.colorTheme] ?? colorThemes.blue;
-    const now = new Date().toISOString();
 
-    const nextBook: DashboardBook = {
-      id: nextId,
-      title,
-      author: form.author.trim() || "Onbekende auteur",
-      subtitle: form.subtitle.trim() || "Nieuw interactief boek in concept.",
-      description: form.description.trim() || "Nog geen beschrijving ingevuld.",
-      genres: form.genres,
-      primaryGenre: form.primaryGenre || form.genres[0],
-      status: form.status,
-      ageRating: form.ageRating,
-      readTime: form.readTime.trim() || "Concept",
-      coverImage: theme.coverImage,
-      bannerImage: theme.bannerImage,
-      coverClass: theme.coverClass,
-      accentClass: theme.accentClass,
-      published: false,
-      featured: false,
-      mostRead: false,
-      source: "dashboard",
-      ...(user ? getOwnedResourceFields(user) : {}),
-      createdAt: now,
-      updatedAt: now,
-    };
+    try {
+      const savedBook = await saveDashboardBookToSupabase(user, {
+        title,
+        author: form.author.trim() || user.name || "Onbekende auteur",
+        subtitle: form.subtitle.trim() || "Nieuw interactief boek in concept.",
+        description: form.description.trim() || "Nog geen beschrijving ingevuld.",
+        genres: form.genres,
+        primaryGenre: form.primaryGenre || form.genres[0],
+        status: form.status,
+        ageRating: form.ageRating,
+        readTime: form.readTime.trim() || "Concept",
+        coverImage: theme.coverImage,
+        bannerImage: theme.bannerImage,
+        coverClass: theme.coverClass,
+        accentClass: theme.accentClass,
+        colorTheme: form.colorTheme,
+        published: false,
+        featured: false,
+        mostRead: false,
+        projectData: {
+          version: 1,
+          type: "dibooks-project",
+          bookTitle: title,
+          startNodeId: "node_1",
+          nodes: [],
+          edges: [],
+          savedAt: new Date().toISOString(),
+        },
+      });
 
-    setDraftDashboardBooks((currentBooks) => [nextBook, ...currentBooks]);
-    setForm(defaultForm);
-    setNewBookOpen(false);
+      setDraftDashboardBooks((currentBooks) => [
+        savedBook as DashboardBook,
+        ...currentBooks.filter((book) => book.id !== savedBook.id),
+      ]);
+      setForm(defaultForm);
+      setNewBookOpen(false);
+    } catch (error) {
+      console.error(error);
+      alert(
+        error instanceof Error
+          ? `Opslaan in Supabase mislukt: ${error.message}`
+          : "Opslaan in Supabase mislukt.",
+      );
+    }
   }
 
 
-  function publishBookToLibrary(bookId: string) {
+
+  async function publishBookToLibrary(bookId: string) {
     const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
     if (!targetBook) return;
-    if (!canAccessOwnedResource(user, targetBook.ownerId)) {
-      alert("Je kunt alleen je eigen dashboardboeken beheren.");
-      return;
-    }
-    if (!canAccessOwnedResource(user, targetBook.ownerId)) {
-      alert("Je kunt alleen je eigen dashboardboeken beheren.");
-      return;
-    }
     if (!canAccessOwnedResource(user, targetBook.ownerId)) {
       alert("Je kunt alleen je eigen dashboardboeken beheren.");
       return;
@@ -698,26 +706,23 @@ export default function DashboardPage() {
 
     if (!confirmed) return;
 
-    const now = new Date().toISOString();
-    setDraftDashboardBooks((currentBooks) =>
-      currentBooks.map((book) =>
-        book.id === bookId
-          ? {
-              ...book,
-              published: true,
-              status: book.status === "Concept" ? "Testversie" : book.status,
-              publishedAt: now,
-              removedFromLibraryAt: undefined,
-              updatedAt: now,
-            }
-          : book,
-      ),
-    );
+    try {
+      await publishDashboardBookInSupabase(bookId);
+      await refreshDashboardBooks();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Publiceren mislukt: ${error.message}` : "Publiceren mislukt.");
+    }
   }
 
-  function removeBookFromLibrary(bookId: string) {
+  async function removeBookFromLibrary(bookId: string) {
     const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
     if (!targetBook) return;
+
+    if (!canAccessOwnedResource(user, targetBook.ownerId)) {
+      alert("Je kunt alleen je eigen dashboardboeken beheren.");
+      return;
+    }
 
     const confirmed = window.confirm(
       `Weet je zeker dat je "${targetBook.title}" uit de Library wilt verwijderen?\n\nLezers kunnen dit boek daarna niet meer als live boek openen. Daarna wordt het weer een bewerkbaar concept.`,
@@ -725,25 +730,23 @@ export default function DashboardPage() {
 
     if (!confirmed) return;
 
-    const now = new Date().toISOString();
-    setDraftDashboardBooks((currentBooks) =>
-      currentBooks.map((book) =>
-        book.id === bookId
-          ? {
-              ...book,
-              published: false,
-              status: "Concept",
-              removedFromLibraryAt: now,
-              updatedAt: now,
-            }
-          : book,
-      ),
-    );
+    try {
+      await removeDashboardBookFromLibraryInSupabase(bookId);
+      await refreshDashboardBooks();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Verwijderen uit Library mislukt: ${error.message}` : "Verwijderen uit Library mislukt.");
+    }
   }
 
-  function deleteDraftBook(bookId: string) {
+  async function deleteDraftBook(bookId: string) {
     const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
     if (!targetBook) return;
+
+    if (!canAccessOwnedResource(user, targetBook.ownerId)) {
+      alert("Je kunt alleen je eigen dashboardboeken beheren.");
+      return;
+    }
 
     if (targetBook.published) {
       alert("Een live boek kun je niet als concept verwijderen. Haal het eerst uit de Library.");
@@ -756,8 +759,15 @@ export default function DashboardPage() {
 
     if (!confirmed) return;
 
-    setDraftDashboardBooks((currentBooks) => currentBooks.filter((book) => book.id !== bookId));
+    try {
+      await deleteDashboardBookFromSupabase(bookId);
+      setDraftDashboardBooks((currentBooks) => currentBooks.filter((book) => book.id !== bookId));
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Concept verwijderen mislukt: ${error.message}` : "Concept verwijderen mislukt.");
+    }
   }
+
 
   if (!permissions.canUseDashboard) {
     return (
@@ -885,6 +895,18 @@ export default function DashboardPage() {
             + Nieuw boek
           </button>
         </div>
+
+        {dashboardLoading && (
+          <div className="mt-6 rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm font-bold text-blue-100">
+            Dashboardboeken laden uit Supabase...
+          </div>
+        )}
+
+        {dashboardError && (
+          <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-100">
+            Supabase fout: {dashboardError}
+          </div>
+        )}
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
           {allBooks.map((book) => (
