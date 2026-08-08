@@ -1,13 +1,49 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
   books,
   getBookDetailPath,
   getBookReadPath,
-  getFeaturedBook,
-  getGenreRows,
-  getMostReadBooks,
   type DiBook,
 } from "@/lib/books";
+import { useDemoAuth } from "@/lib/auth";
+
+type DashboardBook = DiBook & {
+  source?: "library" | "dashboard";
+  createdAt?: string;
+  updatedAt?: string;
+  publishedAt?: string;
+  projectData?: any;
+  colorTheme?: string;
+};
+
+const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
+
+function getPublishedDashboardBooks() {
+  if (typeof window === "undefined") return [] as DashboardBook[];
+
+  try {
+    const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
+    if (!savedBooks) return [];
+
+    const parsedBooks = JSON.parse(savedBooks) as DashboardBook[];
+    if (!Array.isArray(parsedBooks)) return [];
+
+    return parsedBooks
+      .filter((book) => book && book.published)
+      .map((book) => ({
+        ...book,
+        source: "dashboard" as const,
+        status: "Testversie",
+        mostRead: true,
+      }));
+  } catch (error) {
+    console.error("Kon dashboardboeken niet laden voor de Library.", error);
+    return [];
+  }
+}
 
 function DiBooksLogo() {
   return (
@@ -25,34 +61,42 @@ function DiBooksLogo() {
   );
 }
 
-function BookCover({ book, large = false }: { book: DiBook; large?: boolean }) {
+function BookCover({ book, large = false }: { book: DashboardBook; large?: boolean }) {
   return (
     <div
       className={`relative flex ${large ? "h-56" : "h-40"} flex-col justify-between overflow-hidden rounded-t-2xl bg-gradient-to-br ${book.coverClass} p-5`}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.22),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.2),transparent_32%)]" />
+      {book.coverImage && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={book.coverImage}
+          alt={`Cover van ${book.title}`}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.18),rgba(0,0,0,0.72))]" />
       <div className="relative flex items-start justify-between gap-3">
-        <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/90">
+        <span className="rounded-full bg-black/55 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/90 backdrop-blur-sm">
           {book.primaryGenre}
         </span>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-black">
-          {book.status}
+          {book.source === "dashboard" ? "Live" : book.status}
         </span>
       </div>
       <div className="relative">
         <h3 className={`${large ? "text-5xl" : "text-3xl"} font-black leading-none text-white drop-shadow-lg`}>
           {book.title}
         </h3>
-        <p className="mt-2 text-xs font-bold uppercase tracking-[0.25em] text-white/55">
-          Interactive book
+        <p className="mt-2 text-xs font-bold uppercase tracking-[0.25em] text-white/65">
+          {book.source === "dashboard" ? "Dashboard publicatie" : "Interactive book"}
         </p>
       </div>
     </div>
   );
 }
 
-function BookCard({ book, large = false }: { book: DiBook; large?: boolean }) {
-  const href = getBookDetailPath(book);
+function BookCard({ book, large = false }: { book: DashboardBook; large?: boolean }) {
+  const href = `/books/${book.id}`;
 
   return (
     <Link
@@ -79,7 +123,9 @@ function BookCard({ book, large = false }: { book: DiBook; large?: boolean }) {
   );
 }
 
-function BookRow({ title, rowBooks }: { title: string; rowBooks: DiBook[] }) {
+function BookRow({ title, rowBooks }: { title: string; rowBooks: DashboardBook[] }) {
+  if (rowBooks.length === 0) return null;
+
   return (
     <section className="mt-10">
       <div className="mb-4 flex items-center justify-between gap-4 px-5 sm:px-8 lg:px-10">
@@ -90,17 +136,47 @@ function BookRow({ title, rowBooks }: { title: string; rowBooks: DiBook[] }) {
       </div>
       <div className="flex gap-5 overflow-x-auto px-5 pb-3 sm:px-8 lg:px-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {rowBooks.map((book) => (
-          <BookCard key={`${title}-${book.id}`} book={book} />
+          <BookCard key={`${title}-${book.source ?? "library"}-${book.id}`} book={book} />
         ))}
       </div>
     </section>
   );
 }
 
+function makeGenreRows(allBooks: DashboardBook[]) {
+  const preferredGenres = ["Sci-fi", "Mystery", "Fantasy", "Thriller", "Keuzeverhaal", "Interactief"];
+
+  return preferredGenres
+    .map((genre) => ({
+      genre,
+      books: allBooks.filter((book) => book.genres.includes(genre)),
+    }))
+    .filter((row) => row.books.length > 0);
+}
+
 export default function LibraryPage() {
-  const featuredBook = getFeaturedBook();
-  const mostReadBooks = getMostReadBooks();
-  const genreRows = getGenreRows();
+  const [dashboardBooks, setDashboardBooks] = useState<DashboardBook[]>([]);
+  const { isLoggedIn, permissions, login, logout } = useDemoAuth();
+
+  useEffect(() => {
+    const loadDashboardBooks = () => setDashboardBooks(getPublishedDashboardBooks());
+
+    loadDashboardBooks();
+    window.addEventListener("storage", loadDashboardBooks);
+
+    return () => {
+      window.removeEventListener("storage", loadDashboardBooks);
+    };
+  }, []);
+
+  const allBooks = useMemo<DashboardBook[]>(() => {
+    const staticBooks: DashboardBook[] = books.map((book) => ({ ...book, source: "library" }));
+    return [...dashboardBooks, ...staticBooks];
+  }, [dashboardBooks]);
+
+  const featuredBook = dashboardBooks[0] ?? allBooks.find((book) => book.featured) ?? allBooks[0];
+  const mostReadBooks = allBooks.filter((book) => book.mostRead || book.source === "dashboard").slice(0, 12);
+  const genreRows = makeGenreRows(allBooks);
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#05070d] text-white">
@@ -110,18 +186,45 @@ export default function LibraryPage() {
         <div className="flex items-center justify-between gap-4">
           <DiBooksLogo />
           <nav className="flex items-center gap-3">
+            {permissions.canUseDashboard && (
+              <Link
+                href="/dashboard"
+                className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block"
+              >
+                Dashboard
+              </Link>
+            )}
+
             <Link
               href="/editor"
               className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block"
             >
               Auteur Studio
             </Link>
-            <button className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:bg-white/10">
-              Login
-            </button>
-            <button className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500">
-              Registreer
-            </button>
+
+            {!isLoggedIn ? (
+              <>
+                <button
+                  onClick={login}
+                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:bg-white/10"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={login}
+                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500"
+                >
+                  Registreer
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={logout}
+                className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20"
+              >
+                Uitloggen
+              </button>
+            )}
           </nav>
         </div>
       </header>
@@ -129,9 +232,22 @@ export default function LibraryPage() {
       <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
         <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-950 shadow-2xl">
           <div className={`absolute inset-0 bg-gradient-to-br ${featuredBook.coverClass}`} />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.22),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.92),rgba(0,0,0,0.58),rgba(0,0,0,0.18))]" />
+          {featuredBook.bannerImage && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={featuredBook.bannerImage}
+              alt={`Banner van ${featuredBook.title}`}
+              className="absolute inset-0 h-full w-full object-cover opacity-80"
+            />
+          )}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.16),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.94),rgba(0,0,0,0.62),rgba(0,0,0,0.2))]" />
           <div className="relative grid min-h-[430px] items-end gap-8 p-6 sm:p-10 lg:grid-cols-[1fr_420px] lg:p-12">
             <div className="max-w-3xl">
+              {featuredBook.source === "dashboard" && (
+                <div className="mb-4 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-emerald-200">
+                  Nieuw gepubliceerd vanuit Dashboard
+                </div>
+              )}
               <div className="mb-5 flex flex-wrap gap-2">
                 {featuredBook.genres.map((genre) => (
                   <span key={genre} className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/80">
@@ -146,9 +262,9 @@ export default function LibraryPage() {
                 {featuredBook.subtitle}
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
-                {featuredBook.published && featuredBook.storyFile ? (
+                {featuredBook.published && (featuredBook.storyFile || featuredBook.projectData) ? (
                   <Link
-                    href={getBookReadPath(featuredBook)}
+                    href={`/books/${featuredBook.id}/read`}
                     className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200"
                   >
                     Lees nu
@@ -159,7 +275,7 @@ export default function LibraryPage() {
                   </span>
                 )}
                 <Link
-                  href={getBookDetailPath(featuredBook)}
+                  href={`/books/${featuredBook.id}`}
                   className="rounded-2xl border border-white/15 bg-black/30 px-7 py-4 text-lg font-black text-white hover:bg-white/10"
                 >
                   Meer informatie
@@ -167,7 +283,7 @@ export default function LibraryPage() {
               </div>
             </div>
 
-            <Link href={getBookDetailPath(featuredBook)} className="hidden lg:block">
+            <Link href={`/books/${featuredBook.id}`} className="hidden lg:block">
               <div className={`rounded-3xl border ${featuredBook.accentClass} bg-black/30 p-4 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
                 <BookCover book={featuredBook} large />
                 <div className="rounded-b-2xl bg-neutral-950 p-5">
@@ -179,6 +295,10 @@ export default function LibraryPage() {
         </div>
       </section>
 
+      {dashboardBooks.length > 0 && (
+        <BookRow title="Nieuw uit het Dashboard" rowBooks={dashboardBooks} />
+      )}
+
       <BookRow title="Meest gelezen boeken" rowBooks={mostReadBooks} />
 
       {genreRows.map((row) => (
@@ -189,19 +309,26 @@ export default function LibraryPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-black uppercase tracking-widest text-blue-300">Auteur?</p>
-            <h2 className="mt-2 text-2xl font-black">Open de DiBooks Auteur Studio</h2>
+            <h2 className="mt-2 text-2xl font-black">Open je Dashboard of Auteur Studio</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
-              Bouw interactieve hoofdstukken met tekst, keuzes, cutscenes en minigames. Later koppelen we dit aan echte accounts.
+              Iedereen kan in de Auteur Studio een boek maken en lokaal opslaan. Met account krijg je later Dashboard-opslag en publicatie naar de Library.
             </p>
           </div>
-          <Link href="/editor" className="rounded-2xl bg-blue-600 px-6 py-4 text-center font-black text-white hover:bg-blue-500">
-            Naar Auteur Studio
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            {permissions.canUseDashboard && (
+              <Link href="/dashboard" className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-center font-black text-white hover:bg-white/10">
+                Naar Dashboard
+              </Link>
+            )}
+            <Link href="/editor" className="rounded-2xl bg-blue-600 px-6 py-4 text-center font-black text-white hover:bg-blue-500">
+              Naar Auteur Studio
+            </Link>
+          </div>
         </div>
       </section>
 
       <footer className="border-t border-white/5 px-5 py-8 text-sm font-bold text-neutral-500 sm:px-8 lg:px-10">
-        DiBooks Library • {books.length} testboeken in catalogus
+        DiBooks Library • {allBooks.length} boeken in catalogus • {dashboardBooks.length} dashboard publicaties
       </footer>
     </main>
   );

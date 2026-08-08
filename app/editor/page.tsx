@@ -23,6 +23,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { Extension } from "@tiptap/core";
+import { useDemoAuth } from "@/lib/auth";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -1334,16 +1335,20 @@ function SaveToDashboardModal({
   form,
   setForm,
   existingBookId,
+  isLoggedIn,
   onClose,
   onSaveDashboard,
   onDownloadProject,
+  onDownloadReaderStory,
 }: {
   form: DashboardSaveForm;
   setForm: React.Dispatch<React.SetStateAction<DashboardSaveForm>>;
   existingBookId: string | null;
+  isLoggedIn: boolean;
   onClose: () => void;
   onSaveDashboard: () => void;
   onDownloadProject: () => void;
+  onDownloadReaderStory: () => void;
 }) {
   function updateField<K extends keyof DashboardSaveForm>(key: K, value: DashboardSaveForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1381,12 +1386,12 @@ function SaveToDashboardModal({
       <div className="mx-auto max-w-4xl rounded-3xl border border-white/10 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.32em] text-cyan-300">Opslaan</p>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-cyan-300">Save menu</p>
             <h2 className="mt-2 text-3xl font-black sm:text-5xl">
-              {existingBookId ? "Dashboard boek bijwerken" : "Opslaan in dashboard"}
+              Opslaan & exporteren
             </h2>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
-              Bewaar je huidige editor-project als conceptboek. Later koppelen we dit aan accounts en echte database-opslag.
+              Kies bewust wat je wilt bewaren: een werkbestand voor de editor, een reader-versie voor publicatie, of een dashboard-concept wanneer je bent ingelogd.
             </p>
           </div>
           <button
@@ -1397,7 +1402,13 @@ function SaveToDashboardModal({
           </button>
         </div>
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        {!isLoggedIn && (
+          <div className="mt-6 rounded-2xl border border-yellow-400/30 bg-yellow-500/10 p-4 text-sm font-semibold leading-6 text-yellow-100">
+            <strong>Niet ingelogd:</strong> opslaan in Dashboard is uitgeschakeld. Download je werkbestand lokaal en bewaar het veilig op je eigen computer.
+          </div>
+        )}
+
+        <div className={`mt-6 grid gap-5 lg:grid-cols-2 ${!isLoggedIn ? "opacity-45" : ""}`}>
           <div className="grid gap-4">
             <div>
               <label className="mb-2 block text-sm font-black text-neutral-300">Titel</label>
@@ -1556,32 +1567,59 @@ function SaveToDashboardModal({
           </div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-4 text-sm leading-6 text-cyan-100">
-          <strong>Concept-flow:</strong> dit slaat de metadata én je huidige nodes/paths op in het dashboard. Publiceren naar de Library blijft later een aparte vergrendelde stap.
-        </div>
-
-        <div className="mt-6 flex flex-wrap justify-between gap-3">
-          <button
-            onClick={onDownloadProject}
-            className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
-          >
-            Download werkbestand
-          </button>
-
-          <div className="flex flex-wrap gap-3">
+        <div className="mt-6 grid gap-3 lg:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="mb-2 text-sm font-black uppercase tracking-widest text-cyan-300">1. Werkbestand</div>
+            <p className="text-sm font-semibold leading-6 text-neutral-400">
+              Download een <strong>.dibooks-project.json</strong>. Dit is je bewerkbare bestand voor later in de Auteur Studio.
+            </p>
             <button
-              onClick={onClose}
-              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+              onClick={onDownloadProject}
+              className="mt-4 w-full rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 text-sm font-black text-cyan-100 hover:bg-cyan-500/20"
             >
-              Annuleren
-            </button>
-            <button
-              onClick={onSaveDashboard}
-              className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
-            >
-              {existingBookId ? "Bijwerken in dashboard" : "Opslaan in dashboard"}
+              Download werkbestand
             </button>
           </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="mb-2 text-sm font-black uppercase tracking-widest text-emerald-300">2. Reader-versie</div>
+            <p className="text-sm font-semibold leading-6 text-neutral-400">
+              Download een schone <strong>story.json</strong>. Dit is het bestand dat de Reader gebruikt voor publicatie.
+            </p>
+            <button
+              onClick={onDownloadReaderStory}
+              className="mt-4 w-full rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-500/20"
+            >
+              Export reader story
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="mb-2 text-sm font-black uppercase tracking-widest text-yellow-300">3. Dashboard</div>
+            <p className="text-sm font-semibold leading-6 text-neutral-400">
+              Bewaar metadata, nodes en paths als dashboard-concept. Publiceren blijft een aparte vergrendelde stap.
+            </p>
+            <button
+              onClick={onSaveDashboard}
+              disabled={!isLoggedIn}
+              className="mt-4 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-black hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+            >
+              {!isLoggedIn ? "Login nodig" : existingBookId ? "Bijwerken in dashboard" : "Opslaan in dashboard"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-4 text-sm leading-6 text-cyan-100">
+          <strong>Belangrijk:</strong> publiceren naar de Library doe je vanuit het Dashboard. Zodra een boek live staat, is het vergrendeld totdat je het uit de Library haalt.
+        </div>
+
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+          >
+            Sluiten
+          </button>
         </div>
       </div>
     </div>
@@ -1595,6 +1633,7 @@ export default function Home() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(true);
   const [editorDarkMode, setEditorDarkMode] = useState(false);
+  const { isLoggedIn, permissions, login, logout } = useDemoAuth();
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false);
   const [dashboardBookId, setDashboardBookId] = useState<string | null>(null);
   const [dashboardSaveForm, setDashboardSaveForm] = useState<DashboardSaveForm>(defaultDashboardSaveForm);
@@ -1887,7 +1926,26 @@ export default function Home() {
     setSaveDashboardOpen(true);
   }
 
+  function handleDemoLogin() {
+    login();
+  }
+
+  function handleDemoLogout() {
+    const confirmed = window.confirm(
+      "Weet je zeker dat je wilt uitloggen? Vergeet niet eerst lokaal op te slaan of in je Dashboard op te slaan.",
+    );
+
+    if (!confirmed) return;
+
+    logout();
+  }
+
   function saveCurrentBookToDashboard() {
+    if (!permissions.canSaveToDashboard) {
+      alert("Je moet ingelogd zijn als auteur om op te slaan in je Dashboard. Download je werkbestand lokaal of log eerst in.");
+      return;
+    }
+
     const title = dashboardSaveForm.title.trim();
     if (!title) {
       alert("Geef je boek eerst een titel.");
@@ -2500,9 +2558,9 @@ export default function Home() {
     });
   }
 
-  function exportJson() {
-    const storyData = {
-      bookTitle: "Nieuw DiBooks verhaal",
+  function getReaderStoryData() {
+    return {
+      bookTitle: dashboardSaveForm.title.trim() || "Nieuw DiBooks verhaal",
       startNodeId,
       nodes: nodes.map((node) => ({
         id: node.id,
@@ -2528,11 +2586,29 @@ export default function Home() {
         id: edge.id,
         source: edge.source,
         target: edge.target,
+        label: edge.label,
+        data: edge.data,
       })),
     };
+  }
 
-    console.log(JSON.stringify(storyData, null, 2));
-    alert("Export staat in de browser console.");
+  function downloadReaderStoryFile() {
+    const storyData = getReaderStoryData();
+    const json = JSON.stringify(storyData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const safeTitle = slugifyDashboardBook(dashboardSaveForm.title || "story");
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeTitle || "story"}.story.json`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function exportJson() {
+    downloadReaderStoryFile();
   }
 
   return (
@@ -2598,7 +2674,7 @@ export default function Home() {
 
             <SidebarButton
               onClick={saveProject}
-              label="Save project"
+              label="Save menu"
               className="mt-6 bg-cyan-600 text-white hover:bg-cyan-500"
               icon={<SaveIcon />}
             />
@@ -2627,12 +2703,6 @@ export default function Home() {
               icon={<PlayIcon />}
             />
 
-            <SidebarButton
-              onClick={exportJson}
-              label="Export JSON"
-              className="mt-6 bg-white text-black hover:bg-neutral-200"
-              icon={<ExportIcon />}
-            />
           </div>
 
           <div className="mt-6 grid justify-items-center gap-3 border-t border-neutral-800 pt-5">
@@ -2658,8 +2728,48 @@ export default function Home() {
 
         <section
           ref={flowWrapperRef}
-          className={`flex-1 transition-colors ${editorDarkMode ? "bg-[#101521]" : "bg-[#f7f3ea]"}`}
+          className={`flex flex-1 flex-col transition-colors ${editorDarkMode ? "bg-[#101521]" : "bg-[#f7f3ea]"}`}
         >
+          <div className={`flex shrink-0 items-center justify-between gap-4 border-b border-black/15 px-5 py-3 ${editorDarkMode ? "bg-slate-950/70 text-white" : "bg-[#fffaf0]/90 text-neutral-950"}`}>
+            <div className="min-w-0">
+              <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${editorDarkMode ? "text-cyan-300" : "text-blue-700"}`}>Auteur Studio</p>
+              <h1 className="truncate text-lg font-black sm:text-2xl">
+                {dashboardSaveForm.title.trim() || "Naamloos boek"}
+              </h1>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs font-black">
+              <span className={`rounded-full px-3 py-1 ${isLoggedIn ? "bg-emerald-500/15 text-emerald-300" : "bg-yellow-500/15 text-yellow-300"}`}>
+                {isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
+              </span>
+              <button
+                onClick={isLoggedIn ? handleDemoLogout : handleDemoLogin}
+                className={`rounded-full px-3 py-1 transition ${
+                  isLoggedIn
+                    ? editorDarkMode
+                      ? "bg-red-500/15 text-red-200 hover:bg-red-500/25"
+                      : "bg-red-600/10 text-red-700 hover:bg-red-600/20"
+                    : editorDarkMode
+                      ? "bg-blue-500/15 text-blue-200 hover:bg-blue-500/25"
+                      : "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20"
+                }`}
+                title={isLoggedIn ? "Uitloggen" : "Demo-login"}
+              >
+                {isLoggedIn ? "Uitloggen" : "Login"}
+              </button>
+              <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
+                {nodes.length} nodes
+              </span>
+              <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
+                {edges.length} paths
+              </span>
+              {dashboardBookId && (
+                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-blue-500/15 text-blue-200" : "bg-blue-600/10 text-blue-700"}`}>
+                  Dashboard: {dashboardBookId}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="min-h-0 flex-1">
           <ReactFlow
             nodes={flowNodes}
             edges={getValidatedEdges(edges, nodes)}
@@ -2687,6 +2797,7 @@ export default function Home() {
             <Controls />
             <MiniMap />
           </ReactFlow>
+          </div>
         </section>
 
         <aside className="w-80 overflow-y-auto border-l-4 border-black bg-neutral-950 p-4">
@@ -3284,9 +3395,11 @@ export default function Home() {
           form={dashboardSaveForm}
           setForm={setDashboardSaveForm}
           existingBookId={dashboardBookId}
+          isLoggedIn={isLoggedIn}
           onClose={() => setSaveDashboardOpen(false)}
           onSaveDashboard={saveCurrentBookToDashboard}
           onDownloadProject={downloadProjectFile}
+          onDownloadReaderStory={downloadReaderStoryFile}
         />
       )}
       {previewOpen && previewNode && (

@@ -3,7 +3,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { getBookById, getBookDetailPath } from "@/lib/books";
+import { getBookById } from "@/lib/books";
 
 type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame";
 type MiniGameDifficulty = "easy" | "normal" | "hard";
@@ -51,6 +51,31 @@ type ProjectData = {
   nodes?: any[];
   edges?: DiEdge[];
 };
+
+type DashboardBook = NonNullable<ReturnType<typeof getBookById>> & {
+  source?: "library" | "dashboard";
+  projectData?: ProjectData;
+  publishedAt?: string;
+};
+
+const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
+
+function getPublishedDashboardBook(bookId: string) {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
+    if (!savedBooks) return null;
+
+    const parsedBooks = JSON.parse(savedBooks) as DashboardBook[];
+    if (!Array.isArray(parsedBooks)) return null;
+
+    return parsedBooks.find((book) => book.id === bookId && book.published) ?? null;
+  } catch (error) {
+    console.error("Kon dashboardboek niet laden in reader.", error);
+    return null;
+  }
+}
 
 
 function escapeHtml(value: string) {
@@ -660,9 +685,11 @@ function StabilizeLineMiniGame({
 export default function ReaderOnlyPage() {
   const params = useParams<{ bookId: string }>();
   const bookId = Array.isArray(params?.bookId) ? params.bookId[0] : params?.bookId;
-  const libraryBook = getBookById(bookId ?? "");
+  const staticBook = getBookById(bookId ?? "");
+  const [dashboardBook, setDashboardBook] = useState<DashboardBook | null>(null);
+  const selectedBook = dashboardBook ?? staticBook;
 
-  const [bookTitle, setBookTitle] = useState(libraryBook?.title ?? "DiBooks");
+  const [bookTitle, setBookTitle] = useState(staticBook?.title ?? "DiBooks");
   const [nodes, setNodes] = useState<DiNode[]>([]);
   const [edges, setEdges] = useState<DiEdge[]>([]);
   const [startNodeId, setStartNodeId] = useState("");
@@ -677,6 +704,11 @@ export default function ReaderOnlyPage() {
   const [readerTextSize, setReaderTextSize] = useState<ReaderTextSize>("normal");
   const [readerPageMode, setReaderPageMode] = useState<ReaderPageMode>("auto");
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>("dark");
+
+  useEffect(() => {
+    if (!bookId) return;
+    setDashboardBook(getPublishedDashboardBook(bookId));
+  }, [bookId]);
 
   useEffect(() => {
     const savedTextSize = window.localStorage.getItem("dibooks-reader-text-size") as ReaderTextSize | null;
@@ -711,25 +743,32 @@ export default function ReaderOnlyPage() {
         setLoading(true);
         setLoadError("");
 
-        if (!libraryBook) {
+        if (!selectedBook) {
           setLoadError("Dit boek staat niet in de DiBooks library.");
           return;
         }
 
-        if (!libraryBook.storyFile) {
-          setLoadError("Dit boek heeft nog geen gekoppeld verhaalbestand.");
+        let projectData: ProjectData | null = null;
+
+        if (dashboardBook?.projectData) {
+          projectData = dashboardBook.projectData as ProjectData;
+        } else if (selectedBook.storyFile) {
+          const response = await fetch(selectedBook.storyFile, { cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(`Kon ${selectedBook.storyFile} niet laden. Status: ${response.status}`);
+          }
+
+          projectData = (await response.json()) as ProjectData;
+        }
+
+        if (!projectData) {
+          setLoadError("Dit boek heeft nog geen gekoppeld verhaalbestand of opgeslagen dashboard-project.");
           return;
         }
 
-        const response = await fetch(libraryBook.storyFile, { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`Kon ${libraryBook.storyFile} niet laden. Status: ${response.status}`);
-        }
-
-        const projectData = (await response.json()) as ProjectData;
         const normalized = normalizeProject(projectData);
 
-        setBookTitle(normalized.bookTitle || libraryBook.title);
+        setBookTitle(normalized.bookTitle || selectedBook.title);
         setNodes(normalized.nodes);
         setEdges(normalized.edges);
         setStartNodeId(normalized.startNodeId);
@@ -745,7 +784,7 @@ export default function ReaderOnlyPage() {
     }
 
     loadBook();
-  }, [libraryBook]);
+  }, [dashboardBook, selectedBook]);
 
   function goToNode(nodeId: string) {
     const targetNode = nodes.find((node) => node.id === nodeId);

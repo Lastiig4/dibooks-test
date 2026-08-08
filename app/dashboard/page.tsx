@@ -9,11 +9,16 @@ import {
   type BookStatus,
   type DiBook,
 } from "@/lib/books";
+import { useDemoAuth } from "@/lib/auth";
 
 type DashboardBook = DiBook & {
   source?: "library" | "dashboard";
   createdAt?: string;
   updatedAt?: string;
+  publishedAt?: string;
+  removedFromLibraryAt?: string;
+  projectData?: any;
+  colorTheme?: string;
 };
 
 type NewBookForm = {
@@ -135,9 +140,20 @@ function statusClass(book: DashboardBook) {
   return "border-blue-500/40 bg-blue-500/10 text-blue-200";
 }
 
-function BookDashboardCard({ book }: { book: DashboardBook }) {
+function BookDashboardCard({
+  book,
+  onPublish,
+  onRemoveFromLibrary,
+  onDeleteDraft,
+}: {
+  book: DashboardBook;
+  onPublish: (bookId: string) => void;
+  onRemoveFromLibrary: (bookId: string) => void;
+  onDeleteDraft: (bookId: string) => void;
+}) {
   const isPublished = !!book.published;
   const canEdit = !isPublished;
+  const isDashboardBook = book.source === "dashboard";
   const detailHref = book.source === "dashboard" ? "/dashboard" : getBookDetailPath(book);
   const readHref = book.source === "dashboard" ? "" : getBookReadPath(book);
 
@@ -206,11 +222,11 @@ function BookDashboardCard({ book }: { book: DashboardBook }) {
 
         {isPublished ? (
           <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
-            <strong>Live versie is vergrendeld.</strong> Later maken we hiervan: nieuwe wijzigingen gaan eerst naar een conceptversie. Pas na opnieuw publiceren komt die nieuwe versie in de Library.
+            <strong>Live in de Library = vergrendeld.</strong> Dit boek kan niet worden aangepast zolang het live staat. Wil je toch wijzigen, dan moet het boek eerst uit de Library worden gehaald. Zo voorkom je dat lezers midden in een veranderend verhaal zitten.
           </div>
         ) : (
           <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
-            <strong>Concept.</strong> Dit boek mag vanuit je dashboard/editor worden aangepast. Publiceren naar de Library bouwen we later als aparte stap.
+            <strong>Concept / testfase.</strong> Dit boek mag je vrij aanpassen in de Studio. Pas bij publiceren wordt het vergrendeld.
           </div>
         )}
 
@@ -226,7 +242,7 @@ function BookDashboardCard({ book }: { book: DashboardBook }) {
             <button
               disabled
               className="cursor-not-allowed rounded-2xl bg-neutral-800 px-5 py-3 text-sm font-black text-neutral-500"
-              title="Live boeken kunnen straks niet direct aangepast worden. Maak eerst een nieuwe conceptversie."
+              title="Live boeken kun je niet aanpassen. Haal het boek eerst uit de Library."
             >
               Bewerken vergrendeld
             </button>
@@ -258,23 +274,43 @@ function BookDashboardCard({ book }: { book: DashboardBook }) {
             </Link>
           )}
 
-          {canEdit && (
+          {canEdit && isDashboardBook && (
             <button
-              disabled
-              className="cursor-not-allowed rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-3 text-sm font-black text-emerald-300/60"
-              title="Komt later: publiceer dit concept naar de publieke Library."
+              onClick={() => onPublish(book.id)}
+              className="rounded-2xl border border-emerald-500/35 bg-emerald-500/15 px-5 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-500/25"
+              title="Publiceer dit boek naar de Library en vergrendel het."
             >
-              Publiceren later
+              Publiceer naar Library
             </button>
           )}
 
-          {isPublished && (
+          {canEdit && isDashboardBook && (
+            <button
+              onClick={() => onDeleteDraft(book.id)}
+              className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-sm font-black text-red-100 hover:bg-red-500/20"
+              title="Verwijder dit concept uit je dashboard."
+            >
+              Verwijder concept
+            </button>
+          )}
+
+          {isPublished && isDashboardBook && (
+            <button
+              onClick={() => onRemoveFromLibrary(book.id)}
+              className="rounded-2xl border border-red-500/35 bg-red-500/15 px-5 py-3 text-sm font-black text-red-100 hover:bg-red-500/25"
+              title="Haal dit boek uit de Library. Daarna kun je het weer aanpassen als concept."
+            >
+              Verwijder uit Library
+            </button>
+          )}
+
+          {isPublished && !isDashboardBook && (
             <button
               disabled
-              className="cursor-not-allowed rounded-2xl border border-purple-500/20 bg-purple-500/10 px-5 py-3 text-sm font-black text-purple-300/60"
-              title="Komt later: maak een nieuwe conceptversie van dit live boek."
+              className="cursor-not-allowed rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-3 text-sm font-black text-red-300/60"
+              title="Dit live boek komt nu nog uit lib/books.ts. Later verwijderen we live boeken via het dashboard/admin systeem."
             >
-              Nieuwe versie maken
+              Verwijderen later
             </button>
           )}
         </div>
@@ -530,6 +566,7 @@ function NewBookModal({
 }
 
 export default function DashboardPage() {
+  const { permissions, login, logout, user } = useDemoAuth();
   const [draftDashboardBooks, setDraftDashboardBooks] = useState<DashboardBook[]>([]);
   const [newBookOpen, setNewBookOpen] = useState(false);
   const [form, setForm] = useState<NewBookForm>(defaultForm);
@@ -613,6 +650,112 @@ export default function DashboardPage() {
     setNewBookOpen(false);
   }
 
+
+  function publishBookToLibrary(bookId: string) {
+    const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
+    if (!targetBook) return;
+
+    const confirmed = window.confirm(
+      `Weet je zeker dat je "${targetBook.title}" naar de Library wilt publiceren?\n\nNa publicatie wordt dit boek vergrendeld. Je kunt het dan niet meer aanpassen zolang het live staat.`,
+    );
+
+    if (!confirmed) return;
+
+    const now = new Date().toISOString();
+    setDraftDashboardBooks((currentBooks) =>
+      currentBooks.map((book) =>
+        book.id === bookId
+          ? {
+              ...book,
+              published: true,
+              status: book.status === "Concept" ? "Testversie" : book.status,
+              publishedAt: now,
+              removedFromLibraryAt: undefined,
+              updatedAt: now,
+            }
+          : book,
+      ),
+    );
+  }
+
+  function removeBookFromLibrary(bookId: string) {
+    const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
+    if (!targetBook) return;
+
+    const confirmed = window.confirm(
+      `Weet je zeker dat je "${targetBook.title}" uit de Library wilt verwijderen?\n\nLezers kunnen dit boek daarna niet meer als live boek openen. Daarna wordt het weer een bewerkbaar concept.`,
+    );
+
+    if (!confirmed) return;
+
+    const now = new Date().toISOString();
+    setDraftDashboardBooks((currentBooks) =>
+      currentBooks.map((book) =>
+        book.id === bookId
+          ? {
+              ...book,
+              published: false,
+              status: "Concept",
+              removedFromLibraryAt: now,
+              updatedAt: now,
+            }
+          : book,
+      ),
+    );
+  }
+
+  function deleteDraftBook(bookId: string) {
+    const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
+    if (!targetBook) return;
+
+    if (targetBook.published) {
+      alert("Een live boek kun je niet als concept verwijderen. Haal het eerst uit de Library.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Weet je zeker dat je concept "${targetBook.title}" wilt verwijderen uit je dashboard?`,
+    );
+
+    if (!confirmed) return;
+
+    setDraftDashboardBooks((currentBooks) => currentBooks.filter((book) => book.id !== bookId));
+  }
+
+  if (!permissions.canUseDashboard) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#05070d] p-5 text-white">
+        <div className="max-w-2xl rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-center shadow-2xl">
+          <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Auteur Dashboard</p>
+          <h1 className="mt-4 text-4xl font-black sm:text-6xl">Login nodig</h1>
+          <p className="mt-5 text-base font-semibold leading-7 text-neutral-300">
+            Je kunt zonder account wel schrijven in de Auteur Studio en lokaal opslaan. Dashboard-opslag, boekbeheer en publiceren zijn alleen beschikbaar voor ingelogde auteurs.
+          </p>
+          <div className="mt-7 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={login}
+              className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500"
+            >
+              Demo-login als auteur
+            </button>
+            <Link
+              href="/editor"
+              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+            >
+              Open Auteur Studio lokaal
+            </Link>
+            <Link
+              href="/"
+              className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-black text-neutral-300 hover:bg-white/10 hover:text-white"
+            >
+              Terug naar Library
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#05070d]/90 backdrop-blur-xl">
@@ -629,6 +772,13 @@ export default function DashboardPage() {
             <Link href="/editor" className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">
               Studio openen
             </Link>
+            <button
+              onClick={logout}
+              className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-black text-red-100 hover:bg-red-500/20"
+              title={user?.email ?? "Uitloggen"}
+            >
+              Uitloggen
+            </button>
           </div>
         </div>
       </header>
@@ -636,12 +786,12 @@ export default function DashboardPage() {
       <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
         <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-stretch">
           <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-blue-950/70 via-neutral-950 to-purple-950/55 p-6 shadow-2xl sm:p-8">
-            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Dashboard v2</p>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Dashboard v3</p>
             <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight sm:text-6xl">
-              Maak boeken aan voordat ze live gaan.
+              Beheer concepten en live boeken veilig.
             </h1>
             <p className="mt-5 max-w-3xl text-lg font-semibold leading-8 text-neutral-300">
-              Nieuwe boeken start je als concept met titel, leeftijdscategorie, genre labels en beschrijving. Later koppelen we dit aan echte accounts, opslag en publiceren naar de Library.
+              Nieuwe boeken start je als concept. Zodra je publiceert naar de Library wordt dat boek vergrendeld. Wil je later iets wijzigen, dan haal je het eerst uit de Library.
             </p>
           </div>
 
@@ -651,7 +801,7 @@ export default function DashboardPage() {
               <strong>Concepten mag je bewerken.</strong> Zodra een boek live is gepusht naar de Library, wordt die versie vergrendeld.
             </div>
             <div className="rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm leading-6 text-blue-100">
-              Updates gaan later via <strong>nieuwe conceptversies</strong>, zodat lezers nooit ineens een veranderend live boek krijgen.
+              Aanpassen kan pas nadat een boek <strong>uit de Library is verwijderd</strong>. Zo blijft een live verhaal stabiel voor lezers.
             </div>
           </div>
         </div>
@@ -666,7 +816,7 @@ export default function DashboardPage() {
             <p className="mt-2 text-4xl font-black text-emerald-300">{liveBooks.length}</p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Concept / binnenkort</p>
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Niet live</p>
             <p className="mt-2 text-4xl font-black text-yellow-300">{draftBooks.length}</p>
           </div>
         </div>
@@ -686,7 +836,7 @@ export default function DashboardPage() {
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
           {allBooks.map((book) => (
-            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} />
+            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} />
           ))}
         </div>
       </section>
