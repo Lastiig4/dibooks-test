@@ -7,6 +7,7 @@ import {
   getBookDetailPath,
   getBookReadPath,
   type DiBook,
+  type BookStatus,
 } from "@/lib/books";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
@@ -22,7 +23,7 @@ type DashboardBook = DiBook & {
 
 const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
 
-function getPublishedDashboardBooks() {
+function getPublishedDashboardBooks(): DashboardBook[] {
   if (typeof window === "undefined") return [] as DashboardBook[];
 
   try {
@@ -37,7 +38,7 @@ function getPublishedDashboardBooks() {
       .map((book) => ({
         ...book,
         source: "dashboard" as const,
-        status: "Testversie",
+        status: "Testversie" as BookStatus,
         mostRead: true,
       }));
   } catch (error) {
