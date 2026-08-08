@@ -118,6 +118,32 @@ export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
   };
 }
 
+export async function ensureSupabaseProfile(user: DemoAuthUser): Promise<AuthActionResult> {
+  const supabase = getSupabaseOrAlert();
+  if (!supabase) return { ok: false, message: "Supabase is nog niet ingesteld." };
+
+  const displayName = user.name?.trim() || user.email?.split("@")[0] || "Auteur";
+
+  // Belangrijk: ignoreDuplicates voorkomt dat een bestaande admin/author profile
+  // per ongeluk wordt overschreven. Ontbreekt de profile-row, dan maken we hem aan.
+  const { error } = await supabase.from("profiles").upsert(
+    {
+      id: user.id,
+      email: user.email,
+      display_name: displayName,
+      role: "author",
+    },
+    { onConflict: "id", ignoreDuplicates: true },
+  );
+
+  if (error) {
+    console.error("Kon DiBooks profile niet controleren/aanmaken.", error);
+    return { ok: false, message: error.message };
+  }
+
+  return { ok: true };
+}
+
 async function promptForLogin() {
   const email = window.prompt("E-mailadres voor DiBooks login:");
   if (!email) return null;
@@ -164,15 +190,29 @@ export function useDemoAuth() {
         console.warn("Supabase getUser gaf geen actieve gebruiker.", error.message);
       }
 
-      setUser(mapSupabaseUser(data.user));
+      const mappedUser = mapSupabaseUser(data.user);
+      setUser(mappedUser);
       setLoading(false);
+
+      if (mappedUser) {
+        ensureSupabaseProfile(mappedUser).catch((profileError) => {
+          console.warn("DiBooks profile check mislukt.", profileError);
+        });
+      }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
-      setUser(mapSupabaseUser(session?.user ?? null));
+      const mappedUser = mapSupabaseUser(session?.user ?? null);
+      setUser(mappedUser);
       setLoading(false);
       broadcastAuthChange();
+
+      if (mappedUser) {
+        ensureSupabaseProfile(mappedUser).catch((profileError) => {
+          console.warn("DiBooks profile check mislukt.", profileError);
+        });
+      }
     });
 
     return () => {
@@ -201,7 +241,13 @@ export function useDemoAuth() {
       return { ok: false, message: error.message };
     }
 
-    setUser(mapSupabaseUser(data.user));
+    const mappedUser = mapSupabaseUser(data.user);
+    if (mappedUser) {
+      const profileResult = await ensureSupabaseProfile(mappedUser);
+      if (!profileResult.ok) return profileResult;
+    }
+
+    setUser(mappedUser);
     broadcastAuthChange();
     return { ok: true };
   }
@@ -244,7 +290,13 @@ export function useDemoAuth() {
       };
     }
 
-    setUser(mapSupabaseUser(data.user));
+    const mappedUser = mapSupabaseUser(data.user);
+    if (mappedUser) {
+      const profileResult = await ensureSupabaseProfile(mappedUser);
+      if (!profileResult.ok) return profileResult;
+    }
+
+    setUser(mappedUser);
     broadcastAuthChange();
     return { ok: true, message: "Account aangemaakt en ingelogd." };
   }

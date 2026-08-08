@@ -1,7 +1,7 @@
 "use client";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { DemoAuthUser } from "@/lib/auth";
+import { ensureSupabaseProfile, type DemoAuthUser } from "@/lib/auth";
 
 export type DashboardBookStatus = "Concept" | "Testversie" | "Binnenkort";
 
@@ -133,6 +133,11 @@ export async function fetchDashboardBookFromSupabase(bookId: string) {
 }
 
 export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: DashboardBookInput) {
+  const profileResult = await ensureSupabaseProfile(user);
+  if (!profileResult.ok) {
+    throw new Error(profileResult.message || "DiBooks profile kon niet worden aangemaakt.");
+  }
+
   const supabase = createSupabaseBrowserClient();
   const existingBookId = input.id || null;
   const slug = existingBookId ? undefined : await getUniqueSlug(user.id, input.title, existingBookId);
