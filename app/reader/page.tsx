@@ -31,6 +31,10 @@ type DiNode = {
   data: DiNodeData;
 };
 
+type ReaderTextSize = "small" | "normal" | "large";
+type ReaderPageMode = "auto" | "single" | "double";
+type ReaderTheme = "dark" | "light" | "sepia";
+
 type DiEdge = {
   id: string;
   source: string;
@@ -268,16 +272,38 @@ function BookPageReader({
   setPageIndex,
   onPageCountChange,
   onVisiblePageCountChange,
+  textSize,
+  pageMode,
+  theme,
 }: {
   html: string;
   pageIndex: number;
   setPageIndex: React.Dispatch<React.SetStateAction<number>>;
   onPageCountChange: (pageCount: number) => void;
   onVisiblePageCountChange: (visiblePageCount: number) => void;
+  textSize: ReaderTextSize;
+  pageMode: ReaderPageMode;
+  theme: ReaderTheme;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<string[]>(["<p>Deze tekst is nog leeg.</p>"]);
   const [visiblePageCount, setVisiblePageCount] = useState(1);
+
+  const textSizeClass =
+    textSize === "small"
+      ? "text-[15px] leading-7 sm:text-[17px] sm:leading-8"
+      : textSize === "large"
+        ? "text-[18px] leading-8 sm:text-[21px] sm:leading-10"
+        : "text-[16px] leading-7 sm:text-[18px] sm:leading-8";
+
+  const pageThemeClass =
+    theme === "light"
+      ? "border-neutral-300 bg-[#fbfaf6] text-neutral-950 shadow-lg"
+      : theme === "sepia"
+        ? "border-[#d8c49d] bg-[#f3e4c6] text-[#24170d] shadow-lg"
+        : "border-neutral-800 bg-neutral-950/95 text-white shadow-inner";
+
+  const proseThemeClass = theme === "dark" ? "prose-invert" : "";
 
   useEffect(() => {
     setPageIndex(0);
@@ -292,7 +318,14 @@ function BookPageReader({
       const viewportHeight = viewport.clientHeight;
       if (viewportWidth <= 0 || viewportHeight <= 0) return;
 
-      const nextVisiblePageCount = viewportWidth >= 1100 ? 2 : 1;
+      const nextVisiblePageCount =
+        pageMode === "single"
+          ? 1
+          : pageMode === "double" && viewportWidth >= 900
+            ? 2
+            : viewportWidth >= 1100
+              ? 2
+              : 1;
       setVisiblePageCount(nextVisiblePageCount);
       onVisiblePageCountChange(nextVisiblePageCount);
 
@@ -307,14 +340,17 @@ function BookPageReader({
           : Math.floor(Math.min(viewportWidth - 32, 820));
       const singlePageHeight = Math.floor(viewportHeight - 32);
 
-      const usableWidth = Math.max(260, singlePageWidth - (viewportWidth < 700 ? 74 : 118));
-      const usableHeight = Math.max(220, singlePageHeight - (viewportWidth < 700 ? 260 : 210));
-      const averageCharacterWidth = viewportWidth < 700 ? 9.8 : 11.2;
-      const lineHeight = viewportWidth < 700 ? 32 : 40;
+      const usableWidth = Math.max(260, singlePageWidth - (viewportWidth < 700 ? 64 : 94));
+      const usableHeight = Math.max(260, singlePageHeight - (viewportWidth < 700 ? 170 : 150));
+      const fontScale = textSize === "small" ? 0.9 : textSize === "large" ? 1.12 : 1;
+      const averageCharacterWidth = (viewportWidth < 700 ? 9.8 : 10.4) * fontScale;
+      const lineHeight = (viewportWidth < 700 ? 32 : 34) * fontScale;
 
       const charactersPerLine = Math.max(22, Math.floor(usableWidth / averageCharacterWidth));
-      const linesPerPage = Math.max(6, Math.floor(usableHeight / lineHeight));
-      const density = viewportWidth < 700 ? 0.38 : 0.52;
+      const linesPerPage = Math.max(7, Math.floor(usableHeight / lineHeight));
+
+      // Iets voller dan de vorige versie, omdat de reader anders te veel lege bladruimte kreeg.
+      const density = viewportWidth < 700 ? 0.76 : nextVisiblePageCount === 1 ? 0.9 : 0.78;
       const maxCharacters = Math.floor(charactersPerLine * linesPerPage * density);
 
       const nextPages = paginateHtml(html, maxCharacters);
@@ -327,7 +363,7 @@ function BookPageReader({
     resizeObserver.observe(viewport);
 
     return () => resizeObserver.disconnect();
-  }, [html, onPageCountChange, onVisiblePageCountChange, setPageIndex]);
+  }, [html, onPageCountChange, onVisiblePageCountChange, pageMode, setPageIndex, textSize]);
 
   useEffect(() => {
     if (pageIndex > pages.length - 1) {
@@ -350,17 +386,17 @@ function BookPageReader({
           {visiblePages.map((pageHtml, index) => (
             <article
               key={`${pageIndex}-${index}`}
-              className="h-full overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/95 px-5 pb-16 pt-5 shadow-inner sm:px-12 sm:pb-24 sm:pt-10 md:px-16"
+              className={`h-full overflow-hidden rounded-2xl border px-4 pb-12 pt-4 sm:px-8 sm:pb-16 sm:pt-6 md:px-10 md:py-8 ${pageThemeClass}`}
             >
               <div
-                className="dibooks-reader-content prose prose-invert max-w-none text-[16px] leading-7 sm:text-[20px] sm:leading-9 [&_p]:mb-5 sm:[&_p]:mb-6 [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0"
+                className={`dibooks-reader-content prose ${proseThemeClass} max-w-none ${textSizeClass} [&_p]:mb-5 sm:[&_p]:mb-5 [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0`}
                 dangerouslySetInnerHTML={{ __html: pageHtml }}
               />
             </article>
           ))}
 
           {visiblePageCount === 2 && visiblePages.length === 1 && (
-            <article className="h-full rounded-2xl border border-neutral-900 bg-neutral-950/40" />
+            <article className={`h-full rounded-2xl border ${theme === "dark" ? "border-neutral-900 bg-neutral-950/40" : theme === "sepia" ? "border-[#d8c49d] bg-[#ead7ae]/60" : "border-neutral-300 bg-white/50"}`} />
           )}
         </div>
       </div>
@@ -632,6 +668,35 @@ export default function ReaderOnlyPage() {
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [visiblePageCount, setVisiblePageCount] = useState(1);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [readerTextSize, setReaderTextSize] = useState<ReaderTextSize>("normal");
+  const [readerPageMode, setReaderPageMode] = useState<ReaderPageMode>("auto");
+  const [readerTheme, setReaderTheme] = useState<ReaderTheme>("dark");
+
+  useEffect(() => {
+    const savedTextSize = window.localStorage.getItem("dibooks-reader-text-size") as ReaderTextSize | null;
+    const savedPageMode = window.localStorage.getItem("dibooks-reader-page-mode") as ReaderPageMode | null;
+    const savedTheme = window.localStorage.getItem("dibooks-reader-theme") as ReaderTheme | null;
+
+    if (savedTextSize === "small" || savedTextSize === "normal" || savedTextSize === "large") {
+      setReaderTextSize(savedTextSize);
+    }
+
+    if (savedPageMode === "auto" || savedPageMode === "single" || savedPageMode === "double") {
+      setReaderPageMode(savedPageMode);
+    }
+
+    if (savedTheme === "dark" || savedTheme === "light" || savedTheme === "sepia") {
+      setReaderTheme(savedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("dibooks-reader-text-size", readerTextSize);
+    window.localStorage.setItem("dibooks-reader-page-mode", readerPageMode);
+    window.localStorage.setItem("dibooks-reader-theme", readerTheme);
+    setPageIndex(0);
+  }, [readerTextSize, readerPageMode, readerTheme]);
 
   const currentNode = nodes.find((node) => node.id === currentNodeId);
 
@@ -764,6 +829,23 @@ export default function ReaderOnlyPage() {
     ),
   );
 
+  const readerShellClass =
+    readerTheme === "light"
+      ? "bg-[#f5f5f2] text-neutral-950"
+      : readerTheme === "sepia"
+        ? "bg-[#d9c39a] text-[#24170d]"
+        : "bg-neutral-950 text-white";
+
+  const readerChromeClass =
+    readerTheme === "light"
+      ? "border-neutral-300 bg-[#fbfaf6]/95"
+      : readerTheme === "sepia"
+        ? "border-[#b99b67] bg-[#ead7ae]/95"
+        : "border-neutral-800 bg-neutral-950/95";
+
+  const mutedTextClass =
+    readerTheme === "dark" ? "text-neutral-500" : readerTheme === "sepia" ? "text-[#705638]" : "text-neutral-500";
+
   if (loading) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-neutral-950 p-4 text-white sm:p-6">
@@ -815,10 +897,10 @@ export default function ReaderOnlyPage() {
   }
 
   return (
-    <main className="fixed inset-0 flex h-[100dvh] min-h-[100dvh] flex-col overflow-hidden bg-neutral-950 text-white">
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-800 px-3 py-2 sm:px-6 sm:py-3">
+    <main className={`fixed inset-0 flex h-[100dvh] min-h-[100dvh] flex-col overflow-hidden ${readerShellClass}`}>
+      <div className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-6 sm:py-3 ${readerChromeClass}`}>
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">Reader mode</p>
+          <p className={`text-xs font-bold uppercase tracking-widest ${mutedTextClass}`}>Reader mode</p>
           <h2 className="line-clamp-1 text-base font-black sm:text-2xl">
             {currentNode.data.type === "text" || currentNode.data.type === "special"
               ? bookTitle
@@ -826,16 +908,123 @@ export default function ReaderOnlyPage() {
           </h2>
         </div>
 
-        <button
-          onClick={() => {
-            setStarted(false);
-            goToNode(startNodeId);
-          }}
-          className="shrink-0 rounded-xl bg-neutral-800 px-3 py-2 text-sm font-black text-white hover:bg-neutral-700 sm:px-4 sm:text-base"
-        >
-          Terug naar start
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => setSettingsOpen((current) => !current)}
+            className="flex h-11 min-w-11 items-center justify-center rounded-full bg-neutral-800 px-3 text-lg font-black text-white hover:bg-neutral-700"
+            aria-label="Leesinstellingen"
+            title="Leesinstellingen"
+          >
+            Aa
+          </button>
+
+          <button
+            onClick={() => {
+              setStarted(false);
+              goToNode(startNodeId);
+            }}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-red-600 text-2xl font-black leading-none text-white shadow-lg hover:bg-red-500"
+            aria-label="Terug naar start"
+            title="Terug naar start"
+          >
+            <span className="text-3xl font-black leading-none">✕</span>
+          </button>
+        </div>
       </div>
+
+      {settingsOpen && (
+        <div className="absolute right-3 top-16 z-20 w-[min(92vw,360px)] rounded-2xl border border-neutral-700 bg-neutral-900 p-4 shadow-2xl sm:right-6 sm:top-20">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Leesinstellingen</p>
+              <h3 className="text-lg font-black">Reader weergave</h3>
+            </div>
+            <button
+              onClick={() => setSettingsOpen(false)}
+              className="rounded-lg bg-neutral-800 px-3 py-2 text-sm font-black hover:bg-neutral-700"
+            >
+              Sluit
+            </button>
+          </div>
+
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Tekstgrootte</label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  ["small", "Klein"],
+                  ["normal", "Normaal"],
+                  ["large", "Groot"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setReaderTextSize(value)}
+                    className={`rounded-xl px-3 py-2 text-sm font-black ${
+                      readerTextSize === value
+                        ? "bg-blue-600 text-white"
+                        : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Paginaweergave</label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  ["auto", "Auto"],
+                  ["single", "1 pagina"],
+                  ["double", "2 pagina’s"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setReaderPageMode(value)}
+                    className={`rounded-xl px-3 py-2 text-sm font-black ${
+                      readerPageMode === value
+                        ? "bg-blue-600 text-white"
+                        : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-neutral-500">
+                Op smalle schermen blijft 2 pagina’s automatisch veilig op 1 pagina.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Leeskleur</label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  ["dark", "Donker"],
+                  ["light", "Licht"],
+                  ["sepia", "Boek"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setReaderTheme(value)}
+                    className={`rounded-xl px-3 py-2 text-sm font-black ${
+                      readerTheme === value
+                        ? "bg-blue-600 text-white"
+                        : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-neutral-500">
+                Donker, licht of een oude boekkleur voor rustiger lezen.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {(currentNode.data.type === "text" || currentNode.data.type === "special") && (
@@ -845,6 +1034,9 @@ export default function ReaderOnlyPage() {
             setPageIndex={setPageIndex}
             onPageCountChange={setPageCount}
             onVisiblePageCountChange={setVisiblePageCount}
+            textSize={readerTextSize}
+            pageMode={readerPageMode}
+            theme={readerTheme}
           />
         )}
 
@@ -959,16 +1151,22 @@ export default function ReaderOnlyPage() {
         )}
       </div>
 
-      <div className="shrink-0 border-t border-neutral-800 bg-neutral-950/95 px-3 py-2 sm:px-6 sm:py-3">
+      <div className={`shrink-0 border-t px-3 py-2 sm:px-6 sm:py-3 ${readerChromeClass}`}>
         {(currentNode.data.type === "text" || currentNode.data.type === "special") && (
           <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
             <button
-              onClick={() => setPageIndex((current) => Math.max(0, current - visiblePageCount))}
-              disabled={pageIndex === 0}
-              className="rounded-xl bg-neutral-800 px-3 py-2 text-sm font-black text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:py-3 sm:text-base"
-            >
-              Vorige pagina
-            </button>
+  onClick={() =>
+    setPageIndex((current) => Math.max(0, current - visiblePageCount))
+  }
+  disabled={pageIndex === 0}
+  className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:opacity-40"
+  aria-label="Vorige pagina"
+  title="Vorige pagina"
+>
+  <span className="-translate-y-[9px] scale-x-70 text-7xl font-black leading-none">
+    ←
+  </span>
+</button>
 
             <div className="min-w-[110px] flex-1 text-center text-xs font-bold text-neutral-400 sm:text-sm">
               <div>
@@ -981,11 +1179,19 @@ export default function ReaderOnlyPage() {
 
             {pageIndex < pageCount - visiblePageCount && (
               <button
-                onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + visiblePageCount))}
-                className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-black text-white hover:bg-blue-500 sm:px-4 sm:py-3 sm:text-base"
-              >
-                Volgende pagina
-              </button>
+  onClick={() =>
+    setPageIndex((current) =>
+      Math.min(pageCount - 1, current + visiblePageCount),
+    )
+  }
+  className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-500"
+  aria-label="Volgende pagina"
+  title="Volgende pagina"
+>
+  <span className="-translate-y-[9px] scale-x-70 text-7xl font-black leading-none">
+    →
+  </span>
+</button>
             )}
 
             {pageIndex >= pageCount - visiblePageCount && textChain.nextNodeAfterChain && (

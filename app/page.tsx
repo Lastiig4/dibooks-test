@@ -121,6 +121,148 @@ const nodeLabels: Record<DiNodeType, string> = {
   minigame: "Mini game",
 };
 
+
+function SidebarButton({
+  icon,
+  label,
+  className,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  className: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`group flex h-14 w-14 items-center justify-center rounded-2xl font-black shadow-sm transition hover:scale-[1.06] active:scale-[0.96] ${className}`}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center transition group-hover:scale-110">
+        {icon}
+      </span>
+      <span className="sr-only">{label}</span>
+    </button>
+  );
+}
+
+function BookIcon({ sparkle = false }: { sparkle?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7 fill-none stroke-current stroke-[2.4]"
+      aria-hidden="true"
+    >
+      <path d="M5 4h10a4 4 0 0 1 4 4v12H8a3 3 0 0 0-3 3V4Z" />
+      <path d="M8 4v15" />
+      <path d="M10 8h5" />
+      <path d="M10 12h4" />
+      {sparkle && (
+        <path d="M16 3.5l.9 1.9 2.1.3-1.5 1.5.4 2.1-1.9-1-1.9 1 .4-2.1L13 5.7l2.1-.3.9-1.9Z" />
+      )}
+    </svg>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7 fill-none stroke-current stroke-[2.4]"
+      aria-hidden="true"
+    >
+      <rect x="3" y="6" width="13" height="12" rx="2" />
+      <path d="M16 10l5-3v10l-5-3v-4Z" />
+      <path d="M8 10l4 2-4 2v-4Z" />
+    </svg>
+  );
+}
+
+function JoystickIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7 fill-none stroke-current stroke-[2.4]"
+      aria-hidden="true"
+    >
+      <path d="M7 10h10a5 5 0 0 1 4.7 6.7l-.6 1.7a2.2 2.2 0 0 1-3.8.6L15.5 17h-7L6.7 19a2.2 2.2 0 0 1-3.8-.6l-.6-1.7A5 5 0 0 1 7 10Z" />
+      <path d="M8 13v4" />
+      <path d="M6 15h4" />
+      <circle cx="16.5" cy="14" r="0.7" />
+      <circle cx="18.5" cy="16" r="0.7" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-7 w-7 fill-none stroke-current stroke-[2.4]" aria-hidden="true">
+      <path d="M5 4h12l2 2v14H5V4Z" />
+      <path d="M8 4v6h8V4" />
+      <path d="M8 20v-6h8v6" />
+    </svg>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-7 w-7 fill-none stroke-current stroke-[2.4]" aria-hidden="true">
+      <path d="M3 7h7l2 2h9v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+      <path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h5a2 2 0 0 1 2 2" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-7 w-7 fill-current" aria-hidden="true">
+      <path d="M8 5v14l11-7-11-7Z" />
+    </svg>
+  );
+}
+
+function ExportIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-7 w-7 fill-none stroke-current stroke-[2.4]" aria-hidden="true">
+      <path d="M6 3h9l3 3v15H6V3Z" />
+      <path d="M14 3v4h4" />
+      <path d="M9 13h6" />
+      <path d="M9 17h4" />
+    </svg>
+  );
+}
+
+function HelpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-8 w-8 fill-none stroke-current stroke-[2.6]" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.8 9.2a2.5 2.5 0 0 1 4.7 1.2c0 1.9-2.5 2.2-2.5 4" />
+      <path d="M12 18h.01" />
+    </svg>
+  );
+}
+
+function MoonIcon({ darkMode }: { darkMode: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={darkMode ? "h-8 w-8 fill-current stroke-current stroke-[2.2]" : "h-8 w-8 fill-none stroke-current stroke-[2.4]"}
+      aria-hidden="true"
+    >
+      {darkMode ? (
+        <>
+          <circle cx="12" cy="12" r="7" />
+          <path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+        </>
+      ) : (
+        <path d="M20.2 15.3A8.1 8.1 0 0 1 8.7 3.8 8.7 8.7 0 1 0 20.2 15.3Z" />
+      )}
+    </svg>
+  );
+}
+
 function stripHtml(html: string) {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -1091,6 +1233,8 @@ export default function Home() {
     useNodesState<Node<DiNodeData>>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(true);
+  const [editorDarkMode, setEditorDarkMode] = useState(false);
   const [startNodeId, setStartNodeId] = useState<string>("node_1");
   const [editingTextNodeId, setEditingTextNodeId] = useState<string | null>(
     null,
@@ -1100,7 +1244,19 @@ export default function Home() {
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [previewPageCount, setPreviewPageCount] = useState(1);
   const [readerVisiblePageCount, setReaderVisiblePageCount] = useState(1);
+  const flowWrapperRef = useRef<HTMLDivElement | null>(null);
+  const [flowViewport, setFlowViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const nodeTypes = useMemo(() => ({ bullet: BulletNode }), []);
+
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
+    if (savedMode === "true") setEditorDarkMode(true);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("dibooks-editor-dark-grid", String(editorDarkMode));
+  }, [editorDarkMode]);
+
   const previewNode = nodes.find((node) => node.id === previewNodeId);
 
   const textChain =
@@ -1403,14 +1559,32 @@ export default function Home() {
 
   function createNode(type: DiNodeType) {
     const id = `node_${Date.now()}`;
+    const wrapperBounds = flowWrapperRef.current?.getBoundingClientRect();
+    const centerScreenX = (wrapperBounds?.width ?? 900) / 2;
+    const centerScreenY = (wrapperBounds?.height ?? 700) / 2;
+    const viewportZoom = flowViewport.zoom || 1;
+
+    // Zet nieuwe nodes in het midden van het huidige canvas-beeld.
+    // Daardoor hoef je niet meer terug te zoeken naar de oude startpositie
+    // wanneer je ver ingezoomd of ver in je verhaal bent.
+    const staggerIndex = nodes.length % 5;
+    const staggerX = (staggerIndex - 2) * 64;
+    const staggerY = Math.floor((nodes.length % 10) / 5) * 64;
+    const nextPosition = {
+      x:
+        Math.round(
+          ((centerScreenX - flowViewport.x) / viewportZoom + staggerX) / 64,
+        ) * 64,
+      y:
+        Math.round(
+          ((centerScreenY - flowViewport.y) / viewportZoom + staggerY) / 64,
+        ) * 64,
+    };
 
     const newNode: Node<DiNodeData> = {
       id,
       type: "bullet",
-      position: {
-        x: 256 + nodes.length * 96,
-        y: 256 + nodes.length * 64,
-      },
+      position: nextPosition,
       data: {
         label: nodeLabels[type],
         type,
@@ -1880,67 +2054,70 @@ export default function Home() {
   return (
     <main className="h-screen w-screen overflow-hidden bg-neutral-950 text-white">
       <div className="flex h-full">
-        <aside className="w-72 border-r-4 border-black bg-neutral-950 p-4">
-          <div className="mb-6">
-            <div className="flex items-baseline leading-none">
-              <span className="text-4xl font-black tracking-tight text-white">
-                DI
-              </span>
-              <span
-                className="ml-1 text-4xl italic text-white"
-                style={{ fontFamily: "Georgia, Times New Roman, serif" }}
-              >
-                Books
-              </span>
+        <aside className="flex w-24 flex-col items-center border-r-4 border-black bg-neutral-950 p-3">
+          <div className="mb-6 flex flex-col items-center" title="DiBooks Auteur Studio">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900 shadow-inner">
+              <span className="text-2xl font-black tracking-tight text-white">DI</span>
             </div>
-            <p className="mt-2 text-sm text-neutral-400">Auteur Studio</p>
+            <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">Studio</p>
           </div>
 
-          <div className="grid gap-3">
-            <button
+          <div className="grid justify-items-center gap-3">
+            <SidebarButton
               onClick={() => createNode("text")}
-              className="rounded-xl bg-blue-600 px-4 py-3 font-bold hover:bg-blue-500"
-            >
-              + Tekst
-            </button>
+              label="Tekst"
+              className="bg-blue-600 text-white hover:bg-blue-500"
+              icon={<BookIcon />}
+            />
 
-            <button
+            <SidebarButton
               onClick={() => createNode("special")}
-              className="rounded-xl bg-yellow-500 px-4 py-3 font-bold text-black hover:bg-yellow-400"
-            >
-              + Speciale pagina
-            </button>
+              label="Speciale pagina"
+              className="bg-yellow-500 text-black hover:bg-yellow-400"
+              icon={<BookIcon sparkle />}
+            />
 
-            <button
+            <SidebarButton
               onClick={() => createNode("cutscene")}
-              className="rounded-xl bg-green-600 px-4 py-3 font-bold hover:bg-green-500"
-            >
-              + Cutscene
-            </button>
+              label="Cutscene"
+              className="bg-green-600 text-white hover:bg-green-500"
+              icon={<VideoIcon />}
+            />
 
-            <button
+            <SidebarButton
               onClick={() => createNode("choice")}
-              className="rounded-xl bg-orange-500 px-4 py-3 font-bold hover:bg-orange-400"
-            >
-              + Keuze menu
-            </button>
+              label="Keuze menu"
+              className="bg-orange-500 text-white hover:bg-orange-400"
+              icon={
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-black/20 text-[11px] font-black tracking-tight">
+                  ABC
+                </div>
+              }
+            />
 
-            <button
+            <SidebarButton
               onClick={() => createNode("minigame")}
-              className="rounded-xl bg-purple-600 px-4 py-3 font-bold hover:bg-purple-500"
-            >
-              + Mini game
-            </button>
+              label="Mini game"
+              className="bg-purple-600 text-white hover:bg-purple-500"
+              icon={<JoystickIcon />}
+            />
 
-            <button
+            <SidebarButton
               onClick={saveProject}
-              className="mt-6 rounded-xl bg-cyan-600 px-4 py-3 font-black text-white hover:bg-cyan-500"
-            >
-              Save project
-            </button>
+              label="Save project"
+              className="mt-6 bg-cyan-600 text-white hover:bg-cyan-500"
+              icon={<SaveIcon />}
+            />
 
-            <label className="cursor-pointer rounded-xl bg-sky-700 px-4 py-3 text-center font-black text-white hover:bg-sky-600">
-              Load project
+            <label
+              title="Load project"
+              aria-label="Load project"
+              className="group flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl bg-sky-700 text-white shadow-sm transition hover:scale-[1.06] hover:bg-sky-600 active:scale-[0.96]"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center transition group-hover:scale-110">
+                <FolderIcon />
+              </span>
+              <span className="sr-only">Load project</span>
               <input
                 type="file"
                 accept=".json,.dibooks-project.json"
@@ -1949,34 +2126,53 @@ export default function Home() {
               />
             </label>
 
-            <button
+            <SidebarButton
               onClick={openPreview}
-              className="rounded-xl bg-emerald-600 px-4 py-3 font-black text-white hover:bg-emerald-500"
-            >
-              Play project
-            </button>
+              label="Play project"
+              className="bg-emerald-600 text-white hover:bg-emerald-500"
+              icon={<PlayIcon />}
+            />
 
-            <button
+            <SidebarButton
               onClick={exportJson}
-              className="mt-6 rounded-xl bg-white px-4 py-3 font-black text-black hover:bg-neutral-200"
-            >
-              Export JSON
-            </button>
+              label="Export JSON"
+              className="mt-6 bg-white text-black hover:bg-neutral-200"
+              icon={<ExportIcon />}
+            />
           </div>
 
-          <div className="mt-6 rounded-xl bg-neutral-900 p-3 text-sm text-neutral-300">
-            Sleep nodes over het raster. Klik op een node en gebruik rechts Add
-            path om de flow te maken.
+          <div className="mt-6 grid justify-items-center gap-3 border-t border-neutral-800 pt-5">
+            <SidebarButton
+              onClick={() => setHelpOpen(true)}
+              label="Handleiding"
+              className="bg-neutral-800 text-white hover:bg-neutral-700"
+              icon={<HelpIcon />}
+            />
+
+            <SidebarButton
+              onClick={() => setEditorDarkMode((current) => !current)}
+              label={editorDarkMode ? "Grid light mode" : "Grid dark mode"}
+              className={
+                editorDarkMode
+                  ? "bg-slate-200 text-slate-950 hover:bg-white"
+                  : "bg-slate-900 text-slate-100 hover:bg-slate-800"
+              }
+              icon={<MoonIcon darkMode={editorDarkMode} />}
+            />
           </div>
         </aside>
 
-        <section className="flex-1 bg-[#f7f3ea]">
+        <section
+          ref={flowWrapperRef}
+          className={`flex-1 transition-colors ${editorDarkMode ? "bg-[#101521]" : "bg-[#f7f3ea]"}`}
+        >
           <ReactFlow
             nodes={flowNodes}
             edges={getValidatedEdges(edges, nodes)}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            onMoveEnd={(_, viewport) => setFlowViewport(viewport)}
             nodesConnectable={false}
             nodesDraggable={true}
             elementsSelectable={true}
@@ -1992,7 +2188,7 @@ export default function Home() {
               variant={BackgroundVariant.Lines}
               gap={64}
               lineWidth={2}
-              color="#350a0a"
+              color={editorDarkMode ? "#334155" : "#350a0a"}
             />
             <Controls />
             <MiniMap />
@@ -2516,6 +2712,64 @@ export default function Home() {
           )}
         </aside>
       </div>
+
+      {helpOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 p-4 sm:p-8">
+          <div className="mx-auto flex max-h-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-neutral-700 bg-neutral-950 text-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-neutral-800 p-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-neutral-500">DiBooks Auteur Studio</p>
+                <h2 className="text-2xl font-black">Handleiding</h2>
+              </div>
+              <button
+                onClick={() => setHelpOpen(false)}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-red-600 text-2xl font-black leading-none text-white hover:bg-red-500"
+                aria-label="Sluit handleiding"
+                title="Sluit handleiding"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5 sm:p-7">
+              <div className="grid gap-5 md:grid-cols-2">
+                <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5">
+                  <h3 className="mb-4 text-lg font-black">Iconen links</h3>
+                  <div className="grid gap-3 text-sm text-neutral-300">
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600"><BookIcon /></span><span><strong className="text-white">Tekst</strong><br />Normale verhaaltekst.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500 text-black"><BookIcon sparkle /></span><span><strong className="text-white">Speciale pagina</strong><br />Brief, logboek, dossier of dagboek. Krijgt een eigen pagina.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-600"><VideoIcon /></span><span><strong className="text-white">Cutscene</strong><br />Kort videofragment van maximaal 12 seconden.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-[11px] font-black">ABC</span><span><strong className="text-white">Keuze menu</strong><br />Lezer kiest uit maximaal drie routes.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600"><JoystickIcon /></span><span><strong className="text-white">Mini game</strong><br />Interactief moment met success/fail route.</span></div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5">
+                  <h3 className="mb-4 text-lg font-black">Project knoppen</h3>
+                  <div className="grid gap-3 text-sm text-neutral-300">
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-600"><SaveIcon /></span><span><strong className="text-white">Save project</strong><br />Downloadt je project als DiBooks JSON.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-700"><FolderIcon /></span><span><strong className="text-white">Load project</strong><br />Laadt een eerder opgeslagen projectbestand.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600"><PlayIcon /></span><span><strong className="text-white">Play project</strong><br />Test je verhaal vanuit de start-node.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black"><ExportIcon /></span><span><strong className="text-white">Export JSON</strong><br />Zet een reader/export versie in de browser console.</span></div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5 md:col-span-2">
+                  <h3 className="mb-3 text-lg font-black">Basis workflow</h3>
+                  <ol className="grid gap-2 pl-5 text-sm text-neutral-300 md:grid-cols-2">
+                    <li className="list-decimal">Maak nodes aan met de iconen links.</li>
+                    <li className="list-decimal">Klik op een node om rechts de instellingen te openen.</li>
+                    <li className="list-decimal">Gebruik <strong className="text-white">Paths</strong> om nodes met elkaar te verbinden.</li>
+                    <li className="list-decimal">Gebruik <strong className="text-white">Keuze menu</strong> voor echte lezerskeuzes.</li>
+                    <li className="list-decimal">Gebruik <strong className="text-white">Mini game</strong> voor success/fail-routes.</li>
+                    <li className="list-decimal">Klik <strong className="text-white">Play</strong> om je verhaal te testen.</li>
+                  </ol>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingTextNode &&
         (editingTextNode.data.type === "text" ||
