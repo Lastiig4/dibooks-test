@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1300" viewBox="0 0 900 1300">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="0.48" stop-color="#0b1026"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <radialGradient id="r" cx="30%" cy="15%" r="65%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000" flood-opacity="0.45"/></filter>
+  </defs>
+  <rect width="900" height="1300" fill="url(#g)"/>
+  <rect width="900" height="1300" fill="url(#r)"/>
+  <circle cx="730" cy="190" r="160" fill="#ffffff" opacity="0.08"/>
+  <circle cx="165" cy="1060" r="240" fill="#ffffff" opacity="0.06"/>
+  <path d="M90 300 C250 200 385 375 520 270 C660 160 750 225 820 150" fill="none" stroke="#fff" stroke-opacity="0.18" stroke-width="8"/>
+  <path d="M75 950 C230 860 330 1030 510 910 C620 835 725 880 850 790" fill="none" stroke="#fff" stroke-opacity="0.12" stroke-width="7"/>
+  <rect x="70" y="70" width="760" height="1160" rx="54" fill="#000" opacity="0.22" stroke="#fff" stroke-opacity="0.18"/>
+  <text x="90" y="135" fill="#fff" opacity="0.82" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="900" letter-spacing="7">DIBOOKS</text>
+  <text x="90" y="880" fill="#fff" font-family="Inter, Arial, sans-serif" font-size="92" font-weight="900" filter="url(#shadow)">The Sovereign</text>
+  <text x="90" y="950" fill="#fff" opacity="0.72" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800" letter-spacing="5">Sci-fi • INTERACTIVE BOOK</text>
+  <rect x="90" y="1045" width="130" height="52" rx="26" fill="#fff"/>
+  <text x="155" y="1080" text-anchor="middle" fill="#05070d" font-family="Inter, Arial, sans-serif" font-size="23" font-weight="900">12+</text>
+</svg>

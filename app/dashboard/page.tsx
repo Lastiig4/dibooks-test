@@ -1,0 +1,704 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import {
+  books,
+  getBookDetailPath,
+  getBookReadPath,
+  type BookStatus,
+  type DiBook,
+} from "@/lib/books";
+
+type DashboardBook = DiBook & {
+  source?: "library" | "dashboard";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type NewBookForm = {
+  title: string;
+  author: string;
+  subtitle: string;
+  description: string;
+  genres: string[];
+  genreInput: string;
+  primaryGenre: string;
+  status: BookStatus;
+  ageRating: string;
+  readTime: string;
+  colorTheme: string;
+};
+
+const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
+
+const defaultForm: NewBookForm = {
+  title: "",
+  author: "Giovanni",
+  subtitle: "",
+  description: "",
+  genres: ["Interactief"],
+  genreInput: "",
+  primaryGenre: "Interactief",
+  status: "Concept",
+  ageRating: "12+",
+  readTime: "Concept",
+  colorTheme: "blue",
+};
+
+const ageRatings = ["AL", "6+", "9+", "12+", "16+", "18+"];
+const suggestedGenres = [
+  "Sci-fi",
+  "Fantasy",
+  "Mystery",
+  "Thriller",
+  "Romance",
+  "Horror",
+  "Avontuur",
+  "Dystopie",
+  "Interactief",
+  "Keuzeverhaal",
+  "Dossier",
+  "Medieval",
+];
+
+const colorThemes: Record<
+  string,
+  { label: string; coverClass: string; accentClass: string; coverImage: string; bannerImage: string }
+> = {
+  blue: {
+    label: "Blauw / sci-fi",
+    coverClass: "from-blue-950 via-slate-950 to-purple-950",
+    accentClass: "border-blue-500/60",
+    coverImage: "/books/the-sovereign/cover.svg",
+    bannerImage: "/books/the-sovereign/banner.svg",
+  },
+  gold: {
+    label: "Goud / dossier",
+    coverClass: "from-yellow-950 via-neutral-950 to-stone-900",
+    accentClass: "border-yellow-400/40",
+    coverImage: "/books/briars-logs/cover.svg",
+    bannerImage: "/books/briars-logs/banner.svg",
+  },
+  red: {
+    label: "Rood / fantasy",
+    coverClass: "from-red-950 via-stone-950 to-yellow-950",
+    accentClass: "border-red-400/40",
+    coverImage: "/books/crown-of-ash/cover.svg",
+    bannerImage: "/books/crown-of-ash/banner.svg",
+  },
+  green: {
+    label: "Groen / mystery",
+    coverClass: "from-cyan-950 via-neutral-950 to-emerald-950",
+    accentClass: "border-cyan-400/40",
+    coverImage: "/books/echoes-of-lumina/cover.svg",
+    bannerImage: "/books/echoes-of-lumina/banner.svg",
+  },
+  orange: {
+    label: "Oranje / thriller",
+    coverClass: "from-orange-950 via-stone-950 to-red-950",
+    accentClass: "border-orange-400/40",
+    coverImage: "/books/the-dust-protocol/cover.svg",
+    bannerImage: "/books/the-dust-protocol/banner.svg",
+  },
+};
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || `boek-${Date.now()}`;
+}
+
+function DiBooksLogo() {
+  return (
+    <Link href="/" className="group flex items-end leading-none" aria-label="Terug naar DiBooks Library">
+      <span className="text-4xl font-black tracking-tight text-white transition group-hover:text-blue-200 sm:text-5xl">
+        DI
+      </span>
+      <span
+        className="ml-1 text-4xl italic text-white transition group-hover:text-blue-200 sm:text-5xl"
+        style={{ fontFamily: "Georgia, Times New Roman, serif" }}
+      >
+        Books
+      </span>
+    </Link>
+  );
+}
+
+function statusClass(book: DashboardBook) {
+  if (book.published) return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (book.status === "Concept") return "border-yellow-500/40 bg-yellow-500/10 text-yellow-200";
+  if (book.status === "Binnenkort") return "border-purple-500/40 bg-purple-500/10 text-purple-200";
+  return "border-blue-500/40 bg-blue-500/10 text-blue-200";
+}
+
+function BookDashboardCard({ book }: { book: DashboardBook }) {
+  const isPublished = !!book.published;
+  const canEdit = !isPublished;
+  const detailHref = book.source === "dashboard" ? "/dashboard" : getBookDetailPath(book);
+  const readHref = book.source === "dashboard" ? "" : getBookReadPath(book);
+
+  return (
+    <article className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-2xl">
+      <div className={`relative h-40 overflow-hidden bg-gradient-to-br ${book.coverClass}`}>
+        {book.bannerImage && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={book.bannerImage}
+            alt={`Banner van ${book.title}`}
+            className="absolute inset-0 h-full w-full object-cover opacity-75"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
+        <div className="absolute bottom-4 left-4 right-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-widest ${statusClass(book)}`}>
+              {isPublished ? "Live / vergrendeld" : book.status}
+            </span>
+            <span className="rounded-full bg-black/55 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/85">
+              {book.primaryGenre}
+            </span>
+            {book.source === "dashboard" && (
+              <span className="rounded-full border border-blue-400/25 bg-blue-500/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-blue-200">
+                Dashboard concept
+              </span>
+            )}
+          </div>
+          <h2 className="mt-3 line-clamp-1 text-3xl font-black text-white">{book.title}</h2>
+        </div>
+      </div>
+
+      <div className="grid gap-5 p-5">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-300">{book.author}</p>
+          <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-neutral-300">{book.subtitle}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Status</p>
+            <p className="mt-1 font-black text-white">{isPublished ? "Live" : book.status}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Bewerken</p>
+            <p className="mt-1 font-black text-white">{canEdit ? "Open" : "Locked"}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Leeftijd</p>
+            <p className="mt-1 font-black text-white">{book.ageRating ?? "-"}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Leestijd</p>
+            <p className="mt-1 font-black text-white">{book.readTime ?? "-"}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {book.genres.map((genre) => (
+            <span key={genre} className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-neutral-200">
+              {genre}
+            </span>
+          ))}
+        </div>
+
+        {isPublished ? (
+          <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
+            <strong>Live versie is vergrendeld.</strong> Later maken we hiervan: nieuwe wijzigingen gaan eerst naar een conceptversie. Pas na opnieuw publiceren komt die nieuwe versie in de Library.
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
+            <strong>Concept.</strong> Dit boek mag vanuit je dashboard/editor worden aangepast. Publiceren naar de Library bouwen we later als aparte stap.
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3">
+          {canEdit ? (
+            <Link
+              href={`/editor?book=${book.id}`}
+              className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500"
+            >
+              Bewerk in Studio
+            </Link>
+          ) : (
+            <button
+              disabled
+              className="cursor-not-allowed rounded-2xl bg-neutral-800 px-5 py-3 text-sm font-black text-neutral-500"
+              title="Live boeken kunnen straks niet direct aangepast worden. Maak eerst een nieuwe conceptversie."
+            >
+              Bewerken vergrendeld
+            </button>
+          )}
+
+          {book.source === "dashboard" ? (
+            <button
+              disabled
+              className="cursor-not-allowed rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-neutral-500"
+              title="Boekpagina komt zodra dit boek echt gepubliceerd is."
+            >
+              Boekpagina later
+            </button>
+          ) : (
+            <Link
+              href={detailHref}
+              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+            >
+              Boekpagina
+            </Link>
+          )}
+
+          {book.storyFile && readHref && (
+            <Link
+              href={readHref}
+              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+            >
+              Preview lezen
+            </Link>
+          )}
+
+          {canEdit && (
+            <button
+              disabled
+              className="cursor-not-allowed rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-3 text-sm font-black text-emerald-300/60"
+              title="Komt later: publiceer dit concept naar de publieke Library."
+            >
+              Publiceren later
+            </button>
+          )}
+
+          {isPublished && (
+            <button
+              disabled
+              className="cursor-not-allowed rounded-2xl border border-purple-500/20 bg-purple-500/10 px-5 py-3 text-sm font-black text-purple-300/60"
+              title="Komt later: maak een nieuwe conceptversie van dit live boek."
+            >
+              Nieuwe versie maken
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function NewBookModal({
+  form,
+  setForm,
+  onClose,
+  onSave,
+}: {
+  form: NewBookForm;
+  setForm: React.Dispatch<React.SetStateAction<NewBookForm>>;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  function updateField<K extends keyof NewBookForm>(key: K, value: NewBookForm[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function addGenre(genre: string) {
+    const cleanGenre = genre.trim();
+    if (!cleanGenre) return;
+
+    setForm((current) => {
+      if (current.genres.includes(cleanGenre)) {
+        return { ...current, genreInput: "" };
+      }
+
+      const nextGenres = [...current.genres, cleanGenre];
+      return {
+        ...current,
+        genres: nextGenres,
+        primaryGenre: current.primaryGenre || cleanGenre,
+        genreInput: "",
+      };
+    });
+  }
+
+  function removeGenre(genre: string) {
+    setForm((current) => {
+      const nextGenres = current.genres.filter((item) => item !== genre);
+      return {
+        ...current,
+        genres: nextGenres,
+        primaryGenre: current.primaryGenre === genre ? nextGenres[0] ?? "" : current.primaryGenre,
+      };
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
+      <div className="mx-auto max-w-4xl rounded-3xl border border-white/10 bg-[#080b13] p-5 shadow-2xl sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Nieuw boek</p>
+            <h2 className="mt-2 text-3xl font-black sm:text-5xl">Boek opslaan in dashboard</h2>
+            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
+              Dit maakt nu alvast een dashboard-concept aan. Later koppelen we deze flow aan echte accounts, database en editor-save.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-500"
+          >
+            Sluiten
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Titel</label>
+              <input
+                value={form.title}
+                onChange={(event) => updateField("title", event.target.value)}
+                placeholder="Bijv. The Sovereign"
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Auteur</label>
+              <input
+                value={form.author}
+                onChange={(event) => updateField("author", event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Korte ondertitel</label>
+              <input
+                value={form.subtitle}
+                onChange={(event) => updateField("subtitle", event.target.value)}
+                placeholder="Een zin die op de boekkaart komt."
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Beschrijving</label>
+              <textarea
+                value={form.description}
+                onChange={(event) => updateField("description", event.target.value)}
+                placeholder="Korte omschrijving voor de boekpagina."
+                className="h-32 w-full resize-none rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold leading-6 text-white outline-none focus:border-blue-400"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Genre labels</label>
+              <div className="flex gap-2">
+                <input
+                  value={form.genreInput}
+                  onChange={(event) => updateField("genreInput", event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addGenre(form.genreInput);
+                    }
+                  }}
+                  placeholder="Bijv. Sci-fi"
+                  className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+                />
+                <button
+                  onClick={() => addGenre(form.genreInput)}
+                  className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500"
+                >
+                  Voeg toe
+                </button>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {form.genres.map((genre) => (
+                  <button
+                    key={genre}
+                    onClick={() => removeGenre(genre)}
+                    className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-white hover:bg-red-600"
+                    title="Klik om te verwijderen"
+                  >
+                    {genre} ×
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {suggestedGenres.map((genre) => (
+                  <button
+                    key={genre}
+                    onClick={() => addGenre(genre)}
+                    className="rounded-full border border-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-neutral-300 hover:bg-white/10"
+                  >
+                    + {genre}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Hoofdgenre</label>
+              <select
+                value={form.primaryGenre}
+                onChange={(event) => updateField("primaryGenre", event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+              >
+                {form.genres.length === 0 && <option value="">Voeg eerst genre labels toe</option>}
+                {form.genres.map((genre) => (
+                  <option key={genre} value={genre}>{genre}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-2 block text-sm font-black text-neutral-300">Leeftijd</label>
+                <select
+                  value={form.ageRating}
+                  onChange={(event) => updateField("ageRating", event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+                >
+                  {ageRatings.map((rating) => (
+                    <option key={rating} value={rating}>{rating}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-neutral-300">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(event) => updateField("status", event.target.value as BookStatus)}
+                  className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+                >
+                  <option value="Concept">Concept</option>
+                  <option value="Testversie">Testversie</option>
+                  <option value="Binnenkort">Binnenkort</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Leestijd</label>
+              <input
+                value={form.readTime}
+                onChange={(event) => updateField("readTime", event.target.value)}
+                placeholder="Bijv. ± 30 min testversie"
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Coverstijl</label>
+              <select
+                value={form.colorTheme}
+                onChange={(event) => updateField("colorTheme", event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+              >
+                {Object.entries(colorThemes).map(([value, theme]) => (
+                  <option key={value} value={value}>{theme.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm leading-6 text-blue-100">
+          Later wordt dit: <strong>Nieuw boek → metadata invullen → boek verschijnt in dashboard → openen in Studio → opslaan als concept → publiceren naar Library.</strong>
+        </div>
+
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+          >
+            Annuleren
+          </button>
+          <button
+            onClick={onSave}
+            className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
+          >
+            Opslaan in dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const [draftDashboardBooks, setDraftDashboardBooks] = useState<DashboardBook[]>([]);
+  const [newBookOpen, setNewBookOpen] = useState(false);
+  const [form, setForm] = useState<NewBookForm>(defaultForm);
+
+  useEffect(() => {
+    try {
+      const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
+      if (!savedBooks) return;
+
+      const parsedBooks = JSON.parse(savedBooks) as DashboardBook[];
+      if (Array.isArray(parsedBooks)) {
+        setDraftDashboardBooks(parsedBooks);
+      }
+    } catch (error) {
+      console.error("Kon dashboard boeken niet laden", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_BOOKS_STORAGE_KEY, JSON.stringify(draftDashboardBooks));
+  }, [draftDashboardBooks]);
+
+  const allBooks = useMemo<DashboardBook[]>(() => {
+    const staticBooks: DashboardBook[] = books.map((book) => ({ ...book, source: "library" }));
+    return [...draftDashboardBooks, ...staticBooks];
+  }, [draftDashboardBooks]);
+
+  const liveBooks = allBooks.filter((book) => book.published);
+  const draftBooks = allBooks.filter((book) => !book.published);
+
+  function saveNewBook() {
+    const title = form.title.trim();
+    if (!title) {
+      alert("Geef je boek eerst een titel.");
+      return;
+    }
+
+    if (form.genres.length === 0) {
+      alert("Voeg minimaal één genre label toe.");
+      return;
+    }
+
+    const baseId = slugify(title.normalize("NFD"));
+    const existingIds = new Set(allBooks.map((book) => book.id));
+    let nextId = baseId;
+    let counter = 2;
+
+    while (existingIds.has(nextId)) {
+      nextId = `${baseId}-${counter}`;
+      counter += 1;
+    }
+
+    const theme = colorThemes[form.colorTheme] ?? colorThemes.blue;
+    const now = new Date().toISOString();
+
+    const nextBook: DashboardBook = {
+      id: nextId,
+      title,
+      author: form.author.trim() || "Onbekende auteur",
+      subtitle: form.subtitle.trim() || "Nieuw interactief boek in concept.",
+      description: form.description.trim() || "Nog geen beschrijving ingevuld.",
+      genres: form.genres,
+      primaryGenre: form.primaryGenre || form.genres[0],
+      status: form.status,
+      ageRating: form.ageRating,
+      readTime: form.readTime.trim() || "Concept",
+      coverImage: theme.coverImage,
+      bannerImage: theme.bannerImage,
+      coverClass: theme.coverClass,
+      accentClass: theme.accentClass,
+      published: false,
+      featured: false,
+      mostRead: false,
+      source: "dashboard",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setDraftDashboardBooks((currentBooks) => [nextBook, ...currentBooks]);
+    setForm(defaultForm);
+    setNewBookOpen(false);
+  }
+
+  return (
+    <main className="min-h-screen bg-[#05070d] text-white">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#05070d]/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
+          <div>
+            <DiBooksLogo />
+            <p className="mt-1 text-xs font-black uppercase tracking-[0.32em] text-neutral-500">Auteur Dashboard</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link href="/" className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white hover:bg-white/10">
+              Library
+            </Link>
+            <Link href="/editor" className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">
+              Studio openen
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
+        <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-stretch">
+          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-blue-950/70 via-neutral-950 to-purple-950/55 p-6 shadow-2xl sm:p-8">
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Dashboard v2</p>
+            <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight sm:text-6xl">
+              Maak boeken aan voordat ze live gaan.
+            </h1>
+            <p className="mt-5 max-w-3xl text-lg font-semibold leading-8 text-neutral-300">
+              Nieuwe boeken start je als concept met titel, leeftijdscategorie, genre labels en beschrijving. Later koppelen we dit aan echte accounts, opslag en publiceren naar de Library.
+            </p>
+          </div>
+
+          <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl sm:p-6">
+            <h2 className="text-xl font-black">Publicatie-regel</h2>
+            <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
+              <strong>Concepten mag je bewerken.</strong> Zodra een boek live is gepusht naar de Library, wordt die versie vergrendeld.
+            </div>
+            <div className="rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm leading-6 text-blue-100">
+              Updates gaan later via <strong>nieuwe conceptversies</strong>, zodat lezers nooit ineens een veranderend live boek krijgen.
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Totaal boeken</p>
+            <p className="mt-2 text-4xl font-black">{allBooks.length}</p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Live</p>
+            <p className="mt-2 text-4xl font-black text-emerald-300">{liveBooks.length}</p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Concept / binnenkort</p>
+            <p className="mt-2 text-4xl font-black text-yellow-300">{draftBooks.length}</p>
+          </div>
+        </div>
+
+        <div className="mt-10 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-neutral-500">Mijn boeken</p>
+            <h2 className="mt-2 text-3xl font-black sm:text-4xl">Auteurcollectie</h2>
+          </div>
+          <button
+            onClick={() => setNewBookOpen(true)}
+            className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
+          >
+            + Nieuw boek
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+          {allBooks.map((book) => (
+            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} />
+          ))}
+        </div>
+      </section>
+
+      {newBookOpen && (
+        <NewBookModal
+          form={form}
+          setForm={setForm}
+          onClose={() => setNewBookOpen(false)}
+          onSave={saveNewBook}
+        />
+      )}
+    </main>
+  );
+}

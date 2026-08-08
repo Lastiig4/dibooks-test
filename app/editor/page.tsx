@@ -1228,6 +1228,366 @@ function StabilizeLineMiniGame({
   );
 }
 
+
+type DashboardBookStatus = "Concept" | "Testversie" | "Binnenkort";
+
+type DashboardSaveForm = {
+  title: string;
+  author: string;
+  subtitle: string;
+  description: string;
+  genres: string[];
+  genreInput: string;
+  primaryGenre: string;
+  status: DashboardBookStatus;
+  ageRating: string;
+  readTime: string;
+  colorTheme: string;
+};
+
+const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
+
+const dashboardAgeRatings = ["AL", "6+", "9+", "12+", "16+", "18+"];
+const dashboardSuggestedGenres = [
+  "Sci-fi",
+  "Fantasy",
+  "Mystery",
+  "Thriller",
+  "Romance",
+  "Horror",
+  "Avontuur",
+  "Dystopie",
+  "Interactief",
+  "Keuzeverhaal",
+  "Dossier",
+  "Medieval",
+];
+
+const dashboardColorThemes: Record<
+  string,
+  { label: string; coverClass: string; accentClass: string; coverImage: string; bannerImage: string }
+> = {
+  blue: {
+    label: "Blauw / sci-fi",
+    coverClass: "from-blue-950 via-slate-950 to-purple-950",
+    accentClass: "border-blue-500/60",
+    coverImage: "/books/the-sovereign/cover.svg",
+    bannerImage: "/books/the-sovereign/banner.svg",
+  },
+  gold: {
+    label: "Goud / dossier",
+    coverClass: "from-yellow-950 via-neutral-950 to-stone-900",
+    accentClass: "border-yellow-400/40",
+    coverImage: "/books/briars-logs/cover.svg",
+    bannerImage: "/books/briars-logs/banner.svg",
+  },
+  red: {
+    label: "Rood / fantasy",
+    coverClass: "from-red-950 via-stone-950 to-yellow-950",
+    accentClass: "border-red-400/40",
+    coverImage: "/books/crown-of-ash/cover.svg",
+    bannerImage: "/books/crown-of-ash/banner.svg",
+  },
+  green: {
+    label: "Groen / mystery",
+    coverClass: "from-cyan-950 via-neutral-950 to-emerald-950",
+    accentClass: "border-cyan-400/40",
+    coverImage: "/books/echoes-of-lumina/cover.svg",
+    bannerImage: "/books/echoes-of-lumina/banner.svg",
+  },
+  orange: {
+    label: "Oranje / thriller",
+    coverClass: "from-orange-950 via-stone-950 to-red-950",
+    accentClass: "border-orange-400/40",
+    coverImage: "/books/the-dust-protocol/cover.svg",
+    bannerImage: "/books/the-dust-protocol/banner.svg",
+  },
+};
+
+const defaultDashboardSaveForm: DashboardSaveForm = {
+  title: "",
+  author: "Giovanni",
+  subtitle: "",
+  description: "",
+  genres: ["Interactief"],
+  genreInput: "",
+  primaryGenre: "Interactief",
+  status: "Concept",
+  ageRating: "12+",
+  readTime: "Concept",
+  colorTheme: "blue",
+};
+
+function slugifyDashboardBook(value: string) {
+  return (
+    value
+      .normalize("NFD")
+      .toLowerCase()
+      .trim()
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || `boek-${Date.now()}`
+  );
+}
+
+function SaveToDashboardModal({
+  form,
+  setForm,
+  existingBookId,
+  onClose,
+  onSaveDashboard,
+  onDownloadProject,
+}: {
+  form: DashboardSaveForm;
+  setForm: React.Dispatch<React.SetStateAction<DashboardSaveForm>>;
+  existingBookId: string | null;
+  onClose: () => void;
+  onSaveDashboard: () => void;
+  onDownloadProject: () => void;
+}) {
+  function updateField<K extends keyof DashboardSaveForm>(key: K, value: DashboardSaveForm[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function addGenre(genre: string) {
+    const cleanGenre = genre.trim();
+    if (!cleanGenre) return;
+
+    setForm((current) => {
+      if (current.genres.includes(cleanGenre)) return { ...current, genreInput: "" };
+      const nextGenres = [...current.genres, cleanGenre];
+      return {
+        ...current,
+        genres: nextGenres,
+        primaryGenre: current.primaryGenre || cleanGenre,
+        genreInput: "",
+      };
+    });
+  }
+
+  function removeGenre(genre: string) {
+    setForm((current) => {
+      const nextGenres = current.genres.filter((item) => item !== genre);
+      return {
+        ...current,
+        genres: nextGenres,
+        primaryGenre: current.primaryGenre === genre ? nextGenres[0] ?? "" : current.primaryGenre,
+      };
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
+      <div className="mx-auto max-w-4xl rounded-3xl border border-white/10 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-cyan-300">Opslaan</p>
+            <h2 className="mt-2 text-3xl font-black sm:text-5xl">
+              {existingBookId ? "Dashboard boek bijwerken" : "Opslaan in dashboard"}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
+              Bewaar je huidige editor-project als conceptboek. Later koppelen we dit aan accounts en echte database-opslag.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-500"
+          >
+            Sluiten
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Titel</label>
+              <input
+                value={form.title}
+                onChange={(event) => updateField("title", event.target.value)}
+                placeholder="Bijv. The Sovereign"
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Auteur</label>
+              <input
+                value={form.author}
+                onChange={(event) => updateField("author", event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Korte ondertitel</label>
+              <input
+                value={form.subtitle}
+                onChange={(event) => updateField("subtitle", event.target.value)}
+                placeholder="Een zin die op de boekkaart komt."
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Beschrijving</label>
+              <textarea
+                value={form.description}
+                onChange={(event) => updateField("description", event.target.value)}
+                placeholder="Korte omschrijving voor de boekpagina."
+                className="h-32 w-full resize-none rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold leading-6 text-white outline-none focus:border-cyan-400"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Genre labels</label>
+              <div className="flex gap-2">
+                <input
+                  value={form.genreInput}
+                  onChange={(event) => updateField("genreInput", event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addGenre(form.genreInput);
+                    }
+                  }}
+                  placeholder="Bijv. Sci-fi"
+                  className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+                />
+                <button
+                  onClick={() => addGenre(form.genreInput)}
+                  className="rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-black text-white hover:bg-cyan-500"
+                >
+                  Voeg toe
+                </button>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {form.genres.map((genre) => (
+                  <button
+                    key={genre}
+                    onClick={() => removeGenre(genre)}
+                    className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-white hover:bg-red-600"
+                    title="Klik om te verwijderen"
+                  >
+                    {genre} ×
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {dashboardSuggestedGenres.map((genre) => (
+                  <button
+                    key={genre}
+                    onClick={() => addGenre(genre)}
+                    className="rounded-full border border-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-neutral-300 hover:bg-white/10"
+                  >
+                    + {genre}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Hoofdgenre</label>
+              <select
+                value={form.primaryGenre}
+                onChange={(event) => updateField("primaryGenre", event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+              >
+                {form.genres.length === 0 && <option value="">Voeg eerst genre labels toe</option>}
+                {form.genres.map((genre) => (
+                  <option key={genre} value={genre}>{genre}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-2 block text-sm font-black text-neutral-300">Leeftijd</label>
+                <select
+                  value={form.ageRating}
+                  onChange={(event) => updateField("ageRating", event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+                >
+                  {dashboardAgeRatings.map((rating) => (
+                    <option key={rating} value={rating}>{rating}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-neutral-300">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(event) => updateField("status", event.target.value as DashboardBookStatus)}
+                  className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+                >
+                  <option value="Concept">Concept</option>
+                  <option value="Testversie">Testversie</option>
+                  <option value="Binnenkort">Binnenkort</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Leestijd</label>
+              <input
+                value={form.readTime}
+                onChange={(event) => updateField("readTime", event.target.value)}
+                placeholder="Bijv. ± 30 min testversie"
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Coverstijl</label>
+              <select
+                value={form.colorTheme}
+                onChange={(event) => updateField("colorTheme", event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+              >
+                {Object.entries(dashboardColorThemes).map(([value, theme]) => (
+                  <option key={value} value={value}>{theme.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-4 text-sm leading-6 text-cyan-100">
+          <strong>Concept-flow:</strong> dit slaat de metadata én je huidige nodes/paths op in het dashboard. Publiceren naar de Library blijft later een aparte vergrendelde stap.
+        </div>
+
+        <div className="mt-6 flex flex-wrap justify-between gap-3">
+          <button
+            onClick={onDownloadProject}
+            className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+          >
+            Download werkbestand
+          </button>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={onClose}
+              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+            >
+              Annuleren
+            </button>
+            <button
+              onClick={onSaveDashboard}
+              className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
+            >
+              {existingBookId ? "Bijwerken in dashboard" : "Opslaan in dashboard"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [nodes, setNodes, onNodesChange] =
     useNodesState<Node<DiNodeData>>(initialNodes);
@@ -1235,6 +1595,9 @@ export default function Home() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(true);
   const [editorDarkMode, setEditorDarkMode] = useState(false);
+  const [saveDashboardOpen, setSaveDashboardOpen] = useState(false);
+  const [dashboardBookId, setDashboardBookId] = useState<string | null>(null);
+  const [dashboardSaveForm, setDashboardSaveForm] = useState<DashboardSaveForm>(defaultDashboardSaveForm);
   const [startNodeId, setStartNodeId] = useState<string>("node_1");
   const [editingTextNodeId, setEditingTextNodeId] = useState<string | null>(
     null,
@@ -1256,6 +1619,49 @@ export default function Home() {
   useEffect(() => {
     window.localStorage.setItem("dibooks-editor-dark-grid", String(editorDarkMode));
   }, [editorDarkMode]);
+
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const bookId = params.get("book");
+      if (!bookId) return;
+
+      const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
+      if (!savedBooks) return;
+
+      const dashboardBooks = JSON.parse(savedBooks) as any[];
+      if (!Array.isArray(dashboardBooks)) return;
+
+      const dashboardBook = dashboardBooks.find((book) => book.id === bookId);
+      if (!dashboardBook) return;
+
+      setDashboardBookId(dashboardBook.id);
+      setDashboardSaveForm({
+        title: dashboardBook.title ?? "",
+        author: dashboardBook.author ?? "Giovanni",
+        subtitle: dashboardBook.subtitle ?? "",
+        description: dashboardBook.description ?? "",
+        genres: Array.isArray(dashboardBook.genres) && dashboardBook.genres.length > 0 ? dashboardBook.genres : ["Interactief"],
+        genreInput: "",
+        primaryGenre: dashboardBook.primaryGenre ?? dashboardBook.genres?.[0] ?? "Interactief",
+        status: dashboardBook.status ?? "Concept",
+        ageRating: dashboardBook.ageRating ?? "12+",
+        readTime: dashboardBook.readTime ?? "Concept",
+        colorTheme: dashboardBook.colorTheme ?? "blue",
+      });
+
+      const projectData = dashboardBook.projectData;
+      if (projectData?.type === "dibooks-project") {
+        setNodes(projectData.nodes ?? []);
+        setEdges(projectData.edges ?? []);
+        setStartNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? "");
+        setSelectedNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? null);
+      }
+    } catch (error) {
+      console.error("Kon dashboard boek niet openen in de editor", error);
+    }
+  }, [setEdges, setNodes]);
 
   const previewNode = nodes.find((node) => node.id === previewNodeId);
 
@@ -1446,22 +1852,26 @@ export default function Home() {
     };
   }
 
-  function saveProject() {
-    const projectData = {
+  function getCurrentProjectData() {
+    return {
       version: 1,
       type: "dibooks-project",
-      bookTitle: "Nieuw DiBooks verhaal",
+      bookTitle: dashboardSaveForm.title.trim() || "Nieuw DiBooks verhaal",
       startNodeId,
       nodes,
       edges,
       savedAt: new Date().toISOString(),
     };
+  }
 
+  function downloadProjectFile() {
+    const projectData = getCurrentProjectData();
     const json = JSON.stringify(projectData, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
-    const fileName = `dibooks-project-${new Date()
+    const safeTitle = slugifyDashboardBook(dashboardSaveForm.title || "dibooks-project");
+    const fileName = `${safeTitle}-${new Date()
       .toISOString()
       .slice(0, 10)}.dibooks-project.json`;
 
@@ -1471,6 +1881,75 @@ export default function Home() {
     link.click();
 
     URL.revokeObjectURL(url);
+  }
+
+  function saveProject() {
+    setSaveDashboardOpen(true);
+  }
+
+  function saveCurrentBookToDashboard() {
+    const title = dashboardSaveForm.title.trim();
+    if (!title) {
+      alert("Geef je boek eerst een titel.");
+      return;
+    }
+
+    if (dashboardSaveForm.genres.length === 0) {
+      alert("Voeg minimaal één genre label toe.");
+      return;
+    }
+
+    try {
+      const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
+      const parsedBooks = savedBooks ? JSON.parse(savedBooks) : [];
+      const dashboardBooks = Array.isArray(parsedBooks) ? parsedBooks : [];
+      const existingIds = new Set(dashboardBooks.map((book: any) => book.id));
+
+      let nextId = dashboardBookId || slugifyDashboardBook(title);
+      let counter = 2;
+      while (!dashboardBookId && existingIds.has(nextId)) {
+        nextId = `${slugifyDashboardBook(title)}-${counter}`;
+        counter += 1;
+      }
+
+      const theme = dashboardColorThemes[dashboardSaveForm.colorTheme] ?? dashboardColorThemes.blue;
+      const now = new Date().toISOString();
+      const projectData = getCurrentProjectData();
+
+      const nextBook = {
+        id: nextId,
+        title,
+        author: dashboardSaveForm.author.trim() || "Onbekende auteur",
+        subtitle: dashboardSaveForm.subtitle.trim() || "Nieuw interactief boek in concept.",
+        description: dashboardSaveForm.description.trim() || "Nog geen beschrijving ingevuld.",
+        genres: dashboardSaveForm.genres,
+        primaryGenre: dashboardSaveForm.primaryGenre || dashboardSaveForm.genres[0],
+        status: dashboardSaveForm.status,
+        ageRating: dashboardSaveForm.ageRating,
+        readTime: dashboardSaveForm.readTime.trim() || "Concept",
+        coverImage: theme.coverImage,
+        bannerImage: theme.bannerImage,
+        coverClass: theme.coverClass,
+        accentClass: theme.accentClass,
+        colorTheme: dashboardSaveForm.colorTheme,
+        published: false,
+        featured: false,
+        mostRead: false,
+        source: "dashboard",
+        projectData,
+        createdAt: dashboardBooks.find((book: any) => book.id === nextId)?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      const nextBooks = [nextBook, ...dashboardBooks.filter((book: any) => book.id !== nextId)];
+      window.localStorage.setItem(DASHBOARD_BOOKS_STORAGE_KEY, JSON.stringify(nextBooks));
+      setDashboardBookId(nextId);
+      setSaveDashboardOpen(false);
+      alert("Boek opgeslagen in je dashboard.");
+    } catch (error) {
+      console.error(error);
+      alert("Er ging iets mis met opslaan in je dashboard.");
+    }
   }
 
   function loadProject(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1499,6 +1978,11 @@ export default function Home() {
         setNodes(projectData.nodes ?? []);
         setEdges(projectData.edges ?? []);
         setStartNodeId(projectData.startNodeId ?? "");
+        setDashboardBookId(null);
+        setDashboardSaveForm((current) => ({
+          ...current,
+          title: projectData.bookTitle && projectData.bookTitle !== "Nieuw DiBooks verhaal" ? projectData.bookTitle : current.title,
+        }));
 
         alert("Project geladen.");
       } catch (error) {
@@ -2056,21 +2540,17 @@ export default function Home() {
       <div className="flex h-full">
         <aside className="flex w-24 flex-col items-center border-r-4 border-black bg-neutral-950 p-3">
           <button
-            type="button"
             onClick={() => {
               const confirmed = window.confirm(
-                "Weet je zeker dat je terug wilt naar de Library? Vergeet niet eerst je project op te slaan als je wijzigingen hebt gemaakt.",
+                "Weet je zeker dat je terug wilt naar de Library? Vergeet niet eerst je project op te slaan.",
               );
-
-              if (!confirmed) return;
-
-              window.location.href = "/";
+              if (confirmed) window.location.href = "/";
             }}
-            className="mb-6 flex flex-col items-center rounded-2xl outline-none transition hover:scale-105 focus:ring-2 focus:ring-blue-500"
+            className="mb-6 flex flex-col items-center rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             title="Terug naar Library"
             aria-label="Terug naar Library"
           >
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900 shadow-inner transition hover:border-blue-500 hover:bg-neutral-800">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900 shadow-inner transition hover:border-blue-400 hover:bg-neutral-800">
               <span className="text-2xl font-black tracking-tight text-white">DI</span>
             </div>
             <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">Studio</p>
@@ -2799,6 +3279,16 @@ export default function Home() {
             onClose={() => setEditingTextNodeId(null)}
           />
         )}
+      {saveDashboardOpen && (
+        <SaveToDashboardModal
+          form={dashboardSaveForm}
+          setForm={setDashboardSaveForm}
+          existingBookId={dashboardBookId}
+          onClose={() => setSaveDashboardOpen(false)}
+          onSaveDashboard={saveCurrentBookToDashboard}
+          onDownloadProject={downloadProjectFile}
+        />
+      )}
       {previewOpen && previewNode && (
         <div className="fixed inset-0 z-50 flex min-h-screen flex-col bg-neutral-950 text-white">
           <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-6">

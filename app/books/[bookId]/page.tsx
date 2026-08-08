@@ -41,9 +41,16 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
       <section className="grid gap-8 px-5 py-10 sm:px-8 lg:grid-cols-[420px_1fr] lg:px-10 lg:py-14">
         <div className={`overflow-hidden rounded-[2rem] border ${book.accentClass} bg-neutral-950 shadow-2xl`}>
           <div className={`relative flex h-[520px] flex-col justify-between bg-gradient-to-br ${book.coverClass} p-7`}>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.22),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.22),transparent_32%)]" />
+            {book.coverImage && (
+              <img
+                src={book.coverImage}
+                alt={`Cover van ${book.title}`}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            )}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.78))]" />
             <div className="relative flex items-start justify-between gap-3">
-              <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/90">
+              <span className="rounded-full bg-black/55 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/90 backdrop-blur-sm">
                 {book.primaryGenre}
               </span>
               <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-black">
@@ -54,7 +61,7 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
               <h1 className="text-5xl font-black leading-none text-white drop-shadow-lg">
                 {book.title}
               </h1>
-              <p className="mt-3 text-xs font-bold uppercase tracking-[0.25em] text-white/55">
+              <p className="mt-3 text-xs font-bold uppercase tracking-[0.25em] text-white/65">
                 Interactive book
               </p>
             </div>

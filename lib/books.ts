@@ -12,6 +12,8 @@ export type DiBook = {
   ageRating?: string;
   readTime?: string;
   storyFile?: string;
+  coverImage?: string;
+  bannerImage?: string;
   coverClass: string;
   accentClass: string;
   featured?: boolean;
@@ -33,9 +35,9 @@ export const books: DiBook[] = [
     status: "Testversie",
     ageRating: "12+",
     readTime: "± 30 min testversie",
-    // Voor nu gebruiken we je bestaande bestand in public/The Sovereign.json.
-    // Later kunnen we dit verplaatsen naar /books/the-sovereign/story.json.
-    storyFile: "/The%20Sovereign.json",
+    storyFile: "/books/the-sovereign/The Sovereign.json",
+    coverImage: "/books/the-sovereign/cover.svg",
+    bannerImage: "/books/the-sovereign/banner.svg",
     coverClass: "from-blue-950 via-slate-950 to-purple-950",
     accentClass: "border-blue-500/60",
     featured: true,
@@ -54,6 +56,8 @@ export const books: DiBook[] = [
     status: "Binnenkort",
     ageRating: "12+",
     readTime: "Binnenkort",
+    coverImage: "/books/echoes-of-lumina/cover.svg",
+    bannerImage: "/books/echoes-of-lumina/banner.svg",
     coverClass: "from-cyan-950 via-neutral-950 to-emerald-950",
     accentClass: "border-cyan-400/40",
     mostRead: true,
@@ -71,6 +75,8 @@ export const books: DiBook[] = [
     status: "Binnenkort",
     ageRating: "16+",
     readTime: "Binnenkort",
+    coverImage: "/books/the-dust-protocol/cover.svg",
+    bannerImage: "/books/the-dust-protocol/banner.svg",
     coverClass: "from-orange-950 via-stone-950 to-red-950",
     accentClass: "border-orange-400/40",
     mostRead: true,
@@ -88,6 +94,8 @@ export const books: DiBook[] = [
     status: "Concept",
     ageRating: "12+",
     readTime: "Concept",
+    coverImage: "/books/briars-logs/cover.svg",
+    bannerImage: "/books/briars-logs/banner.svg",
     coverClass: "from-yellow-950 via-neutral-950 to-stone-900",
     accentClass: "border-yellow-400/40",
     mostRead: true,
@@ -104,6 +112,8 @@ export const books: DiBook[] = [
     status: "Concept",
     ageRating: "12+",
     readTime: "Concept",
+    coverImage: "/books/orbit-zero/cover.svg",
+    bannerImage: "/books/orbit-zero/banner.svg",
     coverClass: "from-indigo-950 via-black to-sky-950",
     accentClass: "border-indigo-400/40",
     published: false,
@@ -119,6 +129,8 @@ export const books: DiBook[] = [
     status: "Concept",
     ageRating: "12+",
     readTime: "Concept",
+    coverImage: "/books/last-signal/cover.svg",
+    bannerImage: "/books/last-signal/banner.svg",
     coverClass: "from-slate-950 via-blue-950 to-black",
     accentClass: "border-sky-400/40",
     published: false,
@@ -134,6 +146,8 @@ export const books: DiBook[] = [
     status: "Concept",
     ageRating: "12+",
     readTime: "Concept",
+    coverImage: "/books/room-17/cover.svg",
+    bannerImage: "/books/room-17/banner.svg",
     coverClass: "from-zinc-950 via-neutral-900 to-teal-950",
     accentClass: "border-teal-400/40",
     published: false,
@@ -149,6 +163,8 @@ export const books: DiBook[] = [
     status: "Concept",
     ageRating: "12+",
     readTime: "Concept",
+    coverImage: "/books/the-silent-vote/cover.svg",
+    bannerImage: "/books/the-silent-vote/banner.svg",
     coverClass: "from-amber-950 via-neutral-950 to-red-950",
     accentClass: "border-amber-400/40",
     published: false,
@@ -164,6 +180,8 @@ export const books: DiBook[] = [
     status: "Concept",
     ageRating: "12+",
     readTime: "Concept",
+    coverImage: "/books/crown-of-ash/cover.svg",
+    bannerImage: "/books/crown-of-ash/banner.svg",
     coverClass: "from-red-950 via-stone-950 to-yellow-950",
     accentClass: "border-red-400/40",
     published: false,
@@ -179,6 +197,8 @@ export const books: DiBook[] = [
     status: "Concept",
     ageRating: "12+",
     readTime: "Concept",
+    coverImage: "/books/lion-of-murcia/cover.svg",
+    bannerImage: "/books/lion-of-murcia/banner.svg",
     coverClass: "from-yellow-900 via-orange-950 to-stone-950",
     accentClass: "border-yellow-500/40",
     published: false,

@@ -737,7 +737,7 @@ export default function ReaderOnlyPage() {
       } catch (error) {
         console.error(error);
         setLoadError(
-          "Kon het boekbestand niet laden. Controleer de storyFile in lib/books.ts en of het JSON-bestand in public staat.",
+          "Kon het boekbestand niet laden. Controleer of public/books/the-sovereign/story.json bestaat en of storyFile in lib/books.ts klopt.",
         );
       } finally {
         setLoading(false);
@@ -880,7 +880,7 @@ export default function ReaderOnlyPage() {
           <h1 className="mt-3 text-3xl font-black">Boek niet gevonden</h1>
           <p className="mt-4 text-red-100">{loadError || "Start-node niet gevonden."}</p>
           <p className="mt-4 text-sm text-red-100/70">
-            Controleer in <strong>lib/books.ts</strong> of dit boek een correcte storyFile heeft, bijvoorbeeld <strong>/The%20Sovereign.json</strong>.
+            Controleer in <strong>lib/books.ts</strong> of dit boek een correcte storyFile heeft, bijvoorbeeld <strong>/books/the-sovereign/story.json</strong>.
           </p>
         </div>
       </main>
