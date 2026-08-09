@@ -272,7 +272,7 @@ function BookPageReader({
   theme: ReaderTheme;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const [pages, setPages] = useState<string[]>(["<p>Deze pagina is nog leeg.</p>"]);
+  const [pages, setPages] = useState<string[]>([]);
   const [visiblePageCount, setVisiblePageCount] = useState(1);
 
   useEffect(() => {
@@ -311,12 +311,19 @@ function BookPageReader({
   }, [html, onPageCountChange, onVisiblePageCountChange, pageMode, setPageIndex, textSize]);
 
   useEffect(() => {
+    // Wacht tot de echte paginering klaar is. Anders wordt een opgeslagen
+    // pagina-index zoals 4 direct teruggezet naar 0 omdat de reader vóór
+    // de eerste meting nog 0 pagina's kent.
+    if (pages.length === 0) return;
+
     if (pageIndex > pages.length - 1) {
       setPageIndex(Math.max(0, pages.length - 1));
     }
   }, [pageIndex, pages.length, setPageIndex]);
 
-  const visiblePages = pages.slice(pageIndex, pageIndex + visiblePageCount);
+  const visiblePages = pages.length
+    ? pages.slice(pageIndex, pageIndex + visiblePageCount)
+    : ["<p>Pagina wordt geladen...</p>"];
 
   const pageClass =
     theme === "light"
