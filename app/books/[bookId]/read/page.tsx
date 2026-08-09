@@ -357,85 +357,256 @@ function StabilizeLineMiniGame({
   onSuccess: () => void;
   onFail: () => void;
 }) {
-  const [result, setResult] = useState<"success" | "fail" | null>(null);
-  const [progress, setProgress] = useState(0);
+  const arenaRef = useRef<HTMLDivElement | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const lastFrameTimeRef = useRef<number | null>(null);
+  const pointerActiveRef = useRef(false);
+  const pointerPositionRef = useRef(50);
+  const signalPositionRef = useRef(50);
+
+  const [signalPosition, setSignalPosition] = useState(50);
+  const [stableSeconds, setStableSeconds] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [running, setRunning] = useState(false);
-  const timerRef = useRef<number | null>(null);
-  const duration = Math.max(3, Math.min(12, node.miniGameDuration ?? 5));
+  const [result, setResult] = useState<"success" | "fail" | null>(null);
 
-  useEffect(() => {
-    if (!running || result) return;
+  const difficulty = node.miniGameDifficulty ?? "normal";
+  const requiredSeconds = Math.max(3, Math.min(12, node.miniGameDuration ?? 5));
+  const timeLimitSeconds = Math.max(requiredSeconds + 6, requiredSeconds * 2);
+  const tolerance = difficulty === "easy" ? 15 : difficulty === "hard" ? 8 : 11;
+  const safeZoneWidth = tolerance * 2;
 
-    const startTime = Date.now();
-    timerRef.current = window.setInterval(() => {
-      const nextProgress = Math.min(100, ((Date.now() - startTime) / (duration * 1000)) * 100);
-      setProgress(nextProgress);
-      if (nextProgress >= 100) {
-        setResult("success");
-        setRunning(false);
-      }
-    }, 80);
+  function updatePointerFromEvent(event: React.PointerEvent<HTMLDivElement>) {
+    const arena = arenaRef.current;
+    if (!arena) return;
 
-    return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-    };
-  }, [duration, result, running]);
+    const rect = arena.getBoundingClientRect();
+    const rawPercentage = ((event.clientX - rect.left) / rect.width) * 100;
+    pointerPositionRef.current = Math.max(0, Math.min(100, rawPercentage));
+  }
 
-  function reset() {
-    if (timerRef.current) window.clearInterval(timerRef.current);
-    setProgress(0);
+  function resetGame() {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
+    pointerActiveRef.current = false;
+    pointerPositionRef.current = 50;
+    signalPositionRef.current = 50;
+    lastFrameTimeRef.current = null;
+
+    setSignalPosition(50);
+    setStableSeconds(0);
+    setElapsedSeconds(0);
     setResult(null);
     setRunning(false);
   }
 
+  useEffect(() => {
+    if (!running || result) return;
+
+    function tick(timestamp: number) {
+      const lastTimestamp = lastFrameTimeRef.current ?? timestamp;
+      const deltaSeconds = Math.min(0.05, (timestamp - lastTimestamp) / 1000);
+      lastFrameTimeRef.current = timestamp;
+
+      setElapsedSeconds((currentElapsed) => {
+        const nextElapsed = currentElapsed + deltaSeconds;
+
+        if (nextElapsed >= timeLimitSeconds) {
+          setResult("fail");
+          setRunning(false);
+          return timeLimitSeconds;
+        }
+
+        return nextElapsed;
+      });
+
+      const wobble =
+        Math.sin(timestamp / 230) * (difficulty === "hard" ? 5 : 3.2) +
+        Math.sin(timestamp / 97) * (difficulty === "hard" ? 2.6 : 1.7);
+
+      if (pointerActiveRef.current) {
+        signalPositionRef.current +=
+          (pointerPositionRef.current + wobble - signalPositionRef.current) * 0.22;
+      } else {
+        signalPositionRef.current +=
+          (50 + wobble * 2 - signalPositionRef.current) * 0.035;
+      }
+
+      signalPositionRef.current = Math.max(0, Math.min(100, signalPositionRef.current));
+
+      const isStable = Math.abs(signalPositionRef.current - 50) <= tolerance;
+      setSignalPosition(signalPositionRef.current);
+
+      setStableSeconds((currentStableSeconds) => {
+        const nextStableSeconds =
+          isStable && pointerActiveRef.current
+            ? currentStableSeconds + deltaSeconds
+            : Math.max(0, currentStableSeconds - deltaSeconds * 1.4);
+
+        if (nextStableSeconds >= requiredSeconds) {
+          setResult("success");
+          setRunning(false);
+          return requiredSeconds;
+        }
+
+        return nextStableSeconds;
+      });
+
+      animationRef.current = requestAnimationFrame(tick);
+    }
+
+    animationRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
+  }, [difficulty, requiredSeconds, result, running, timeLimitSeconds, tolerance]);
+
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
+  }, []);
+
+  const progressPercentage = Math.min(100, (stableSeconds / requiredSeconds) * 100);
+  const timePercentage = Math.min(100, (elapsedSeconds / timeLimitSeconds) * 100);
+  const isStable = Math.abs(signalPosition - 50) <= tolerance;
+  const allowRetry = node.miniGameAllowRetry ?? true;
+
   return (
-    <div className="mx-auto flex h-full max-w-4xl flex-col justify-center p-5">
+    <div className="mx-auto flex h-full max-w-5xl flex-col justify-center p-5 sm:p-6">
       <div className="rounded-[2rem] border border-purple-500/25 bg-purple-950/25 p-6 shadow-2xl sm:p-8">
-        <p className="text-xs font-black uppercase tracking-[0.28em] text-purple-300">Mini game</p>
-        <h1 className="mt-3 text-3xl font-black sm:text-5xl">{node.title}</h1>
-        <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-neutral-300">
-          Houd het signaal stabiel tot de balk vol is. Deze v1-reader gebruikt een simpele speelbare versie; later koppelen we hier dezelfde volledige minigame aan als in de Studio-preview.
-        </p>
+        <div className="mb-6">
+          <p className="text-xs font-black uppercase tracking-[0.28em] text-purple-300">Mini game</p>
+          <h1 className="mt-3 text-3xl font-black sm:text-5xl">{node.title}</h1>
+          <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-neutral-300">
+            Houd de signaallijn {requiredSeconds.toFixed(0)} seconden binnen de veilige zone. Werkt met muis én touch.
+          </p>
+        </div>
 
-        <div className="mt-8 rounded-3xl border border-purple-400/20 bg-black/40 p-5">
-          <div className="h-6 overflow-hidden rounded-full bg-neutral-800">
-            <div className="h-full bg-cyan-300 transition-[width]" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="mt-3 flex justify-between text-xs font-black uppercase tracking-widest text-neutral-500">
-            <span>Signal</span>
-            <span>{Math.round(progress)}%</span>
+        <div
+          ref={arenaRef}
+          onPointerDown={(event) => {
+            pointerActiveRef.current = true;
+            updatePointerFromEvent(event);
+            event.currentTarget.setPointerCapture(event.pointerId);
+
+            if (!running && !result) {
+              lastFrameTimeRef.current = null;
+              setRunning(true);
+            }
+          }}
+          onPointerMove={updatePointerFromEvent}
+          onPointerUp={() => {
+            pointerActiveRef.current = false;
+          }}
+          onPointerCancel={() => {
+            pointerActiveRef.current = false;
+          }}
+          className="relative h-64 touch-none overflow-hidden rounded-3xl border-2 border-purple-700 bg-neutral-950"
+        >
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-l border-purple-500/50" />
+
+          <div
+            className="absolute top-0 h-full bg-cyan-500/15 ring-2 ring-cyan-300/40"
+            style={{
+              left: `${50 - safeZoneWidth / 2}%`,
+              width: `${safeZoneWidth}%`,
+            }}
+          />
+
+          <div className="absolute left-0 right-0 top-1/2 h-px bg-purple-500/30" />
+
+          <div
+            className={`absolute top-0 h-full w-1 -translate-x-1/2 rounded-full shadow-[0_0_24px_rgba(34,211,238,0.85)] ${
+              isStable ? "bg-cyan-200" : "bg-red-400"
+            }`}
+            style={{ left: `${signalPosition}%` }}
+          />
+
+          <div
+            className={`absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full px-4 py-2 text-sm font-black ${
+              isStable && pointerActiveRef.current ? "bg-cyan-500 text-black" : "bg-neutral-800 text-neutral-300"
+            }`}
+          >
+            {running
+              ? isStable && pointerActiveRef.current
+                ? "STABIEL"
+                : "CORRIGEER DE LIJN"
+              : result === "success"
+                ? "SIGNAL LOCK"
+                : result === "fail"
+                  ? "SIGNAL LOST"
+                  : "HOUD VAST OM TE STARTEN"}
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          {!running && !result && (
-            <button onClick={() => setRunning(true)} className="rounded-2xl bg-cyan-400 px-6 py-4 font-black text-black hover:bg-cyan-300">
-              Start mini game
-            </button>
-          )}
+        <div className="mt-6 grid gap-4">
+          <div>
+            <div className="mb-2 flex items-center justify-between text-sm font-bold text-neutral-400">
+              <span>Stabiliteit</span>
+              <span>
+                {stableSeconds.toFixed(1)} / {requiredSeconds.toFixed(0)} sec
+              </span>
+            </div>
+            <div className="h-4 overflow-hidden rounded-full bg-neutral-800">
+              <div className="h-full bg-cyan-400 transition-[width]" style={{ width: `${progressPercentage}%` }} />
+            </div>
+          </div>
 
-          {result === "success" && (
-            <button onClick={onSuccess} className="rounded-2xl bg-emerald-500 px-6 py-4 font-black text-white hover:bg-emerald-400">
-              Gelukt — ga verder
-            </button>
-          )}
-
-          {result === "fail" && (
-            <button onClick={onFail} className="rounded-2xl bg-red-600 px-6 py-4 font-black text-white hover:bg-red-500">
-              Mislukt — ga verder
-            </button>
-          )}
-
-          <button onClick={() => setResult("fail")} className="rounded-2xl border border-red-400/25 bg-red-500/10 px-6 py-4 font-black text-red-100 hover:bg-red-500/20">
-            Forceer fail route
-          </button>
-
-          {(node.miniGameAllowRetry ?? true) && (running || result) && (
-            <button onClick={reset} className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 font-black text-white hover:bg-white/10">
-              Opnieuw
-            </button>
-          )}
+          <div>
+            <div className="mb-2 flex items-center justify-between text-sm font-bold text-neutral-500">
+              <span>Tijdslimiet</span>
+              <span>
+                {elapsedSeconds.toFixed(1)} / {timeLimitSeconds.toFixed(0)} sec
+              </span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full bg-neutral-800">
+              <div className="h-full bg-purple-500 transition-[width]" style={{ width: `${timePercentage}%` }} />
+            </div>
+          </div>
         </div>
+
+        {result && (
+          <div
+            className={`mt-6 rounded-2xl border p-4 ${
+              result === "success" ? "border-cyan-500 bg-cyan-950/40 text-cyan-100" : "border-red-600 bg-red-950/40 text-red-100"
+            }`}
+          >
+            <p className="text-xl font-black">{result === "success" ? "Gelukt." : "Mislukt."}</p>
+            <p className="mt-1 text-sm opacity-80">
+              {result === "success"
+                ? "Het signaal is stabiel genoeg om verder te gaan."
+                : "Het signaal is weggevallen. De fail-route wordt geactiveerd."}
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={result === "success" ? onSuccess : onFail}
+                className={`rounded-xl px-5 py-3 font-black ${
+                  result === "success" ? "bg-cyan-500 text-black hover:bg-cyan-400" : "bg-red-600 text-white hover:bg-red-500"
+                }`}
+              >
+                Ga verder
+              </button>
+
+              {allowRetry && (
+                <button onClick={resetGame} className="rounded-xl bg-neutral-800 px-5 py-3 font-black text-white hover:bg-neutral-700">
+                  Opnieuw proberen
+                </button>
+              )}
+
+              {!allowRetry && result === "fail" && (
+                <div className="rounded-xl bg-neutral-900 px-4 py-3 text-sm font-bold text-neutral-300">
+                  Geen herkansing beschikbaar.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
