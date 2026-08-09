@@ -54,41 +54,26 @@ function BookBadge({ children, light = false }: { children: React.ReactNode; lig
   );
 }
 
-function GeneratedCover({ book, large = false }: { book: DashboardBook; large?: boolean }) {
+function CoverArtwork({ book, large = false }: { book: DashboardBook; large?: boolean }) {
   const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
-  const titleSize = large ? "text-5xl sm:text-6xl" : "text-3xl";
   const hasCustomCover = !!book.coverImage;
 
   return (
     <div
-      className={`relative isolate flex ${large ? "h-72" : "h-44"} flex-col justify-between overflow-hidden rounded-t-2xl bg-gradient-to-br ${coverClass} p-5`}
+      className={`relative isolate ${large ? "h-80" : "h-64"} overflow-hidden bg-gradient-to-br ${coverClass}`}
     >
       {hasCustomCover && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={book.coverImage} alt={`Cover van ${book.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover" />
       )}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.16),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.18),rgba(0,0,0,0.78))]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.16),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.20))]" />
       {!hasCustomCover && (
         <>
           <div className="absolute -right-16 top-7 -z-10 h-44 w-44 rounded-full border border-white/10" />
           <div className="absolute -right-8 top-20 -z-10 h-64 w-64 rounded-full border border-white/10" />
+          <div className="absolute left-5 top-5 text-[10px] font-black uppercase tracking-[0.35em] text-white/30">DiBooks</div>
         </>
       )}
-      <div className="absolute bottom-0 left-0 right-0 -z-10 h-24 bg-black/45" />
-
-      <div className="flex items-start justify-between gap-3">
-        <BookBadge>{book.primaryGenre}</BookBadge>
-        <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
-      </div>
-
-      <div>
-        <h3 className={`${titleSize} max-w-[90%] font-black leading-[0.95] text-white drop-shadow-lg`}>
-          {book.title}
-        </h3>
-        <p className="mt-3 text-[11px] font-black uppercase tracking-[0.32em] text-white/55">
-          Interactive story
-        </p>
-      </div>
     </div>
   );
 }
@@ -104,11 +89,21 @@ function BookCard({ book, large = false }: { book: DashboardBook; large?: boolea
         large ? "w-[330px] sm:w-[400px]" : "w-[250px] sm:w-[290px]"
       }`}
     >
-      <GeneratedCover book={book} large={large} />
-      <div className="min-h-[154px] bg-neutral-950 p-5">
-        <p className="line-clamp-3 text-sm font-semibold leading-6 text-neutral-300">
-          {book.subtitle}
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-4 py-3">
+        <BookBadge>{book.primaryGenre}</BookBadge>
+        <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
+      </div>
+
+      <CoverArtwork book={book} large={large} />
+
+      <div className="flex min-h-[136px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-5 backdrop-blur-[2px]">
+        <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300/80">
+          Interactive story
         </p>
+        <h3 className="mt-2 line-clamp-2 text-3xl font-black leading-none text-white">
+          {book.title}
+        </h3>
+
         <div className="mt-5 flex items-center justify-between gap-3">
           <span className="truncate text-xs font-black uppercase tracking-widest text-neutral-500">
             {book.author}
@@ -127,12 +122,19 @@ function FeaturedPanel({ book }: { book: DashboardBook }) {
 
   return (
     <Link href={`/books/${book.id}`} className="hidden lg:block">
-      <div className={`rounded-3xl border ${accentClass} bg-black/25 p-4 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
-        <GeneratedCover book={book} large />
-        <div className="rounded-b-2xl bg-neutral-950 p-5">
-          <p className="line-clamp-4 text-sm font-bold leading-6 text-neutral-300">
-            {book.description}
+      <div className={`overflow-hidden rounded-3xl border ${accentClass} bg-neutral-950 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-5 py-4">
+          <BookBadge>{book.primaryGenre}</BookBadge>
+          <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
+        </div>
+        <CoverArtwork book={book} large />
+        <div className="flex min-h-[150px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-5 backdrop-blur-[2px]">
+          <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300/80">
+            Interactive story
           </p>
+          <h3 className="mt-2 line-clamp-2 text-5xl font-black leading-none text-white">
+            {book.title}
+          </h3>
         </div>
       </div>
     </Link>
