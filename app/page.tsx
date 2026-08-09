@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { books, type DiBook } from "@/lib/books";
-import { fetchPublishedDashboardBooksFromSupabase } from "@/lib/supabase/dashboardBooks";
+import type { DiBook } from "@/lib/books";
+import {
+  fetchComingSoonDashboardBooksFromSupabase,
+  fetchPublishedDashboardBooksFromSupabase,
+} from "@/lib/supabase/dashboardBooks";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
 
@@ -173,7 +176,8 @@ function makeGenreRows(allBooks: DashboardBook[]) {
 }
 
 export default function LibraryPage() {
-  const [dashboardBooks, setDashboardBooks] = useState<DashboardBook[]>([]);
+  const [publishedBooks, setPublishedBooks] = useState<DashboardBook[]>([]);
+  const [comingSoonBooks, setComingSoonBooks] = useState<DashboardBook[]>([]);
   const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
 
@@ -182,8 +186,15 @@ export default function LibraryPage() {
 
     async function loadDashboardBooks() {
       try {
-        const publishedBooks = await fetchPublishedDashboardBooksFromSupabase();
-        if (!cancelled) setDashboardBooks(publishedBooks as DashboardBook[]);
+        const [nextPublishedBooks, nextComingSoonBooks] = await Promise.all([
+          fetchPublishedDashboardBooksFromSupabase(),
+          fetchComingSoonDashboardBooksFromSupabase(),
+        ]);
+
+        if (!cancelled) {
+          setPublishedBooks(nextPublishedBooks as DashboardBook[]);
+          setComingSoonBooks(nextComingSoonBooks as DashboardBook[]);
+        }
       } catch (error) {
         console.error("Kon gepubliceerde dashboardboeken niet laden uit Supabase.", error);
       }
@@ -197,13 +208,17 @@ export default function LibraryPage() {
   }, []);
 
   const allBooks = useMemo<DashboardBook[]>(() => {
-    const staticBooks: DashboardBook[] = books.map((book) => ({ ...book, source: "library" }));
-    return [...dashboardBooks, ...staticBooks];
-  }, [dashboardBooks]);
+    return [...publishedBooks, ...comingSoonBooks];
+  }, [publishedBooks, comingSoonBooks]);
 
-  const featuredBook = dashboardBooks[0] ?? allBooks.find((book) => book.featured) ?? allBooks[0];
-  const mostReadBooks = allBooks.filter((book) => book.mostRead || book.source === "dashboard").slice(0, 12);
-  const genreRows = makeGenreRows(allBooks);
+  const liveBooks = useMemo(
+    () => publishedBooks.filter((book) => book.published),
+    [publishedBooks],
+  );
+
+  const featuredBook = liveBooks[0] ?? comingSoonBooks[0] ?? null;
+  const mostReadBooks = liveBooks.filter((book) => book.mostRead || book.source === "dashboard").slice(0, 12);
+  const genreRows = makeGenreRows(liveBooks);
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#05070d] text-white">
@@ -256,6 +271,7 @@ export default function LibraryPage() {
         </div>
       </header>
 
+      {featuredBook ? (
       <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
         <div className={`relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
           {featuredBook.bannerImage && (
@@ -310,8 +326,21 @@ export default function LibraryPage() {
           </div>
         </div>
       </section>
+      ) : (
+        <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-8 shadow-2xl sm:p-12">
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">DiBooks Library</p>
+            <h1 className="mt-4 max-w-4xl text-5xl font-black leading-none sm:text-7xl">Nog geen boeken live.</h1>
+            <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">
+              De standaard testboeken zijn weggehaald. Publiceer straks je eigen boeken vanuit het Dashboard, of zet een concept op Binnenkort om hem hier alvast aan te kondigen.
+            </p>
+          </div>
+        </section>
+      )}
 
-      {dashboardBooks.length > 0 && <BookRow title="Nieuw uit het Dashboard" rowBooks={dashboardBooks} />}
+      {comingSoonBooks.length > 0 && <BookRow title="Binnenkort" rowBooks={comingSoonBooks} />}
+
+      {liveBooks.length > 0 && <BookRow title="Nieuw in de Library" rowBooks={liveBooks} />}
 
       <BookRow title="Meest gelezen boeken" rowBooks={mostReadBooks} />
 
@@ -342,7 +371,7 @@ export default function LibraryPage() {
       </section>
 
       <footer className="border-t border-white/5 px-5 py-8 text-sm font-bold text-neutral-500 sm:px-8 lg:px-10">
-        DiBooks Library • {allBooks.length} boeken in catalogus • {dashboardBooks.length} dashboard publicaties
+        DiBooks Library • {allBooks.length} boeken in catalogus • {liveBooks.length} live • {comingSoonBooks.length} binnenkort
       </footer>
 
       {authModalMode && (

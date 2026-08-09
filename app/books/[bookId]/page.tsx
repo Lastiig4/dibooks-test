@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { books, type DiBook } from "@/lib/books";
+import type { DiBook } from "@/lib/books";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
@@ -168,22 +168,13 @@ export default function BookDetailPage() {
       setLoading(true);
       setError(null);
 
-      const staticBook = books.find((item) => item.id === bookId);
-      if (staticBook) {
-        if (!cancelled) {
-          setBook({ ...staticBook, source: "library" });
-          setLoading(false);
-        }
-        return;
-      }
-
       try {
         const supabase = createSupabaseBrowserClient();
         const { data, error: supabaseError } = await supabase
           .from("dashboard_books")
           .select("*")
           .eq("id", bookId)
-          .eq("published", true)
+          .or("published.eq.true,status.eq.Binnenkort")
           .maybeSingle();
 
         if (supabaseError) throw supabaseError;
@@ -226,9 +217,9 @@ export default function BookDetailPage() {
       <main className="flex min-h-screen items-center justify-center bg-[#05070d] p-5 text-white">
         <div className="max-w-2xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center shadow-2xl">
           <p className="text-sm font-black uppercase tracking-[0.32em] text-red-300">Niet gevonden</p>
-          <h1 className="mt-3 text-4xl font-black">Dit boek bestaat niet of staat niet live.</h1>
+          <h1 className="mt-3 text-4xl font-black">Dit boek bestaat niet of staat niet in de Library.</h1>
           <p className="mt-4 text-sm font-semibold leading-6 text-neutral-400">
-            Conceptboeken zijn alleen zichtbaar in het Dashboard. Publiceer een boek eerst naar de Library voordat lezers de detailpagina kunnen openen.
+            Conceptboeken zijn alleen zichtbaar in het Dashboard. Boeken met status Binnenkort mogen wel als aankondiging in de Library staan, maar zijn nog niet leesbaar.
           </p>
           <Link href="/" className="mt-6 inline-flex rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500">
             Terug naar Library
@@ -276,8 +267,16 @@ export default function BookDetailPage() {
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_420px] lg:items-center xl:grid-cols-[1fr_470px]">
           <div className="max-w-4xl">
             {book.source === "dashboard" && (
-              <div className="mb-5 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-emerald-200">
-                Nieuw gepubliceerd vanuit Dashboard
+              <div
+                className={`mb-5 inline-flex rounded-full border px-4 py-2 text-xs font-black uppercase tracking-[0.25em] ${
+                  book.status === "Binnenkort" && !book.published
+                    ? "border-yellow-400/30 bg-yellow-500/10 text-yellow-100"
+                    : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                }`}
+              >
+                {book.status === "Binnenkort" && !book.published
+                  ? "Aangekondigd door auteur"
+                  : "Nieuw gepubliceerd vanuit Dashboard"}
               </div>
             )}
 
@@ -302,7 +301,7 @@ export default function BookDetailPage() {
                 </Link>
               ) : (
                 <span className="rounded-2xl bg-neutral-700 px-7 py-4 text-lg font-black text-neutral-300">
-                  Binnenkort
+                  {book.status === "Binnenkort" && !book.published ? "Nog niet leesbaar" : "Binnenkort"}
                 </span>
               )}
               <Link href="/" className="rounded-2xl border border-white/15 bg-black/30 px-7 py-4 text-lg font-black text-white hover:bg-white/10">
@@ -324,7 +323,7 @@ export default function BookDetailPage() {
           </p>
 
           <div className="mt-8 rounded-3xl border border-blue-500/20 bg-blue-500/10 p-5 text-sm font-semibold leading-7 text-blue-100">
-            DiBooks-boeken kunnen tekst, keuzes, cutscenes en mini-games bevatten. De exacte interactieve inhoud wordt geladen wanneer je het boek opent in de Reader.
+            DiBooks-boeken kunnen tekst, keuzes, cutscenes en mini-games bevatten. Boeken met de status Binnenkort zijn alleen een aankondiging; lezen kan pas zodra de auteur het boek publiceert.
           </div>
         </article>
 

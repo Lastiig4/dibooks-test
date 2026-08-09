@@ -260,6 +260,35 @@ export async function fetchPublishedDashboardBooksFromSupabase() {
   return (data ?? []).map(mapRowToDashboardBook);
 }
 
+export async function fetchComingSoonDashboardBooksFromSupabase() {
+  const supabase = createSupabaseBrowserClient();
+
+  const { data, error } = await supabase
+    .from("dashboard_books")
+    .select("*")
+    .eq("published", false)
+    .eq("status", "Binnenkort")
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map(mapRowToDashboardBook);
+}
+
+export async function fetchLibraryDashboardBooksFromSupabase() {
+  const supabase = createSupabaseBrowserClient();
+
+  const { data, error } = await supabase
+    .from("dashboard_books")
+    .select("*")
+    .or("published.eq.true,status.eq.Binnenkort")
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map(mapRowToDashboardBook);
+}
+
 export async function publishDashboardBookInSupabase(bookId: string) {
   const supabase = createSupabaseBrowserClient();
 
