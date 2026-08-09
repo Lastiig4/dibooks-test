@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import NotificationBell from "@/components/NotificationBell";
 import { useEffect, useMemo, useState } from "react";
 import {
   getBookDetailPath,
@@ -1806,6 +1807,7 @@ export default function DashboardPage() {
   if (!permissions.canUseDashboard) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#05070d] p-5 text-white">
+      <NotificationBell />
         <div className="max-w-2xl rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-center shadow-2xl">
           <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Auteur Dashboard</p>
           <h1 className="mt-4 text-4xl font-black sm:text-6xl">Login nodig</h1>

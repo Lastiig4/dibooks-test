@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import NotificationBell from "@/components/NotificationBell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
@@ -148,7 +149,8 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!isLoggedIn || !user) return;
-    void loadConversations();
+    const params = new URLSearchParams(window.location.search);
+    void loadConversations(params.get("conversation"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, user?.id]);
 
@@ -213,6 +215,7 @@ export default function ChatPage() {
 
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
+      <NotificationBell />
       <section className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-5 py-8 sm:px-8 lg:px-10">
         <header className="flex flex-wrap items-center justify-between gap-5 rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 shadow-2xl">
           <DiBooksLogo />

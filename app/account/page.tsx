@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import NotificationBell from "@/components/NotificationBell";
 import { useEffect, useMemo, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
@@ -461,13 +462,13 @@ export default function AccountPage() {
 
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
+      <NotificationBell />
       <header className="sticky top-0 z-30 border-b border-white/5 bg-[#05070d]/85 px-5 py-4 backdrop-blur-xl sm:px-8 lg:px-10">
         <div className="flex items-center justify-between gap-4">
           <DiBooksLogo />
           <nav className="flex items-center gap-3">
             <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white">Library</Link>
             <Link href="/favorites" className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 hover:bg-yellow-500/20" title="Favorieten">★</Link>
-            <Link href="/chat" className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-100 hover:bg-blue-500/20 sm:block">Chat</Link>
             {permissions.canUseDashboard && <Link href="/dashboard" className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block">Dashboard</Link>}
             {!isLoggedIn ? (
               <button onClick={() => setAuthModalMode("login")} className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500">Login</button>
@@ -764,14 +765,7 @@ export default function AccountPage() {
                     </p>
                     <Link href="/dashboard" className="mt-4 inline-flex rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">Open Dashboard</Link>
                   </div>
-                  <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 p-5 shadow-2xl">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-2xl">💬</div>
-                    <h3 className="mt-4 text-xl font-black text-white">Chat is actief</h3>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-neutral-300">
-                      Praat 1-op-1 met je contacten, testlezers of auteurs. Chat gebruikt je geaccepteerde contacten.
-                    </p>
-                    <Link href="/chat" className="mt-4 inline-flex rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">Open Chat</Link>
-                  </div>
+                  <FeaturePlaceholder title="Chat" icon="💬" body="Chat komt later. De basis met contacten, gedeelde boeken, feedback en voorstellen staat nu alvast klaar." />
                 </div>
               )}
             </section>

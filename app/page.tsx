@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import NotificationBell from "@/components/NotificationBell";
 import { useEffect, useMemo, useState } from "react";
 import type { DiBook } from "@/lib/books";
 import {
@@ -247,6 +248,7 @@ export default function LibraryPage() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#05070d] text-white">
+      <NotificationBell />
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_36%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.12),transparent_35%),linear-gradient(180deg,#05070d_0%,#05070d_45%,#020308_100%)]" />
 
       <header className="sticky top-0 z-30 border-b border-white/5 bg-[#05070d]/85 px-5 py-4 backdrop-blur-xl sm:px-8 lg:px-10">

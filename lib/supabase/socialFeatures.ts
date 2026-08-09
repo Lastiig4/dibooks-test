@@ -525,3 +525,71 @@ export async function sendChatMessage(
   if (error) throw error;
   return data as string | null;
 }
+
+export type DiNotification = {
+  notificationId: string;
+  eventType: string;
+  title: string;
+  body: string;
+  linkPath?: string | null;
+  actorUserId?: string | null;
+  actorEmail?: string | null;
+  actorDisplayName?: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  isRead: boolean;
+  createdAt: string;
+  readAt?: string | null;
+};
+
+function mapNotification(row: any): DiNotification {
+  return {
+    notificationId: row.notification_id,
+    eventType: row.event_type ?? "system",
+    title: row.title ?? "Melding",
+    body: row.body ?? "",
+    linkPath: row.link_path ?? null,
+    actorUserId: row.actor_user_id ?? null,
+    actorEmail: row.actor_email ?? null,
+    actorDisplayName: row.actor_display_name ?? null,
+    resourceType: row.resource_type ?? null,
+    resourceId: row.resource_id ?? null,
+    isRead: !!row.is_read,
+    createdAt: row.created_at,
+    readAt: row.read_at ?? null,
+  };
+}
+
+export async function fetchUnreadNotificationCount(user: DemoAuthUser | null): Promise<number> {
+  if (!user) return 0;
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_unread_notification_count");
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+export async function fetchNotifications(user: DemoAuthUser | null): Promise<DiNotification[]> {
+  if (!user) return [] as DiNotification[];
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_user_notifications");
+  if (error) throw error;
+  return (data ?? []).map(mapNotification);
+}
+
+export async function markNotificationRead(user: DemoAuthUser | null, notificationId: string): Promise<boolean> {
+  if (!user || !notificationId) return false;
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("mark_notification_read", {
+    input_notification_id: notificationId,
+  });
+  if (error) throw error;
+  return !!data;
+}
+
+export async function markAllNotificationsRead(user: DemoAuthUser | null): Promise<boolean> {
+  if (!user) return false;
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("mark_all_notifications_read");
+  if (error) throw error;
+  return !!data;
+}

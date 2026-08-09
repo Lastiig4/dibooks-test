@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import NotificationBell from "@/components/NotificationBell";
 import { useEffect, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
@@ -105,6 +106,7 @@ export default function FavoritesPage() {
 
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
+      <NotificationBell />
       <header className="sticky top-0 z-30 border-b border-white/5 bg-[#05070d]/85 px-5 py-4 backdrop-blur-xl sm:px-8 lg:px-10">
         <div className="flex items-center justify-between gap-4">
           <DiBooksLogo />

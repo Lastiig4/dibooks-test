@@ -1,5 +1,6 @@
 "use client";
 
+import NotificationBell from "@/components/NotificationBell";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -2779,6 +2780,7 @@ ${formatSaveError(error)}`);
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-neutral-950 text-white">
+      <NotificationBell />
       <div className="flex h-full">
         <aside className="flex w-24 flex-col items-center border-r-4 border-black bg-neutral-950 p-3">
           <button
