@@ -30,6 +30,17 @@ export type DashboardBookInput = {
   projectData?: any;
 };
 
+function formatSupabaseError(error: any) {
+  if (!error) return "Onbekende Supabase fout.";
+  return [error.message, error.details, error.hint, error.code ? `code: ${error.code}` : ""]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function throwSupabaseError(error: any): never {
+  throw new Error(formatSupabaseError(error));
+}
+
 function slugify(value: string) {
   return (
     value
@@ -287,6 +298,7 @@ export async function deleteDashboardBookFromSupabase(bookId: string) {
   if (error) throw error;
 }
 
+
 export async function updateDashboardBookProjectInSupabase(
   user: DemoAuthUser,
   bookId: string,
@@ -305,7 +317,7 @@ export async function updateDashboardBookProjectInSupabase(
     .eq("id", bookId)
     .maybeSingle();
 
-  if (bookError) throw bookError;
+  if (bookError) throwSupabaseError(bookError);
   if (!book) throw new Error("Dashboardboek niet gevonden of geen toegang.");
   if (book.published) {
     throw new Error("Dit boek staat live. Haal het eerst uit de Library voordat je het concept overschrijft.");
@@ -322,14 +334,14 @@ export async function updateDashboardBookProjectInSupabase(
     .from("book_projects")
     .upsert(projectPayload, { onConflict: "book_id" });
 
-  if (projectError) throw projectError;
+  if (projectError) throwSupabaseError(projectError);
 
   const { error: updateError } = await supabase
     .from("books")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", book.id);
 
-  if (updateError) throw updateError;
+  if (updateError) throwSupabaseError(updateError);
 
   return true;
 }
