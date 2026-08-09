@@ -300,7 +300,7 @@ function mapRevision(row: any): BookRevisionItem {
   };
 }
 
-export async function fetchShareableContacts(user: DemoAuthUser | null) {
+export async function fetchShareableContacts(user: DemoAuthUser | null): Promise<ShareableContact[]> {
   if (!user) return [] as ShareableContact[];
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("get_shareable_contacts");
@@ -481,7 +481,7 @@ function mapChatMessage(row: any): ChatMessage {
   };
 }
 
-export async function fetchChatConversations(user: DemoAuthUser | null) {
+export async function fetchChatConversations(user: DemoAuthUser | null): Promise<ChatConversation[]> {
   if (!user) return [] as ChatConversation[];
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("get_user_chat_conversations");
@@ -489,7 +489,7 @@ export async function fetchChatConversations(user: DemoAuthUser | null) {
   return (data ?? []).map(mapChatConversation);
 }
 
-export async function getOrCreateDirectConversation(user: DemoAuthUser | null, targetUserId: string) {
+export async function getOrCreateDirectConversation(user: DemoAuthUser | null, targetUserId: string): Promise<string | null> {
   if (!user || !targetUserId) return null;
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("get_or_create_direct_conversation", {
@@ -499,7 +499,7 @@ export async function getOrCreateDirectConversation(user: DemoAuthUser | null, t
   return data as string | null;
 }
 
-export async function fetchChatMessages(user: DemoAuthUser | null, conversationId: string) {
+export async function fetchChatMessages(user: DemoAuthUser | null, conversationId: string): Promise<ChatMessage[]> {
   if (!user || !conversationId) return [] as ChatMessage[];
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("get_chat_messages", {
@@ -514,7 +514,7 @@ export async function sendChatMessage(
   conversationId: string,
   message: string,
   relatedBookId?: string | null,
-) {
+): Promise<string | null> {
   if (!user || !conversationId) return null;
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("send_chat_message", {

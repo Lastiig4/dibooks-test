@@ -108,7 +108,7 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const selectedConversation = useMemo(
-    () => conversations.find((conversation) => conversation.conversationId === selectedConversationId) ?? null,
+    () => conversations.find((conversation: ChatConversation) => conversation.conversationId === selectedConversationId) ?? null,
     [conversations, selectedConversationId],
   );
 
@@ -124,7 +124,7 @@ export default function ChatPage() {
       setConversations(nextConversations);
       setContacts(nextContacts);
       const preferred = preferredConversationId ?? selectedConversationId;
-      if (preferred && nextConversations.some((conversation) => conversation.conversationId === preferred)) {
+      if (preferred && nextConversations.some((conversation: ChatConversation) => conversation.conversationId === preferred)) {
         setSelectedConversationId(preferred);
       } else if (!selectedConversationId && nextConversations[0]) {
         setSelectedConversationId(nextConversations[0].conversationId);
