@@ -1778,14 +1778,16 @@ export default function Home() {
         if (cancelled || !dashboardBook) return;
 
         if (sharedBookId) {
-          if (dashboardBook.permission !== "edit") {
+          const sharedDashboardBook = dashboardBook as Awaited<ReturnType<typeof fetchSharedBookForEditor>>;
+
+          if (!sharedDashboardBook || sharedDashboardBook.permission !== "edit") {
             alert("Je hebt alleen lees-/feedbacktoegang. Vraag de eigenaar om bewerkrechten.");
             return;
           }
           setDashboardBookId(null);
-          setSharedEditBookId(dashboardBook.id);
-          setSharedEditOwnerName(dashboardBook.ownerName ?? "de eigenaar");
-          setSharedEditPermission(dashboardBook.permission ?? "edit");
+          setSharedEditBookId(sharedDashboardBook.id);
+          setSharedEditOwnerName(sharedDashboardBook.ownerName ?? "de eigenaar");
+          setSharedEditPermission(sharedDashboardBook.permission ?? "edit");
         } else {
           if (!canAccessOwnedResource(user, (dashboardBook as any).ownerId)) {
             alert("Je kunt dit dashboardboek niet openen, omdat het niet van jouw account is.");
