@@ -27,6 +27,23 @@ import {
   saveDashboardBookToSupabase,
   updateDashboardBookMediaInSupabase,
 } from "@/lib/supabase/dashboardBooks";
+import {
+  fetchBookFeedbackForUser,
+  fetchBookRevisionsForUser,
+  fetchBookSharesForOwner,
+  fetchShareableContacts,
+  fetchSharedBooks,
+  respondToBookRevision,
+  revokeBookShare,
+  shareBookWithContact,
+  submitBookFeedback,
+  type BookFeedbackItem,
+  type BookRevisionItem,
+  type OwnerBookShare,
+  type SharePermission,
+  type ShareableContact,
+  type SharedBook,
+} from "@/lib/supabase/socialFeatures";
 
 type DashboardBook = DiBook & {
   source?: "library" | "dashboard";
@@ -480,6 +497,7 @@ function BookDashboardCard({
   onDeleteDraft,
   onOpenMedia,
   onOpenDetails,
+  onShare,
   canPublish,
 }: {
   book: DashboardBook;
@@ -489,6 +507,7 @@ function BookDashboardCard({
   onDeleteDraft: (bookId: string) => void;
   onOpenMedia: (book: DashboardBook) => void;
   onOpenDetails: (book: DashboardBook) => void;
+  onShare: (book: DashboardBook) => void;
 }) {
   const isPublished = !!book.published;
   const canEdit = !isPublished;
@@ -586,6 +605,16 @@ function BookDashboardCard({
             </button>
           )}
 
+          {isDashboardBook && (
+            <button
+              onClick={() => onShare(book)}
+              className="rounded-2xl border border-purple-400/35 bg-purple-500/10 px-5 py-3 text-sm font-black text-purple-100 hover:bg-purple-500/20"
+              title="Deel dit boek met een contact"
+            >
+              Deel met contact
+            </button>
+          )}
+
 
           {canShowBookPage ? (
             <Link href={detailHref} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
@@ -631,6 +660,166 @@ function BookDashboardCard({
         </div>
       </div>
     </article>
+  );
+}
+
+
+function permissionLabel(permission: SharePermission) {
+  if (permission === "edit") return "Lezen + feedback + voorstel";
+  if (permission === "comment") return "Lezen + feedback";
+  return "Alleen lezen";
+}
+
+function SharedBookCard({
+  book,
+  onFeedback,
+}: {
+  book: SharedBook;
+  onFeedback: (book: SharedBook) => void;
+}) {
+  const nodeCount = Array.isArray(book.projectData?.nodes) ? book.projectData.nodes.length : 0;
+  return (
+    <article className="rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-5 shadow-2xl">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">Gedeeld door {book.ownerName || book.ownerEmail || "auteur"}</p>
+          <h3 className="mt-2 text-2xl font-black text-white">{book.title}</h3>
+          <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-cyan-50/80">{book.subtitle}</p>
+        </div>
+        <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-cyan-100">
+          {permissionLabel(book.permission)}
+        </span>
+      </div>
+      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-cyan-50/80">
+        {nodeCount} nodes • origineel blijft van {book.ownerName || "de eigenaar"}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <Link href={`/books/${book.id}/read`} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
+          Lezen/testen
+        </Link>
+        {book.permission === "edit" ? (
+          <Link href={`/editor?shared=${book.id}`} className="rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-black text-black hover:bg-cyan-300">
+            Bewerk als voorstel
+          </Link>
+        ) : (
+          <button disabled className="cursor-not-allowed rounded-2xl bg-neutral-800 px-5 py-3 text-sm font-black text-neutral-500">
+            Geen bewerkrechten
+          </button>
+        )}
+        {(book.permission === "comment" || book.permission === "edit") && (
+          <button onClick={() => onFeedback(book)} className="rounded-2xl border border-yellow-400/35 bg-yellow-500/10 px-5 py-3 text-sm font-black text-yellow-100 hover:bg-yellow-500/20">
+            Feedback sturen
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function ShareBookModal({
+  book,
+  contacts,
+  shares,
+  onClose,
+  onShare,
+  onRevoke,
+}: {
+  book: DashboardBook;
+  contacts: ShareableContact[];
+  shares: OwnerBookShare[];
+  onClose: () => void;
+  onShare: (contactId: string, permission: SharePermission) => void;
+  onRevoke: (shareId: string) => void;
+}) {
+  const [contactId, setContactId] = useState(contacts[0]?.userId ?? "");
+  const [permission, setPermission] = useState<SharePermission>("comment");
+  const activeShares = shares.filter((share) => share.bookId === book.id && share.status === "active");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm">
+      <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-[#080b13] p-6 text-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-purple-300">Boek delen</p>
+            <h2 className="mt-2 text-3xl font-black">{book.title}</h2>
+            <p className="mt-2 text-sm font-semibold text-neutral-300">De ontvanger krijgt het boek in Dashboard onder “Gedeeld met mij”. Publiceren en metadata blijven alleen van jou.</p>
+          </div>
+          <button onClick={onClose} className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-black hover:bg-white/10">Sluiten</button>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-[1fr_220px]">
+          <label className="grid gap-2 text-sm font-bold text-neutral-300">
+            Contact
+            <select value={contactId} onChange={(event) => setContactId(event.target.value)} className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-white outline-none">
+              {contacts.length === 0 && <option value="">Geen contacten gevonden</option>}
+              {contacts.map((contact) => (
+                <option key={contact.userId} value={contact.userId}>{contact.displayName} — {contact.email}</option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-neutral-300">
+            Rechten
+            <select value={permission} onChange={(event) => setPermission(event.target.value as SharePermission)} className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-white outline-none">
+              <option value="read">Alleen lezen</option>
+              <option value="comment">Lezen + feedback</option>
+              <option value="edit">Lezen + feedback + voorstel</option>
+            </select>
+          </label>
+        </div>
+
+        <button disabled={!contactId} onClick={() => onShare(contactId, permission)} className="mt-4 rounded-2xl bg-purple-500 px-5 py-3 text-sm font-black text-white hover:bg-purple-400 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500">
+          Delen / rechten bijwerken
+        </button>
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+          <h3 className="font-black">Actief gedeeld</h3>
+          {activeShares.length === 0 ? (
+            <p className="mt-2 text-sm font-semibold text-neutral-400">Nog met niemand gedeeld.</p>
+          ) : (
+            <div className="mt-3 grid gap-2">
+              {activeShares.map((share) => (
+                <div key={share.shareId} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25 p-3">
+                  <div>
+                    <p className="font-black">{share.sharedWithDisplayName}</p>
+                    <p className="text-xs font-semibold text-neutral-400">{share.sharedWithEmail} • {permissionLabel(share.permission)}</p>
+                  </div>
+                  <button onClick={() => onRevoke(share.shareId)} className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-black text-red-100 hover:bg-red-500/20">Intrekken</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeedbackModal({
+  book,
+  onClose,
+  onSubmit,
+}: {
+  book: SharedBook;
+  onClose: () => void;
+  onSubmit: (message: string) => void;
+}) {
+  const [message, setMessage] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm">
+      <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#080b13] p-6 text-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-yellow-300">Feedback</p>
+            <h2 className="mt-2 text-3xl font-black">{book.title}</h2>
+          </div>
+          <button onClick={onClose} className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-black hover:bg-white/10">Sluiten</button>
+        </div>
+        <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={7} className="mt-5 w-full rounded-2xl border border-white/10 bg-black/35 p-4 text-sm font-semibold leading-6 text-white outline-none" placeholder="Typ je feedback voor de auteur..." />
+        <button disabled={message.trim().length < 2} onClick={() => onSubmit(message)} className="mt-4 rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-black text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500">
+          Feedback sturen
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1238,6 +1427,13 @@ export default function DashboardPage() {
   const [detailsBook, setDetailsBook] = useState<DashboardBook | null>(null);
   const [detailsForm, setDetailsForm] = useState<NewBookForm>(defaultForm);
   const [form, setForm] = useState<NewBookForm>(defaultForm);
+  const [shareableContacts, setShareableContacts] = useState<ShareableContact[]>([]);
+  const [ownerShares, setOwnerShares] = useState<OwnerBookShare[]>([]);
+  const [sharedBooks, setSharedBooks] = useState<SharedBook[]>([]);
+  const [feedbackItems, setFeedbackItems] = useState<BookFeedbackItem[]>([]);
+  const [revisionItems, setRevisionItems] = useState<BookRevisionItem[]>([]);
+  const [shareBook, setShareBook] = useState<DashboardBook | null>(null);
+  const [feedbackBook, setFeedbackBook] = useState<SharedBook | null>(null);
 
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -1252,8 +1448,20 @@ export default function DashboardPage() {
     setDashboardError(null);
 
     try {
-      const supabaseBooks = await fetchDashboardBooksFromSupabase();
+      const [supabaseBooks, contacts, shares, shared, feedback, revisions] = await Promise.all([
+        fetchDashboardBooksFromSupabase(),
+        fetchShareableContacts(user),
+        fetchBookSharesForOwner(user),
+        fetchSharedBooks(user),
+        fetchBookFeedbackForUser(user),
+        fetchBookRevisionsForUser(user),
+      ]);
       setDraftDashboardBooks(supabaseBooks as DashboardBook[]);
+      setShareableContacts(contacts);
+      setOwnerShares(shares);
+      setSharedBooks(shared);
+      setFeedbackItems(feedback);
+      setRevisionItems(revisions);
     } catch (error) {
       console.error("Kon dashboard boeken niet laden uit Supabase", error);
       setDashboardError(
@@ -1283,6 +1491,60 @@ export default function DashboardPage() {
 
   const liveBooks = allBooks.filter((book) => book.published);
   const draftBooks = allBooks.filter((book) => !book.published);
+  const incomingFeedback = feedbackItems.filter((item) => item.ownerId === user?.id);
+  const outgoingFeedback = feedbackItems.filter((item) => item.fromUserId === user?.id && item.ownerId !== user?.id);
+  const incomingRevisions = revisionItems.filter((item) => item.ownerId === user?.id);
+  const outgoingRevisions = revisionItems.filter((item) => item.editorUserId === user?.id && item.ownerId !== user?.id);
+
+  async function handleShareBookWithContact(contactId: string, permission: SharePermission) {
+    if (!user || !shareBook) return;
+    try {
+      await shareBookWithContact(user, shareBook.id, contactId, permission);
+      await refreshDashboardBooks();
+      alert("Boek gedeeld / rechten bijgewerkt.");
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Delen mislukt: ${error.message}` : "Delen mislukt.");
+    }
+  }
+
+  async function handleRevokeBookShare(shareId: string) {
+    if (!user) return;
+    try {
+      await revokeBookShare(user, shareId);
+      await refreshDashboardBooks();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Delen intrekken mislukt: ${error.message}` : "Delen intrekken mislukt.");
+    }
+  }
+
+  async function handleSubmitFeedback(message: string) {
+    if (!user || !feedbackBook) return;
+    try {
+      await submitBookFeedback(user, feedbackBook.id, message);
+      setFeedbackBook(null);
+      await refreshDashboardBooks();
+      alert("Feedback verstuurd.");
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Feedback sturen mislukt: ${error.message}` : "Feedback sturen mislukt.");
+    }
+  }
+
+  async function handleRespondToRevision(revisionId: string, status: "accepted" | "rejected") {
+    if (!user) return;
+    const confirmed = window.confirm(status === "accepted" ? "Voorstel accepteren? Dit overschrijft je conceptproject en haalt het boek terug naar Concept." : "Voorstel afwijzen?");
+    if (!confirmed) return;
+    try {
+      await respondToBookRevision(user, revisionId, status);
+      await refreshDashboardBooks();
+      alert(status === "accepted" ? "Voorstel geaccepteerd en toegepast." : "Voorstel afgewezen.");
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Voorstel verwerken mislukt: ${error.message}` : "Voorstel verwerken mislukt.");
+    }
+  }
 
   async function saveNewBook() {
     if (!user) {
@@ -1693,9 +1955,73 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
           {allBooks.map((book) => (
-            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} canPublish={permissions.canPublishBook} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} onOpenMedia={setMediaBook} onOpenDetails={openBookDetails} />
+            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} canPublish={permissions.canPublishBook} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} onOpenMedia={setMediaBook} onOpenDetails={openBookDetails} onShare={setShareBook} />
           ))}
         </div>
+
+        <div className="mt-12 grid gap-10">
+          <section>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.32em] text-cyan-300">Gedeeld met mij</p>
+                <h2 className="mt-2 text-3xl font-black sm:text-4xl">Testlezen en voorstellen</h2>
+              </div>
+              <p className="max-w-xl text-sm font-semibold leading-6 text-neutral-400">Deze boeken zijn van iemand anders. Je kunt ze niet publiceren of metadata wijzigen. Met bewerkrechten stuur je alleen een voorstel terug.</p>
+            </div>
+            {sharedBooks.length === 0 ? (
+              <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.035] p-6 text-sm font-bold text-neutral-400">Nog geen boeken met jou gedeeld.</div>
+            ) : (
+              <div className="mt-5 grid gap-6 xl:grid-cols-2">
+                {sharedBooks.map((book) => <SharedBookCard key={book.shareId} book={book} onFeedback={setFeedbackBook} />)}
+              </div>
+            )}
+          </section>
+
+          <section className="grid gap-6 xl:grid-cols-2">
+            <div className="rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-5">
+              <p className="text-sm font-black uppercase tracking-[0.32em] text-yellow-200">Ontvangen feedback</p>
+              <h2 className="mt-2 text-2xl font-black">Voor mijn boeken</h2>
+              <div className="mt-4 grid gap-3">
+                {incomingFeedback.length === 0 ? <p className="text-sm font-bold text-yellow-50/70">Nog geen feedback ontvangen.</p> : incomingFeedback.map((item) => (
+                  <div key={item.feedbackId} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-yellow-200">{item.bookTitle} • {item.fromDisplayName}</p>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-yellow-50/90">{item.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-purple-400/20 bg-purple-500/10 p-5">
+              <p className="text-sm font-black uppercase tracking-[0.32em] text-purple-200">Bewerkingsvoorstellen</p>
+              <h2 className="mt-2 text-2xl font-black">Teruggestuurd naar mij</h2>
+              <div className="mt-4 grid gap-3">
+                {incomingRevisions.length === 0 ? <p className="text-sm font-bold text-purple-50/70">Nog geen voorstellen ontvangen.</p> : incomingRevisions.map((item) => (
+                  <div key={item.revisionId} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-purple-200">{item.bookTitle} • {item.editorDisplayName} • {item.status}</p>
+                    {item.note && <p className="mt-2 text-sm font-semibold leading-6 text-purple-50/90">{item.note}</p>}
+                    {item.status === "submitted" && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button onClick={() => handleRespondToRevision(item.revisionId, "accepted")} className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-black hover:bg-emerald-300">Accepteren</button>
+                        <button onClick={() => handleRespondToRevision(item.revisionId, "rejected")} className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-black text-red-100 hover:bg-red-500/20">Afwijzen</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {(outgoingFeedback.length > 0 || outgoingRevisions.length > 0) && (
+            <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+              <p className="text-sm font-black uppercase tracking-[0.32em] text-neutral-400">Door mij verstuurd</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {outgoingFeedback.map((item) => <div key={item.feedbackId} className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm font-semibold text-neutral-300">Feedback op <strong>{item.bookTitle}</strong>: {item.message}</div>)}
+                {outgoingRevisions.map((item) => <div key={item.revisionId} className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm font-semibold text-neutral-300">Voorstel voor <strong>{item.bookTitle}</strong>: {item.status}</div>)}
+              </div>
+            </section>
+          )}
+        </div>
+
       </section>
 
       {newBookOpen && (
@@ -1722,6 +2048,23 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
           book={mediaBook}
           onClose={() => setMediaBook(null)}
           onSave={(payload) => saveBookMedia(mediaBook.id, payload)}
+        />
+      )}
+      {shareBook && (
+        <ShareBookModal
+          book={shareBook}
+          contacts={shareableContacts}
+          shares={ownerShares}
+          onClose={() => setShareBook(null)}
+          onShare={handleShareBookWithContact}
+          onRevoke={handleRevokeBookShare}
+        />
+      )}
+      {feedbackBook && (
+        <FeedbackModal
+          book={feedbackBook}
+          onClose={() => setFeedbackBook(null)}
+          onSubmit={handleSubmitFeedback}
         />
       )}
       {authModalMode && (

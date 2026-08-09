@@ -30,6 +30,10 @@ import {
   saveDashboardBookToSupabase,
   updateDashboardBookProjectInSupabase,
 } from "@/lib/supabase/dashboardBooks";
+import {
+  fetchSharedBookForEditor,
+  submitBookRevision,
+} from "@/lib/supabase/socialFeatures";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -1729,6 +1733,9 @@ export default function Home() {
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false);
   const [dashboardBookId, setDashboardBookId] = useState<string | null>(null);
+  const [sharedEditBookId, setSharedEditBookId] = useState<string | null>(null);
+  const [sharedEditOwnerName, setSharedEditOwnerName] = useState<string>("");
+  const [sharedEditPermission, setSharedEditPermission] = useState<string>("");
   const [dashboardSaveForm, setDashboardSaveForm] = useState<DashboardSaveForm>(defaultDashboardSaveForm);
   const [startNodeId, setStartNodeId] = useState<string>("node_1");
   const [editingTextNodeId, setEditingTextNodeId] = useState<string | null>(
@@ -1760,31 +1767,48 @@ export default function Home() {
 
     async function openDashboardBook() {
       const params = new URLSearchParams(window.location.search);
+      const sharedBookId = params.get("shared");
       const bookId = params.get("book");
-      if (!bookId || !user) return;
+      if ((!bookId && !sharedBookId) || !user) return;
 
       try {
-        const dashboardBook = await fetchDashboardBookFromSupabase(bookId);
+        const dashboardBook = sharedBookId
+          ? await fetchSharedBookForEditor(user, sharedBookId)
+          : await fetchDashboardBookFromSupabase(bookId as string);
         if (cancelled || !dashboardBook) return;
 
-        if (!canAccessOwnedResource(user, dashboardBook.ownerId)) {
-          alert("Je kunt dit dashboardboek niet openen, omdat het niet van jouw account is.");
-          return;
+        if (sharedBookId) {
+          if (dashboardBook.permission !== "edit") {
+            alert("Je hebt alleen lees-/feedbacktoegang. Vraag de eigenaar om bewerkrechten.");
+            return;
+          }
+          setDashboardBookId(null);
+          setSharedEditBookId(dashboardBook.id);
+          setSharedEditOwnerName(dashboardBook.ownerName ?? "de eigenaar");
+          setSharedEditPermission(dashboardBook.permission ?? "edit");
+        } else {
+          if (!canAccessOwnedResource(user, (dashboardBook as any).ownerId)) {
+            alert("Je kunt dit dashboardboek niet openen, omdat het niet van jouw account is.");
+            return;
+          }
+          setSharedEditBookId(null);
+          setSharedEditOwnerName("");
+          setSharedEditPermission("");
+          setDashboardBookId(dashboardBook.id);
         }
 
-        setDashboardBookId(dashboardBook.id);
         setDashboardSaveForm({
           title: dashboardBook.title ?? "",
           author: dashboardBook.author ?? user.name ?? "Giovanni",
           subtitle: dashboardBook.subtitle ?? "",
-          description: dashboardBook.description ?? "",
+          description: "description" in dashboardBook ? (dashboardBook.description ?? "") : "",
           genres: Array.isArray(dashboardBook.genres) && dashboardBook.genres.length > 0 ? dashboardBook.genres : ["Interactief"],
           genreInput: "",
           primaryGenre: dashboardBook.primaryGenre ?? dashboardBook.genres?.[0] ?? "Interactief",
-          status: dashboardBook.status ?? "Concept",
+          status: (dashboardBook.status as any) ?? "Concept",
           ageRating: dashboardBook.ageRating ?? "12+",
           readTime: dashboardBook.readTime ?? "Concept",
-          colorTheme: dashboardBook.colorTheme ?? "blue",
+          colorTheme: (dashboardBook as any).colorTheme ?? "blue",
           accessType: dashboardBook.accessType ?? "free",
         });
 
@@ -1796,8 +1820,8 @@ export default function Home() {
           setSelectedNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? null);
         }
       } catch (error) {
-        console.error("Kon dashboard boek niet openen in de editor", error);
-        alert(error instanceof Error ? `Kon dashboardboek niet openen: ${error.message}` : "Kon dashboardboek niet openen.");
+        console.error("Kon boek niet openen in de editor", error);
+        alert(error instanceof Error ? `Kon boek niet openen: ${error.message}` : "Kon boek niet openen.");
       }
     }
 
@@ -2047,19 +2071,39 @@ export default function Home() {
   }
 
   async function saveCurrentBookToDashboard() {
-    if (!permissions.canSaveToDashboard || !user) {
+    if (!user) {
+      alert("Login nodig om op te slaan of een voorstel terug te sturen.");
+      setAuthModalMode("login");
+      return;
+    }
+
+    if (!sharedEditBookId && !permissions.canSaveToDashboard) {
       alert("Je moet ingelogd zijn als auteur om op te slaan in je Dashboard. Download je werkbestand lokaal of log eerst in.");
       setAuthModalMode("login");
       return;
     }
 
     const maxNodes = getMaxNodesForUser(user);
-    if (maxNodes !== null && nodes.length > maxNodes) {
+    if (!sharedEditBookId && maxNodes !== null && nodes.length > maxNodes) {
       alert(`Gratis accounts kunnen maximaal ${FREE_NODE_LIMIT} nodes opslaan in Dashboard. Verwijder nodes of upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
     const projectData = getCurrentProjectData();
+
+    if (sharedEditBookId) {
+      const note = window.prompt("Korte notitie voor de eigenaar bij dit bewerkingsvoorstel:", "Ik heb een voorstel teruggestuurd.") ?? "";
+      try {
+        await submitBookRevision(user, sharedEditBookId, projectData, note);
+        setSaveDashboardOpen(false);
+        alert("Voorstel teruggestuurd naar de eigenaar. Het originele boek is niet overschreven.");
+      } catch (error) {
+        console.error(error);
+        alert(`Voorstel versturen mislukt:
+${formatSaveError(error)}`);
+      }
+      return;
+    }
 
     // Bestaand dashboardconcept: alleen project_data overschrijven.
     // Metadata zoals titel, genres, cover/banner en status blijft intact.
@@ -2859,7 +2903,7 @@ ${formatSaveError(error)}`);
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs font-black">
               <span className={`rounded-full px-3 py-1 ${isLoggedIn ? "bg-emerald-500/15 text-emerald-300" : "bg-yellow-500/15 text-yellow-300"}`}>
-                {isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
+                {sharedEditBookId ? "Voorstelmodus • origineel blijft veilig" : isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
               </span>
               <button
                 onClick={() => { window.location.href = "/dashboard"; }}
@@ -2920,6 +2964,11 @@ ${formatSaveError(error)}`);
               <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
                 {edges.length} paths
               </span>
+              {sharedEditBookId && (
+                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-yellow-500/15 text-yellow-200" : "bg-yellow-500/20 text-yellow-800"}`}>
+                  Gedeeld door {sharedEditOwnerName || "eigenaar"}
+                </span>
+              )}
               {dashboardBookId && (
                 <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-blue-500/15 text-blue-200" : "bg-blue-600/10 text-blue-700"}`}>
                   Dashboard: {dashboardBookId}
@@ -3552,7 +3601,7 @@ ${formatSaveError(error)}`);
         <SaveToDashboardModal
           form={dashboardSaveForm}
           setForm={setDashboardSaveForm}
-          existingBookId={dashboardBookId}
+          existingBookId={sharedEditBookId ? sharedEditBookId : dashboardBookId}
           isLoggedIn={isLoggedIn}
           onClose={() => setSaveDashboardOpen(false)}
           onSaveDashboard={saveCurrentBookToDashboard}
