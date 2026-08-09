@@ -117,13 +117,21 @@ async function getUniqueSlug(ownerId: string, title: string, existingBookId?: st
   return nextSlug;
 }
 
-export async function fetchDashboardBooksFromSupabase() {
+export async function fetchDashboardBooksFromSupabase(user?: DemoAuthUser | null) {
   const supabase = createSupabaseBrowserClient();
 
-  const { data, error } = await supabase
+  // Dashboard = "Mijn boeken". Ook admins zien hier alleen hun eigen boeken.
+  // Een apart adminbeheer komt later, zodat oude/testboeken niet tussen eigen werk staan.
+  let query = supabase
     .from("dashboard_books")
     .select("*")
     .order("updated_at", { ascending: false });
+
+  if (user?.id) {
+    query = query.eq("owner_id", user.id);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
 
@@ -250,7 +258,7 @@ export async function fetchPublishedDashboardBooksFromSupabase() {
   const supabase = createSupabaseBrowserClient();
 
   // Publieke Library gebruikt bewust de books-tabel, niet de dashboard_books-view.
-  // De view joinet project_data en die hoeft voor cards/shelves niet publiek mee.
+  // Concepten blijven privé; live boeken zijn openbaar zichtbaar.
   const { data, error } = await supabase
     .from("books")
     .select("*")
@@ -265,8 +273,8 @@ export async function fetchPublishedDashboardBooksFromSupabase() {
 export async function fetchComingSoonDashboardBooksFromSupabase() {
   const supabase = createSupabaseBrowserClient();
 
-  // Binnenkort-boeken moeten zichtbaar zijn voor iedereen, maar niet leesbaar.
-  // Daarom halen we alleen publieke boekmetadata uit books op.
+  // Binnenkort-boeken moeten openbaar zichtbaar zijn voor iedereen,
+  // net als live boeken. Het enige verschil: reader/project_data blijft geblokkeerd.
   const { data, error } = await supabase
     .from("books")
     .select("*")

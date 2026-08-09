@@ -1229,7 +1229,7 @@ export default function DashboardPage() {
     setDashboardError(null);
 
     try {
-      const supabaseBooks = await fetchDashboardBooksFromSupabase();
+      const supabaseBooks = await fetchDashboardBooksFromSupabase(user);
       setDraftDashboardBooks(supabaseBooks as DashboardBook[]);
     } catch (error) {
       console.error("Kon dashboard boeken niet laden uit Supabase", error);
