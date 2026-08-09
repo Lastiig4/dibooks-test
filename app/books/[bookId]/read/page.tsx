@@ -862,6 +862,9 @@ export default function ReadBookPage() {
             <Link href={`/books/${book.id}`} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10">
               Boekinfo
             </Link>
+            <Link href="/account" className="hidden rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10 sm:inline-flex">
+              Account
+            </Link>
             <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10">
               Library
             </Link>

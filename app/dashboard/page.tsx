@@ -634,12 +634,15 @@ function BookDashboardCard({
   );
 }
 
+type CropFitMode = "contain" | "cover";
+
 type CropDraft = {
   source: string;
   fileName: string;
   zoom: number;
   x: number;
   y: number;
+  fitMode: CropFitMode;
 };
 
 function readFileAsDataUrl(file: File) {
@@ -658,6 +661,7 @@ function cropImageToDataUrl(
   zoom: number,
   offsetX: number,
   offsetY: number,
+  fitMode: CropFitMode,
 ) {
   return new Promise<string>((resolve, reject) => {
     const image = new Image();
@@ -671,12 +675,12 @@ function cropImageToDataUrl(
         return;
       }
 
-      const canvasRatio = outputWidth / outputHeight;
-      const imageRatio = image.width / image.height;
-      const baseWidth = imageRatio > canvasRatio ? outputHeight * imageRatio : outputWidth;
-      const baseHeight = imageRatio > canvasRatio ? outputHeight : outputWidth / imageRatio;
-      const drawWidth = baseWidth * zoom;
-      const drawHeight = baseHeight * zoom;
+      const scaleX = outputWidth / image.width;
+      const scaleY = outputHeight / image.height;
+      const baseScale = fitMode === "contain" ? Math.min(scaleX, scaleY) : Math.max(scaleX, scaleY);
+      const safeZoom = Math.max(1, zoom);
+      const drawWidth = image.width * baseScale * safeZoom;
+      const drawHeight = image.height * baseScale * safeZoom;
       const maxShiftX = Math.max(0, (drawWidth - outputWidth) / 2);
       const maxShiftY = Math.max(0, (drawHeight - outputHeight) / 2);
       const drawX = (outputWidth - drawWidth) / 2 + (offsetX / 100) * maxShiftX;
@@ -685,7 +689,7 @@ function cropImageToDataUrl(
       context.fillStyle = "#05070d";
       context.fillRect(0, 0, outputWidth, outputHeight);
       context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
-      resolve(canvas.toDataURL("image/jpeg", 0.86));
+      resolve(canvas.toDataURL("image/jpeg", 0.88));
     };
     image.onerror = () => reject(new Error("Afbeelding kon niet worden geladen."));
     image.src = source;
@@ -712,27 +716,46 @@ function CropPreview({
           <p className="text-sm font-black text-white">{title}</p>
           <p className="text-xs font-bold text-neutral-500">{draft.fileName}</p>
         </div>
-        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-black text-cyan-200">Crop preview</span>
+        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-black text-cyan-200">Beeld bewerken</span>
       </div>
+
       <div className={`relative overflow-hidden rounded-2xl border border-white/10 bg-neutral-950 ${ratioClass}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={draft.source}
           alt={title}
-          className="absolute left-1/2 top-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 object-cover"
+          className={`absolute left-1/2 top-1/2 h-full w-full ${draft.fitMode === "contain" ? "object-contain" : "object-cover"}`}
           style={{
-            transform: `translate(-50%, -50%) scale(${draft.zoom}) translate(${draft.x / 5}%, ${draft.y / 5}%)`,
+            transform: `translate(-50%, -50%) translate(${draft.x / 3}%, ${draft.y / 3}%) scale(${draft.zoom})`,
           }}
         />
         <div className="absolute inset-0 ring-1 ring-inset ring-white/20" />
       </div>
+
       <div className="mt-4 grid gap-3">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
+          <button
+            type="button"
+            onClick={() => onDraftChange({ ...draft, fitMode: "contain", zoom: 1, x: 0, y: 0 })}
+            className={`rounded-xl px-3 py-2 text-xs font-black ${draft.fitMode === "contain" ? "bg-cyan-500 text-white" : "bg-white/5 text-neutral-300 hover:bg-white/10"}`}
+          >
+            Hele afbeelding
+          </button>
+          <button
+            type="button"
+            onClick={() => onDraftChange({ ...draft, fitMode: "cover", zoom: 1, x: 0, y: 0 })}
+            className={`rounded-xl px-3 py-2 text-xs font-black ${draft.fitMode === "cover" ? "bg-cyan-500 text-white" : "bg-white/5 text-neutral-300 hover:bg-white/10"}`}
+          >
+            Vullen / snijden
+          </button>
+        </div>
+
         <label className="text-xs font-black uppercase tracking-widest text-neutral-400">
           Zoom
           <input
             type="range"
             min="1"
-            max="2.5"
+            max="3"
             step="0.05"
             value={draft.zoom}
             onChange={(event) => onDraftChange({ ...draft, zoom: Number(event.target.value) })}
@@ -740,7 +763,7 @@ function CropPreview({
           />
         </label>
         <label className="text-xs font-black uppercase tracking-widest text-neutral-400">
-          Horizontaal snijden
+          Links / rechts
           <input
             type="range"
             min="-100"
@@ -752,7 +775,7 @@ function CropPreview({
           />
         </label>
         <label className="text-xs font-black uppercase tracking-widest text-neutral-400">
-          Verticaal snijden
+          Omhoog / omlaag
           <input
             type="range"
             min="-100"
@@ -796,7 +819,7 @@ function MediaManagerModal({
     }
 
     const source = await readFileAsDataUrl(file);
-    const nextDraft: CropDraft = { source, fileName: file.name, zoom: 1, x: 0, y: 0 };
+    const nextDraft: CropDraft = { source, fileName: file.name, zoom: 1, x: 0, y: 0, fitMode: "contain" };
     if (type === "cover") setCoverDraft(nextDraft);
     if (type === "banner") setBannerDraft(nextDraft);
   }
@@ -820,10 +843,10 @@ function MediaManagerModal({
     setSaving(true);
     try {
       const coverImage = coverDraft
-        ? await cropImageToDataUrl(coverDraft.source, 900, 1350, coverDraft.zoom, coverDraft.x, coverDraft.y)
+        ? await cropImageToDataUrl(coverDraft.source, 900, 1350, coverDraft.zoom, coverDraft.x, coverDraft.y, coverDraft.fitMode)
         : book.coverImage || "";
       const bannerImage = bannerDraft
-        ? await cropImageToDataUrl(bannerDraft.source, 1800, 675, bannerDraft.zoom, bannerDraft.x, bannerDraft.y)
+        ? await cropImageToDataUrl(bannerDraft.source, 1800, 675, bannerDraft.zoom, bannerDraft.x, bannerDraft.y, bannerDraft.fitMode)
         : book.bannerImage || "";
 
       await onSave({
@@ -846,7 +869,7 @@ function MediaManagerModal({
             <p className="text-sm font-black uppercase tracking-[0.32em] text-cyan-300">Book Media Manager</p>
             <h2 className="mt-2 text-3xl font-black sm:text-5xl">Cover & banner</h2>
             <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-neutral-400">
-              Gebruik een standaard DiBooks-template of upload eigen beeld. De crop-tool snijdt automatisch naar vaste verhoudingen: cover 2:3 en banner breed.
+              Gebruik een standaard DiBooks-template of upload eigen beeld. Kies bij eigen beeld tussen Hele afbeelding of Vullen/snijden voor cover 2:3 en brede banner.
             </p>
           </div>
           <button onClick={onClose} className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-500">
@@ -1229,7 +1252,7 @@ export default function DashboardPage() {
     setDashboardError(null);
 
     try {
-      const supabaseBooks = await fetchDashboardBooksFromSupabase(user);
+      const supabaseBooks = await fetchDashboardBooksFromSupabase();
       setDraftDashboardBooks(supabaseBooks as DashboardBook[]);
     } catch (error) {
       console.error("Kon dashboard boeken niet laden uit Supabase", error);
@@ -1582,6 +1605,9 @@ export default function DashboardPage() {
             </Link>
             <Link href="/editor" className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">
               Studio openen
+            </Link>
+            <Link href="/account" className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white hover:bg-white/10">
+              Account
             </Link>
             <button
               onClick={logout}

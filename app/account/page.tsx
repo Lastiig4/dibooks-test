@@ -10,6 +10,15 @@ import {
   getAccessLabel,
   type FavoriteBook,
 } from "@/lib/supabase/readerFeatures";
+import {
+  acceptConnectionRequest,
+  declineConnectionRequest,
+  fetchUserConnections,
+  searchUsersForConnection,
+  sendConnectionRequest,
+  type ConnectableProfile,
+  type UserConnection,
+} from "@/lib/supabase/socialFeatures";
 
 const FALLBACK_COVER_CLASS = "from-blue-950 via-slate-950 to-purple-950";
 const FALLBACK_ACCENT_CLASS = "border-blue-500/40";
@@ -110,11 +119,69 @@ function FeaturePlaceholder({ title, body, icon }: { title: string; body: string
   );
 }
 
+function profileInitial(name?: string, email?: string) {
+  return (name || email || "D").slice(0, 1).toUpperCase();
+}
+
+function MiniProfileRow({ profile, onAdd, disabled }: { profile: ConnectableProfile; onAdd: () => void; disabled?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25 p-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-sm font-black text-white">
+          {profileInitial(profile.displayName, profile.email)}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-white">{profile.displayName}</p>
+          <p className="truncate text-xs font-bold text-neutral-500">{profile.email}</p>
+        </div>
+      </div>
+      <button onClick={onAdd} disabled={disabled} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
+        Voeg toe
+      </button>
+    </div>
+  );
+}
+
+function ConnectionRow({ connection, onAccept, onDecline }: { connection: UserConnection; onAccept?: () => void; onDecline?: () => void }) {
+  const isIncoming = connection.status === "pending" && connection.direction === "incoming";
+  const isOutgoing = connection.status === "pending" && connection.direction === "outgoing";
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25 p-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-sm font-black text-white">
+          {profileInitial(connection.otherDisplayName, connection.otherEmail)}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-white">{connection.otherDisplayName}</p>
+          <p className="truncate text-xs font-bold text-neutral-500">{connection.otherEmail}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge>{connection.status === "accepted" ? "Contact" : isIncoming ? "Verzoek ontvangen" : "Verzoek verstuurd"}</Badge>
+            {isOutgoing && <Badge light>Wacht op antwoord</Badge>}
+          </div>
+        </div>
+      </div>
+
+      {isIncoming && (
+        <div className="flex gap-2">
+          <button onClick={onDecline} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-black text-neutral-300 hover:bg-white/10">Weiger</button>
+          <button onClick={onAccept} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-500">Accepteer</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AccountPage() {
   const { user, isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [favoriteBooks, setFavoriteBooks] = useState<FavoriteBook[]>([]);
   const [progressBooks, setProgressBooks] = useState<FavoriteBook[]>([]);
+  const [connections, setConnections] = useState<UserConnection[]>([]);
+  const [connectionSearch, setConnectionSearch] = useState("");
+  const [connectionResults, setConnectionResults] = useState<ConnectableProfile[]>([]);
+  const [connectionLoading, setConnectionLoading] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,6 +192,8 @@ export default function AccountPage() {
       if (!user) {
         setFavoriteBooks([]);
         setProgressBooks([]);
+        setConnections([]);
+        setConnectionResults([]);
         setLoading(false);
         return;
       }
@@ -133,14 +202,16 @@ export default function AccountPage() {
       setError(null);
 
       try {
-        const [favorites, progress] = await Promise.all([
+        const [favorites, progress, userConnections] = await Promise.all([
           fetchFavoriteBooks(user),
           fetchReadingProgressBooks(user),
+          fetchUserConnections(user),
         ]);
 
         if (!cancelled) {
           setFavoriteBooks(favorites);
           setProgressBooks(progress);
+          setConnections(userConnections);
         }
       } catch (loadError: any) {
         console.error("Accountgegevens laden mislukt.", loadError);
@@ -159,6 +230,91 @@ export default function AccountPage() {
 
   const topProgressBooks = useMemo(() => progressBooks.slice(0, 4), [progressBooks]);
   const topFavoriteBooks = useMemo(() => favoriteBooks.slice(0, 4), [favoriteBooks]);
+  const acceptedConnections = useMemo(() => connections.filter((connection) => connection.status === "accepted"), [connections]);
+  const incomingRequests = useMemo(() => connections.filter((connection) => connection.status === "pending" && connection.direction === "incoming"), [connections]);
+  const outgoingRequests = useMemo(() => connections.filter((connection) => connection.status === "pending" && connection.direction === "outgoing"), [connections]);
+
+  async function reloadConnections() {
+    if (!user) return;
+    const nextConnections = await fetchUserConnections(user);
+    setConnections(nextConnections);
+  }
+
+  async function handleConnectionSearch() {
+    if (!user) return;
+    if (connectionSearch.trim().length < 3) {
+      setConnectionMessage("Vul minimaal 3 tekens in, bijvoorbeeld een e-mail of naam.");
+      setConnectionResults([]);
+      return;
+    }
+
+    setConnectionLoading(true);
+    setConnectionMessage(null);
+
+    try {
+      const results = await searchUsersForConnection(user, connectionSearch);
+      setConnectionResults(results);
+      if (results.length === 0) setConnectionMessage("Geen gebruiker gevonden.");
+    } catch (searchError: any) {
+      console.error("Gebruiker zoeken mislukt.", searchError);
+      setConnectionMessage(searchError?.message ?? "Gebruiker zoeken mislukt.");
+    } finally {
+      setConnectionLoading(false);
+    }
+  }
+
+  async function handleSendConnection(targetUserId: string) {
+    if (!user) return;
+    setConnectionLoading(true);
+    setConnectionMessage(null);
+
+    try {
+      await sendConnectionRequest(user, targetUserId);
+      await reloadConnections();
+      setConnectionResults([]);
+      setConnectionSearch("");
+      setConnectionMessage("Contactverzoek verstuurd.");
+    } catch (sendError: any) {
+      console.error("Contactverzoek versturen mislukt.", sendError);
+      setConnectionMessage(sendError?.message ?? "Contactverzoek versturen mislukt.");
+    } finally {
+      setConnectionLoading(false);
+    }
+  }
+
+  async function handleAcceptConnection(connectionId: string) {
+    if (!user) return;
+    setConnectionLoading(true);
+    setConnectionMessage(null);
+
+    try {
+      await acceptConnectionRequest(user, connectionId);
+      await reloadConnections();
+      setConnectionMessage("Contactverzoek geaccepteerd.");
+    } catch (acceptError: any) {
+      console.error("Contactverzoek accepteren mislukt.", acceptError);
+      setConnectionMessage(acceptError?.message ?? "Contactverzoek accepteren mislukt.");
+    } finally {
+      setConnectionLoading(false);
+    }
+  }
+
+  async function handleDeclineConnection(connectionId: string) {
+    if (!user) return;
+    setConnectionLoading(true);
+    setConnectionMessage(null);
+
+    try {
+      await declineConnectionRequest(user, connectionId);
+      await reloadConnections();
+      setConnectionMessage("Contactverzoek geweigerd.");
+    } catch (declineError: any) {
+      console.error("Contactverzoek weigeren mislukt.", declineError);
+      setConnectionMessage(declineError?.message ?? "Contactverzoek weigeren mislukt.");
+    } finally {
+      setConnectionLoading(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
@@ -294,13 +450,108 @@ export default function AccountPage() {
               </div>
             )}
 
+            <section className="mt-10" id="contacten">
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.32em] text-neutral-500">Sociaal</p>
+                  <h2 className="mt-2 text-3xl font-black">Contacten</h2>
+                  <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
+                    Voeg straks testlezers, auteurs of vrienden toe. Dit wordt de basis voor boeken delen en chat.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Badge light>{acceptedConnections.length} contacten</Badge>
+                  {incomingRequests.length > 0 && <Badge>{incomingRequests.length} verzoeken</Badge>}
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl">
+                  <h3 className="text-xl font-black">Gebruiker zoeken</h3>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-neutral-400">
+                    Zoek op e-mail of naam. Minimaal 3 tekens.
+                  </p>
+                  <div className="mt-5 flex gap-2">
+                    <input
+                      value={connectionSearch}
+                      onChange={(event) => setConnectionSearch(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void handleConnectionSearch();
+                      }}
+                      placeholder="bijv. naam@email.nl"
+                      className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-bold text-white outline-none placeholder:text-neutral-600 focus:border-blue-400"
+                    />
+                    <button
+                      onClick={() => void handleConnectionSearch()}
+                      disabled={connectionLoading}
+                      className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Zoek
+                    </button>
+                  </div>
+
+                  {connectionMessage && <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-3 text-sm font-bold text-neutral-300">{connectionMessage}</div>}
+
+                  {connectionResults.length > 0 && (
+                    <div className="mt-4 grid gap-3">
+                      {connectionResults.map((profile) => (
+                        <MiniProfileRow key={profile.id} profile={profile} disabled={connectionLoading} onAdd={() => void handleSendConnection(profile.id)} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-5">
+                  {incomingRequests.length > 0 && (
+                    <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 shadow-2xl">
+                      <h3 className="text-xl font-black text-emerald-100">Inkomende verzoeken</h3>
+                      <div className="mt-4 grid gap-3">
+                        {incomingRequests.map((connection) => (
+                          <ConnectionRow
+                            key={connection.connectionId}
+                            connection={connection}
+                            onAccept={() => void handleAcceptConnection(connection.connectionId)}
+                            onDecline={() => void handleDeclineConnection(connection.connectionId)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-xl font-black">Mijn contacten</h3>
+                      <Badge light>{acceptedConnections.length}</Badge>
+                    </div>
+                    <div className="mt-4 grid gap-3">
+                      {acceptedConnections.length === 0 ? (
+                        <p className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm font-semibold leading-6 text-neutral-400">
+                          Nog geen contacten. Zoek iemand op e-mail en stuur een verzoek.
+                        </p>
+                      ) : (
+                        acceptedConnections.map((connection) => <ConnectionRow key={connection.connectionId} connection={connection} />)
+                      )}
+                    </div>
+                  </div>
+
+                  {outgoingRequests.length > 0 && (
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl">
+                      <h3 className="text-xl font-black">Verstuurde verzoeken</h3>
+                      <div className="mt-4 grid gap-3">
+                        {outgoingRequests.map((connection) => <ConnectionRow key={connection.connectionId} connection={connection} />)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
             <section className="mt-10">
               <div>
                 <p className="text-sm font-black uppercase tracking-[0.32em] text-neutral-500">Later</p>
-                <h2 className="mt-2 text-3xl font-black">Delen, contacten en chat</h2>
+                <h2 className="mt-2 text-3xl font-black">Boek delen en chat</h2>
               </div>
-              <div className="mt-5 grid gap-5 md:grid-cols-3">
-                <FeaturePlaceholder title="Contacten toevoegen" icon="👥" body="Voeg andere lezers, auteurs of testlezers toe om boeken met elkaar te delen." />
+              <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <FeaturePlaceholder title="Boek delen" icon="↗" body="Deel een boek of concept rechtstreeks met een contact, eventueel met lees- of feedbackrechten." />
                 <FeaturePlaceholder title="Chat" icon="💬" body="Praat straks met contacten of testlezers over een boek, hoofdstuk of interactieve route." />
               </div>

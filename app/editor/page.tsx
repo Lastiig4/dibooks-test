@@ -2873,6 +2873,17 @@ ${formatSaveError(error)}`);
                 Dashboard
               </button>
               <button
+                onClick={() => { window.location.href = "/account"; }}
+                className={`rounded-full px-3 py-1 transition ${
+                  editorDarkMode
+                    ? "bg-white/10 text-neutral-200 hover:bg-white/15"
+                    : "bg-black/10 text-neutral-700 hover:bg-black/15"
+                }`}
+                title="Naar Account"
+              >
+                Account
+              </button>
+              <button
                 onClick={isLoggedIn ? handleDemoLogout : handleDemoLogin}
                 className={`rounded-full px-3 py-1 transition ${
                   isLoggedIn

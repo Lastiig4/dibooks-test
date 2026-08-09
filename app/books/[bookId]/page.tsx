@@ -319,6 +319,9 @@ export default function BookDetailPage() {
                 <Link href="/favorites" className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 hover:bg-yellow-500/20" title="Favorieten">
                   ★
                 </Link>
+                <Link href="/account" className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block">
+                  Account
+                </Link>
                 <button onClick={logout} className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20">
                   Uitloggen
                 </button>
