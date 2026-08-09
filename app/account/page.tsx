@@ -13,10 +13,17 @@ import {
 import {
   acceptConnectionRequest,
   declineConnectionRequest,
+  fetchBookFeedbackForUser,
+  fetchBookRevisionsForUser,
+  fetchSharedBooks,
   fetchUserConnections,
+  respondToBookRevision,
   searchUsersForConnection,
   sendConnectionRequest,
+  type BookFeedbackItem,
+  type BookRevisionItem,
   type ConnectableProfile,
+  type SharedBook,
   type UserConnection,
 } from "@/lib/supabase/socialFeatures";
 
@@ -172,16 +179,110 @@ function ConnectionRow({ connection, onAccept, onDecline }: { connection: UserCo
   );
 }
 
+
+function permissionLabel(permission?: string) {
+  if (permission === "edit") return "Lezen + feedback + voorstel";
+  if (permission === "comment") return "Lezen + feedback";
+  return "Alleen lezen";
+}
+
+function SharedBookCard({ book }: { book: SharedBook }) {
+  const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
+  const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
+  const canEdit = book.permission === "edit";
+  const canComment = book.permission === "comment" || book.permission === "edit";
+
+  return (
+    <article className={`overflow-hidden rounded-3xl border ${accentClass} bg-neutral-950 shadow-2xl`}>
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-4 py-3">
+        <Badge>{permissionLabel(book.permission)}</Badge>
+        <Badge light>{book.status}</Badge>
+      </div>
+      <div className="grid gap-0 md:grid-cols-[180px_1fr]">
+        <div className={`relative h-56 overflow-hidden bg-gradient-to-br md:h-full ${coverClass}`}>
+          {book.coverImage && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={book.coverImage} alt={`Cover van ${book.title}`} className="absolute inset-0 h-full w-full object-cover" />
+          )}
+          <div className="absolute inset-0 bg-black/20" />
+        </div>
+        <div className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-300/80">Gedeeld door {book.ownerName}</p>
+          <h3 className="mt-2 text-2xl font-black leading-none text-white">{book.title}</h3>
+          <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-neutral-400">{book.description || book.subtitle || "Geen beschrijving."}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge>{book.primaryGenre}</Badge>
+            <Badge>{getAccessLabel(book.accessType)}</Badge>
+            {canComment && <Badge>Feedback</Badge>}
+            {canEdit && <Badge>Voorstelmodus</Badge>}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link href={`/books/${book.id}/read`} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">Lezen/testen</Link>
+            {canEdit && (
+              <Link href={`/editor?shared=${book.id}`} className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-500/20">
+                Bewerk als voorstel
+              </Link>
+            )}
+            <Link href="/dashboard" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black text-white hover:bg-white/10">Feedback via Dashboard</Link>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function FeedbackItemCard({ item }: { item: BookFeedbackItem }) {
+  return (
+    <article className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-300/80">Feedback</p>
+          <h3 className="mt-2 text-xl font-black text-white">{item.bookTitle}</h3>
+          <p className="mt-1 text-xs font-bold text-neutral-500">Van {item.fromDisplayName}</p>
+        </div>
+        <Badge light>{item.status}</Badge>
+      </div>
+      <p className="mt-4 whitespace-pre-wrap text-sm font-semibold leading-6 text-neutral-300">{item.message}</p>
+    </article>
+  );
+}
+
+function RevisionItemCard({ item, onAccept, onReject, busy }: { item: BookRevisionItem; onAccept: () => void; onReject: () => void; busy?: boolean }) {
+  return (
+    <article className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 shadow-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-200/80">Bewerkingsvoorstel</p>
+          <h3 className="mt-2 text-xl font-black text-white">{item.bookTitle}</h3>
+          <p className="mt-1 text-xs font-bold text-emerald-100/70">Van {item.editorDisplayName}</p>
+        </div>
+        <Badge light>{item.status}</Badge>
+      </div>
+      {item.note && <p className="mt-4 whitespace-pre-wrap text-sm font-semibold leading-6 text-emerald-50/85">{item.note}</p>}
+      {item.status === "submitted" && (
+        <div className="mt-5 flex flex-wrap gap-2">
+          <button onClick={onReject} disabled={busy} className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-black text-white hover:bg-black/35 disabled:opacity-50">Afwijzen</button>
+          <button onClick={onAccept} disabled={busy} className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white hover:bg-emerald-500 disabled:opacity-50">Accepteren</button>
+        </div>
+      )}
+    </article>
+  );
+}
+
 export default function AccountPage() {
   const { user, isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [favoriteBooks, setFavoriteBooks] = useState<FavoriteBook[]>([]);
   const [progressBooks, setProgressBooks] = useState<FavoriteBook[]>([]);
   const [connections, setConnections] = useState<UserConnection[]>([]);
+  const [sharedBooks, setSharedBooks] = useState<SharedBook[]>([]);
+  const [bookFeedback, setBookFeedback] = useState<BookFeedbackItem[]>([]);
+  const [bookRevisions, setBookRevisions] = useState<BookRevisionItem[]>([]);
   const [connectionSearch, setConnectionSearch] = useState("");
   const [connectionResults, setConnectionResults] = useState<ConnectableProfile[]>([]);
   const [connectionLoading, setConnectionLoading] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
+  const [sharingMessage, setSharingMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -193,6 +294,9 @@ export default function AccountPage() {
         setFavoriteBooks([]);
         setProgressBooks([]);
         setConnections([]);
+        setSharedBooks([]);
+        setBookFeedback([]);
+        setBookRevisions([]);
         setConnectionResults([]);
         setLoading(false);
         return;
@@ -202,16 +306,22 @@ export default function AccountPage() {
       setError(null);
 
       try {
-        const [favorites, progress, userConnections] = await Promise.all([
+        const [favorites, progress, userConnections, shared, feedback, revisions] = await Promise.all([
           fetchFavoriteBooks(user),
           fetchReadingProgressBooks(user),
           fetchUserConnections(user),
+          fetchSharedBooks(user),
+          fetchBookFeedbackForUser(user),
+          fetchBookRevisionsForUser(user),
         ]);
 
         if (!cancelled) {
           setFavoriteBooks(favorites);
           setProgressBooks(progress);
           setConnections(userConnections);
+          setSharedBooks(shared);
+          setBookFeedback(feedback);
+          setBookRevisions(revisions);
         }
       } catch (loadError: any) {
         console.error("Accountgegevens laden mislukt.", loadError);
@@ -233,6 +343,9 @@ export default function AccountPage() {
   const acceptedConnections = useMemo(() => connections.filter((connection) => connection.status === "accepted"), [connections]);
   const incomingRequests = useMemo(() => connections.filter((connection) => connection.status === "pending" && connection.direction === "incoming"), [connections]);
   const outgoingRequests = useMemo(() => connections.filter((connection) => connection.status === "pending" && connection.direction === "outgoing"), [connections]);
+  const topSharedBooks = useMemo(() => sharedBooks.slice(0, 4), [sharedBooks]);
+  const topFeedback = useMemo(() => bookFeedback.slice(0, 4), [bookFeedback]);
+  const topRevisions = useMemo(() => bookRevisions.slice(0, 4), [bookRevisions]);
 
   async function reloadConnections() {
     if (!user) return;
@@ -316,6 +429,36 @@ export default function AccountPage() {
     }
   }
 
+
+  async function reloadSharingData() {
+    if (!user) return;
+    const [shared, feedback, revisions] = await Promise.all([
+      fetchSharedBooks(user),
+      fetchBookFeedbackForUser(user),
+      fetchBookRevisionsForUser(user),
+    ]);
+    setSharedBooks(shared);
+    setBookFeedback(feedback);
+    setBookRevisions(revisions);
+  }
+
+  async function handleRevisionResponse(revisionId: string, status: "accepted" | "rejected") {
+    if (!user) return;
+    setConnectionLoading(true);
+    setSharingMessage(null);
+
+    try {
+      await respondToBookRevision(user, revisionId, status);
+      await reloadSharingData();
+      setSharingMessage(status === "accepted" ? "Bewerkingsvoorstel geaccepteerd." : "Bewerkingsvoorstel afgewezen.");
+    } catch (revisionError: any) {
+      console.error("Bewerkingsvoorstel verwerken mislukt.", revisionError);
+      setSharingMessage(revisionError?.message ?? "Bewerkingsvoorstel verwerken mislukt.");
+    } finally {
+      setConnectionLoading(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
       <header className="sticky top-0 z-30 border-b border-white/5 bg-[#05070d]/85 px-5 py-4 backdrop-blur-xl sm:px-8 lg:px-10">
@@ -324,6 +467,7 @@ export default function AccountPage() {
           <nav className="flex items-center gap-3">
             <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white">Library</Link>
             <Link href="/favorites" className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 hover:bg-yellow-500/20" title="Favorieten">★</Link>
+            <Link href="/chat" className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-100 hover:bg-blue-500/20 sm:block">Chat</Link>
             {permissions.canUseDashboard && <Link href="/dashboard" className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block">Dashboard</Link>}
             {!isLoggedIn ? (
               <button onClick={() => setAuthModalMode("login")} className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500">Login</button>
@@ -547,14 +691,89 @@ export default function AccountPage() {
             </section>
 
             <section className="mt-10">
-              <div>
-                <p className="text-sm font-black uppercase tracking-[0.32em] text-neutral-500">Later</p>
-                <h2 className="mt-2 text-3xl font-black">Boek delen en chat</h2>
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.32em] text-neutral-500">Delen</p>
+                  <h2 className="mt-2 text-3xl font-black">Boek delen en samenwerken</h2>
+                  <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-neutral-400">
+                    Delen zelf doe je vanuit je Dashboard. Hier zie je gedeelde boeken, feedback en bewerkingsvoorstellen terug.
+                  </p>
+                </div>
+                <Link href="/dashboard" className="rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-100 hover:bg-blue-500/20">
+                  Naar Dashboard
+                </Link>
               </div>
-              <div className="mt-5 grid gap-5 md:grid-cols-2">
-                <FeaturePlaceholder title="Boek delen" icon="↗" body="Deel een boek of concept rechtstreeks met een contact, eventueel met lees- of feedbackrechten." />
-                <FeaturePlaceholder title="Chat" icon="💬" body="Praat straks met contacten of testlezers over een boek, hoofdstuk of interactieve route." />
-              </div>
+
+              {sharingMessage && <div className="mb-5 rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm font-black text-emerald-100">{sharingMessage}</div>}
+
+              {topSharedBooks.length > 0 && (
+                <div className="mt-5">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h3 className="text-2xl font-black">Gedeeld met mij</h3>
+                    <Badge light>{sharedBooks.length}</Badge>
+                  </div>
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    {topSharedBooks.map((book) => <SharedBookCard key={book.shareId} book={book} />)}
+                  </div>
+                </div>
+              )}
+
+              {(topFeedback.length > 0 || topRevisions.length > 0) && (
+                <div className="mt-8 grid gap-5 lg:grid-cols-2">
+                  {topFeedback.length > 0 && (
+                    <div>
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <h3 className="text-2xl font-black">Ontvangen feedback</h3>
+                        <Badge light>{bookFeedback.length}</Badge>
+                      </div>
+                      <div className="grid gap-4">
+                        {topFeedback.map((item) => <FeedbackItemCard key={item.feedbackId} item={item} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {topRevisions.length > 0 && (
+                    <div>
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <h3 className="text-2xl font-black">Bewerkingsvoorstellen</h3>
+                        <Badge light>{bookRevisions.length}</Badge>
+                      </div>
+                      <div className="grid gap-4">
+                        {topRevisions.map((item) => (
+                          <RevisionItemCard
+                            key={item.revisionId}
+                            item={item}
+                            busy={connectionLoading}
+                            onAccept={() => void handleRevisionResponse(item.revisionId, "accepted")}
+                            onReject={() => void handleRevisionResponse(item.revisionId, "rejected")}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {topSharedBooks.length === 0 && topFeedback.length === 0 && topRevisions.length === 0 && (
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-2xl">↗</div>
+                    <h3 className="mt-4 text-xl font-black text-white">Boek delen is actief</h3>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-neutral-400">
+                      Ga naar Dashboard, kies een boek en deel het met een contact. Daarna verschijnt het hier bij de ontvanger.
+                    </p>
+                    <Link href="/dashboard" className="mt-4 inline-flex rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">Open Dashboard</Link>
+                  </div>
+                  <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 p-5 shadow-2xl">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-2xl">💬</div>
+                    <h3 className="mt-4 text-xl font-black text-white">Chat is actief</h3>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-neutral-300">
+                      Praat 1-op-1 met je contacten, testlezers of auteurs. Chat gebruikt je geaccepteerde contacten.
+                    </p>
+                    <Link href="/chat" className="mt-4 inline-flex rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">Open Chat</Link>
+                  </div>
+                </div>
+              )}
             </section>
           </>
         )}

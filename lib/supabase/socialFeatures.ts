@@ -424,3 +424,104 @@ export async function respondToBookRevision(
   if (error) throw error;
   return !!data;
 }
+
+export type ChatConversation = {
+  conversationId: string;
+  otherUserId: string;
+  otherEmail: string;
+  otherDisplayName: string;
+  otherRole: string;
+  otherPlan: string;
+  relatedBookId?: string | null;
+  relatedBookTitle?: string | null;
+  lastMessage?: string | null;
+  lastMessageAt?: string | null;
+  updatedAt: string;
+};
+
+export type ChatMessage = {
+  messageId: string;
+  conversationId: string;
+  senderId: string;
+  senderEmail: string;
+  senderDisplayName: string;
+  message: string;
+  relatedBookId?: string | null;
+  relatedBookTitle?: string | null;
+  createdAt: string;
+};
+
+function mapChatConversation(row: any): ChatConversation {
+  return {
+    conversationId: row.conversation_id,
+    otherUserId: row.other_user_id,
+    otherEmail: row.other_email ?? "",
+    otherDisplayName: row.other_display_name ?? row.other_email ?? "DiBooks gebruiker",
+    otherRole: row.other_role ?? "reader",
+    otherPlan: row.other_plan ?? "free",
+    relatedBookId: row.related_book_id ?? null,
+    relatedBookTitle: row.related_book_title ?? null,
+    lastMessage: row.last_message ?? null,
+    lastMessageAt: row.last_message_at ?? null,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapChatMessage(row: any): ChatMessage {
+  return {
+    messageId: row.message_id,
+    conversationId: row.conversation_id,
+    senderId: row.sender_id,
+    senderEmail: row.sender_email ?? "",
+    senderDisplayName: row.sender_display_name ?? row.sender_email ?? "DiBooks gebruiker",
+    message: row.message ?? "",
+    relatedBookId: row.related_book_id ?? null,
+    relatedBookTitle: row.related_book_title ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+export async function fetchChatConversations(user: DemoAuthUser | null) {
+  if (!user) return [] as ChatConversation[];
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_user_chat_conversations");
+  if (error) throw error;
+  return (data ?? []).map(mapChatConversation);
+}
+
+export async function getOrCreateDirectConversation(user: DemoAuthUser | null, targetUserId: string) {
+  if (!user || !targetUserId) return null;
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_or_create_direct_conversation", {
+    target_user_id: targetUserId,
+  });
+  if (error) throw error;
+  return data as string | null;
+}
+
+export async function fetchChatMessages(user: DemoAuthUser | null, conversationId: string) {
+  if (!user || !conversationId) return [] as ChatMessage[];
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("get_chat_messages", {
+    input_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return (data ?? []).map(mapChatMessage);
+}
+
+export async function sendChatMessage(
+  user: DemoAuthUser | null,
+  conversationId: string,
+  message: string,
+  relatedBookId?: string | null,
+) {
+  if (!user || !conversationId) return null;
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("send_chat_message", {
+    input_conversation_id: conversationId,
+    input_message: message,
+    input_related_book_id: relatedBookId ?? null,
+  });
+  if (error) throw error;
+  return data as string | null;
+}
