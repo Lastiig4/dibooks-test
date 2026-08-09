@@ -52,7 +52,7 @@ function FavoriteCard({ book }: { book: FavoriteBook }) {
       <div className="border-t border-white/10 bg-black/55 p-5">
         <div className="flex flex-wrap gap-2">
           <Badge>{getAccessLabel(book.accessType)}</Badge>
-          {book.progressCurrentNodeId && <Badge light>Verder lezen</Badge>}
+          {book.progressCurrentNodeId && <Badge light>{book.progressPercent ?? 0}% gelezen</Badge>}
         </div>
         <p className="mt-4 text-[10px] font-black uppercase tracking-[0.34em] text-yellow-300/80">Favoriet</p>
         <h2 className="mt-2 line-clamp-2 text-3xl font-black leading-none text-white">{book.title}</h2>

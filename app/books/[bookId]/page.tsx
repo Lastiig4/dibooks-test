@@ -350,7 +350,7 @@ export default function BookDetailPage() {
             <div className="mt-8 flex flex-wrap gap-3">
               {canReadThisBook ? (
                 <Link href={readHref} className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200">
-                  {readingProgress ? "Verder lezen" : "Lees nu"}
+                  {readingProgress ? `Verder lezen (${readingProgress.progressPercent || 0}%)` : "Lees nu"}
                 </Link>
               ) : book.status === "Binnenkort" && !book.published ? (
                 <span className="rounded-2xl bg-neutral-700 px-7 py-4 text-lg font-black text-neutral-300">
@@ -417,7 +417,7 @@ export default function BookDetailPage() {
 
           {readingProgress && (
             <div className="mt-4 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm font-semibold leading-7 text-emerald-100">
-              Je hebt al leesvoortgang in dit boek. Klik op <strong>Verder lezen</strong> om door te gaan waar je ongeveer gebleven was.
+              Je bent ongeveer <strong>{readingProgress.progressPercent || 0}%</strong> van dit boek onderweg. Klik op <strong>Verder lezen</strong> om door te gaan waar je gebleven was.
             </div>
           )}
         </article>

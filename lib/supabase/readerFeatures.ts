@@ -9,6 +9,7 @@ export type ReadingProgress = {
   bookId: string;
   currentNodeId: string;
   pageIndex: number;
+  progressPercent: number;
   updatedAt?: string;
 };
 
@@ -33,6 +34,7 @@ export type FavoriteBook = {
   favoriteCreatedAt?: string;
   progressCurrentNodeId?: string;
   progressPageIndex?: number;
+  progressPercent?: number;
 };
 
 export function normalizeAccessType(value: unknown): BookAccessType {
@@ -79,6 +81,7 @@ function mapFavoriteRow(row: any): FavoriteBook {
     favoriteCreatedAt: row.favorite_created_at ?? undefined,
     progressCurrentNodeId: row.progress_current_node_id ?? undefined,
     progressPageIndex: typeof row.progress_page_index === "number" ? row.progress_page_index : undefined,
+    progressPercent: typeof row.progress_percent === "number" ? row.progress_percent : undefined,
   };
 }
 
@@ -138,7 +141,7 @@ export async function getReadingProgress(user: DemoAuthUser | null, bookId: stri
 
   const { data, error } = await supabase
     .from("reading_progress")
-    .select("book_id,current_node_id,page_index,updated_at")
+    .select("book_id,current_node_id,page_index,progress_percent,updated_at")
     .eq("user_id", user.id)
     .eq("book_id", bookId)
     .maybeSingle();
@@ -150,6 +153,7 @@ export async function getReadingProgress(user: DemoAuthUser | null, bookId: stri
     bookId: data.book_id,
     currentNodeId: data.current_node_id ?? "",
     pageIndex: data.page_index ?? 0,
+    progressPercent: data.progress_percent ?? 0,
     updatedAt: data.updated_at ?? undefined,
   } satisfies ReadingProgress;
 }
@@ -159,6 +163,7 @@ export async function upsertReadingProgress(
   bookId: string,
   currentNodeId: string,
   pageIndex: number,
+  progressPercent = 0,
 ) {
   if (!bookId || !currentNodeId) return;
   const supabase = createSupabaseBrowserClient();
@@ -169,6 +174,7 @@ export async function upsertReadingProgress(
       book_id: bookId,
       current_node_id: currentNodeId,
       page_index: Math.max(0, Number(pageIndex) || 0),
+      progress_percent: Math.max(0, Math.min(100, Math.round(Number(progressPercent) || 0))),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,book_id" },

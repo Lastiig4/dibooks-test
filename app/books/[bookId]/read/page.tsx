@@ -193,6 +193,20 @@ async function loadSupabaseBook(bookId: string) {
   } as any);
 }
 
+function clampProgressPercent(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function calculateBookProgressPercent(book: ReaderBook, currentNodeId: string, pageIndex: number, pageCount: number) {
+  const totalNodes = Math.max(1, book.nodes.length);
+  const nodeIndex = Math.max(0, book.nodes.findIndex((node) => node.id === currentNodeId));
+  const safePageCount = Math.max(1, pageCount);
+  const pageFraction = Math.max(0, Math.min(1, (pageIndex + 1) / safePageCount));
+  const percent = ((nodeIndex + pageFraction) / totalNodes) * 100;
+  return clampProgressPercent(percent);
+}
+
 
 function paginateTextHtml(html: string, maxCharacters = 1450) {
   const plainText = stripHtml(html);
@@ -260,10 +274,6 @@ function BookPageReader({
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<string[]>(["<p>Deze pagina is nog leeg.</p>"]);
   const [visiblePageCount, setVisiblePageCount] = useState(1);
-
-  useEffect(() => {
-    setPageIndex(0);
-  }, [html, setPageIndex]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -711,13 +721,14 @@ export default function ReadBookPage() {
     if (loadState.status !== "ready" || !user || !currentNodeId) return;
 
     const timeout = window.setTimeout(() => {
-      upsertReadingProgress(user, loadState.book.id, currentNodeId, pageIndex).catch((progressError) => {
+      const progressPercent = calculateBookProgressPercent(loadState.book, currentNodeId, pageIndex, readerPageCount);
+      upsertReadingProgress(user, loadState.book.id, currentNodeId, pageIndex, progressPercent).catch((progressError) => {
         console.warn("Leesvoortgang opslaan mislukt.", progressError);
       });
     }, 450);
 
     return () => window.clearTimeout(timeout);
-  }, [currentNodeId, loadState, pageIndex, user]);
+  }, [currentNodeId, loadState, pageIndex, readerPageCount, user]);
 
   const reader = useMemo(() => {
     if (loadState.status !== "ready") return null;
@@ -987,7 +998,7 @@ export default function ReadBookPage() {
 
             <div className="text-center text-sm font-bold text-neutral-400">
               <div>{readerVisiblePageCount === 2 && pageIndex + 1 < readerPageCount ? `Pagina ${pageIndex + 1}–${Math.min(pageIndex + 2, readerPageCount)} van ${readerPageCount}` : `Pagina ${pageIndex + 1} van ${readerPageCount}`}</div>
-              <div className="text-xs text-neutral-600">{book.author}</div>
+              <div className="text-xs text-neutral-600">{calculateBookProgressPercent(book, currentNodeId, pageIndex, readerPageCount)}% gelezen • {book.author}</div>
             </div>
 
             {canGoNextPage && (
