@@ -1399,6 +1399,65 @@ function SaveToDashboardModal({
     });
   }
 
+  if (existingBookId) {
+    return (
+      <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.32em] text-cyan-300">Bestaand dashboardconcept</p>
+              <h2 className="mt-2 text-3xl font-black sm:text-5xl">Concept bijwerken</h2>
+              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
+                Je werkt al aan <strong>{form.title || "dit boek"}</strong>. Daarom hoef je de boekgegevens niet opnieuw in te vullen.
+                Deze actie overschrijft alleen je huidige nodes, teksten, paden, keuzes, cutscenes en minigames.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-500"
+            >
+              Sluiten
+            </button>
+          </div>
+
+          {!isLoggedIn && (
+            <div className="mt-6 rounded-2xl border border-yellow-400/30 bg-yellow-500/10 p-4 text-sm font-semibold leading-6 text-yellow-100">
+              <strong>Niet ingelogd:</strong> je kunt dit concept pas bijwerken wanneer je bent ingelogd. Download eventueel eerst een backup.
+            </div>
+          )}
+
+          <div className="mt-6 grid gap-3 lg:grid-cols-4">
+            <button
+              onClick={onSaveDashboard}
+              disabled={!isLoggedIn}
+              className="rounded-2xl bg-white px-5 py-4 text-sm font-black text-black hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+            >
+              Concept bijwerken
+            </button>
+            <button
+              onClick={onDownloadProject}
+              className="rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-4 text-sm font-black text-cyan-100 hover:bg-cyan-500/20"
+            >
+              Download backup
+            </button>
+            <button
+              onClick={onDownloadReaderStory}
+              className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-4 text-sm font-black text-emerald-100 hover:bg-emerald-500/20"
+            >
+              Export reader story
+            </button>
+            <button
+              onClick={() => { window.location.href = "/dashboard"; }}
+              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-sm font-black text-white hover:bg-white/10"
+            >
+              Naar Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
       <div className="mx-auto max-w-4xl rounded-3xl border border-white/10 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
@@ -1426,57 +1485,6 @@ function SaveToDashboardModal({
           </div>
         )}
 
-        {existingBookId && (
-          <>
-            <div className="mt-6 rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-5">
-              <p className="text-xs font-black uppercase tracking-[0.32em] text-cyan-300">Bestaand dashboardconcept</p>
-              <h3 className="mt-2 text-3xl font-black">Concept bijwerken</h3>
-              <p className="mt-3 text-sm font-semibold leading-6 text-neutral-300">
-                Je werkt al aan <strong>{form.title || "dit boek"}</strong>. Daarom hoef je de boekgegevens niet opnieuw in te vullen.
-                Deze knop overschrijft alleen je huidige nodes, teksten, paden, keuzes, cutscenes en minigames.
-              </p>
-            </div>
-
-            <div className="mt-6 grid gap-3 lg:grid-cols-4">
-              <button
-                onClick={onSaveDashboard}
-                disabled={!isLoggedIn}
-                className="rounded-2xl bg-white px-5 py-4 text-sm font-black text-black hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
-              >
-                Concept bijwerken
-              </button>
-              <button
-                onClick={onDownloadProject}
-                className="rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-4 text-sm font-black text-cyan-100 hover:bg-cyan-500/20"
-              >
-                Download backup
-              </button>
-              <button
-                onClick={onDownloadReaderStory}
-                className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-4 text-sm font-black text-emerald-100 hover:bg-emerald-500/20"
-              >
-                Export reader story
-              </button>
-              <button
-                onClick={() => { window.location.href = "/dashboard"; }}
-                className="rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-sm font-black text-white hover:bg-white/10"
-              >
-                Naar Dashboard
-              </button>
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={onClose}
-                className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
-              >
-                Sluiten
-              </button>
-            </div>
-          </>
-        )}
-
-        {!existingBookId && (
         <div className={`mt-6 grid gap-5 lg:grid-cols-2 ${!isLoggedIn ? "opacity-45" : ""}`}>
           <div className="grid gap-4">
             <div>
@@ -1690,7 +1698,6 @@ function SaveToDashboardModal({
             Sluiten
           </button>
         </div>
-        )}
       </div>
     </div>
   );
