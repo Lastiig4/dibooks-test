@@ -24,7 +24,7 @@ import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { Extension } from "@tiptap/core";
 import AuthModal from "@/components/AuthModal";
-import { canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
+import { FREE_NODE_LIMIT, getPlanLabel, getMaxNodesForUser, canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
 import {
   fetchDashboardBookFromSupabase,
   saveDashboardBookToSupabase,
@@ -1655,6 +1655,8 @@ export default function Home() {
   const flowWrapperRef = useRef<HTMLDivElement | null>(null);
   const [flowViewport, setFlowViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const nodeTypes = useMemo(() => ({ bullet: BulletNode }), []);
+  const maxNodesForCurrentUser = getMaxNodesForUser(user);
+  const nodeLimitReached = maxNodesForCurrentUser !== null && nodes.length >= maxNodesForCurrentUser;
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
@@ -1963,6 +1965,12 @@ export default function Home() {
       return;
     }
 
+    const maxNodes = getMaxNodesForUser(user);
+    if (maxNodes !== null && nodes.length > maxNodes) {
+      alert(`Free accounts kunnen maximaal ${FREE_NODE_LIMIT} nodes opslaan in Dashboard. Verwijder nodes of upgrade later naar Member voor onbeperkt bouwen.`);
+      return;
+    }
+
     const title = dashboardSaveForm.title.trim();
     if (!title) {
       alert("Geef je boek eerst een titel.");
@@ -2100,6 +2108,12 @@ export default function Home() {
   }
 
   function createNode(type: DiNodeType) {
+    const maxNodes = getMaxNodesForUser(user);
+    if (maxNodes !== null && nodes.length >= maxNodes) {
+      alert(`Free accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} nodes gebruiken. Upgrade later naar Member voor onbeperkt bouwen.`);
+      return;
+    }
+
     const id = `node_${Date.now()}`;
     const wrapperBounds = flowWrapperRef.current?.getBoundingClientRect();
     const centerScreenX = (wrapperBounds?.width ?? 900) / 2;
@@ -2769,8 +2783,11 @@ export default function Home() {
                   Registreer
                 </button>
               )}
-              <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
-                {nodes.length} nodes
+              <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-600/10 text-cyan-700"}`}>
+                {getPlanLabel(user)}
+              </span>
+              <span className={`rounded-full px-3 py-1 ${nodeLimitReached ? "bg-red-500/15 text-red-300" : editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
+                {nodes.length}{maxNodesForCurrentUser !== null ? `/${maxNodesForCurrentUser}` : ""} nodes
               </span>
               <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
                 {edges.length} paths

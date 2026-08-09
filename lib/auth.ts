@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type UserRole = "guest" | "author" | "admin";
+export type UserPlan = "free" | "member";
 
 export type AuthActionResult = { ok: boolean; message?: string };
 
@@ -24,6 +25,7 @@ export type DemoAuthUser = {
   name: string;
   email: string;
   role: Exclude<UserRole, "guest">;
+  plan: UserPlan;
 };
 
 export type AuthPermissions = {
@@ -37,6 +39,7 @@ export type AuthPermissions = {
   canPublishBook: boolean;
   canRemoveFromLibrary: boolean;
   canManageUsers: boolean;
+  maxNodesPerBook: number | null;
 };
 
 export const DIBOOKS_AUTH_CHANGED_EVENT = "dibooks-auth-changed";
@@ -69,6 +72,24 @@ function broadcastAuthChange() {
   window.dispatchEvent(new Event(DIBOOKS_AUTH_CHANGED_EVENT));
 }
 
+export const FREE_NODE_LIMIT = 15;
+export const MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH = 5;
+export const FULL_BOOK_NODE_BADGE_THRESHOLD = 20;
+
+export function isMemberUser(user: DemoAuthUser | null) {
+  return !!user && (user.role === "admin" || user.plan === "member");
+}
+
+export function getMaxNodesForUser(user: DemoAuthUser | null) {
+  return isMemberUser(user) ? null : FREE_NODE_LIMIT;
+}
+
+export function getPlanLabel(user: DemoAuthUser | null) {
+  if (!user) return "Gast / Free";
+  if (user.role === "admin") return "Admin";
+  return user.plan === "member" ? "Member" : "Free";
+}
+
 function mapSupabaseUser(user: User | null): DemoAuthUser | null {
   if (!user) return null;
 
@@ -77,6 +98,8 @@ function mapSupabaseUser(user: User | null): DemoAuthUser | null {
   const metadataRole = metadata.role || appMetadata.role;
   const role: Exclude<UserRole, "guest"> =
     metadataRole === "admin" ? "admin" : "author";
+  const metadataPlan = metadata.plan || appMetadata.plan;
+  const plan: UserPlan = metadataPlan === "member" ? "member" : "free";
 
   return {
     id: user.id,
@@ -84,6 +107,7 @@ function mapSupabaseUser(user: User | null): DemoAuthUser | null {
       String(metadata.full_name || metadata.name || user.email?.split("@")[0] || "Auteur"),
     email: user.email ?? "",
     role,
+    plan,
   };
 }
 
@@ -99,10 +123,42 @@ function getSupabaseOrAlert() {
   }
 }
 
+async function applySupabaseProfile(user: DemoAuthUser | null): Promise<DemoAuthUser | null> {
+  if (!user) return null;
+
+  const supabase = getSupabaseOrAlert();
+  if (!supabase) return user;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("display_name, email, role, plan")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Kon DiBooks profile niet laden. Gebruik auth fallback.", error.message);
+    return user;
+  }
+
+  if (!data) return user;
+
+  const role: Exclude<UserRole, "guest"> = data.role === "admin" ? "admin" : "author";
+  const plan: UserPlan = data.plan === "member" ? "member" : "free";
+
+  return {
+    ...user,
+    name: data.display_name || user.name,
+    email: data.email || user.email,
+    role,
+    plan,
+  };
+}
+
 export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
   const role: UserRole = user?.role ?? "guest";
   const isAuthor = role === "author" || role === "admin";
   const isAdmin = role === "admin";
+  const isMember = isMemberUser(user);
 
   return {
     canReadLibrary: true,
@@ -112,9 +168,10 @@ export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
     canSaveToDashboard: isAuthor,
     canCreateBook: isAuthor,
     canEditConceptBook: isAuthor,
-    canPublishBook: isAuthor,
-    canRemoveFromLibrary: isAuthor,
+    canPublishBook: isMember,
+    canRemoveFromLibrary: isMember,
     canManageUsers: isAdmin,
+    maxNodesPerBook: getMaxNodesForUser(user),
   };
 }
 
@@ -131,7 +188,8 @@ export async function ensureSupabaseProfile(user: DemoAuthUser): Promise<AuthAct
       id: user.id,
       email: user.email,
       display_name: displayName,
-      role: "author",
+      role: user.role === "admin" ? "admin" : "author",
+      plan: user.plan || "free",
     },
     { onConflict: "id", ignoreDuplicates: true },
   );
@@ -183,7 +241,7 @@ export function useDemoAuth() {
       return;
     }
 
-    supabase.auth.getUser().then(({ data, error }) => {
+    supabase.auth.getUser().then(async ({ data, error }) => {
       if (!mounted) return;
 
       if (error) {
@@ -191,27 +249,33 @@ export function useDemoAuth() {
       }
 
       const mappedUser = mapSupabaseUser(data.user);
-      setUser(mappedUser);
-      setLoading(false);
-
       if (mappedUser) {
-        ensureSupabaseProfile(mappedUser).catch((profileError) => {
-          console.warn("DiBooks profile check mislukt.", profileError);
-        });
+        await ensureSupabaseProfile(mappedUser);
       }
+      const profiledUser = await applySupabaseProfile(mappedUser);
+      if (!mounted) return;
+      setUser(profiledUser);
+      setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
       const mappedUser = mapSupabaseUser(session?.user ?? null);
-      setUser(mappedUser);
       setLoading(false);
       broadcastAuthChange();
 
       if (mappedUser) {
-        ensureSupabaseProfile(mappedUser).catch((profileError) => {
-          console.warn("DiBooks profile check mislukt.", profileError);
-        });
+        ensureSupabaseProfile(mappedUser)
+          .then(() => applySupabaseProfile(mappedUser))
+          .then((profiledUser) => {
+            if (mounted) setUser(profiledUser);
+          })
+          .catch((profileError) => {
+            console.warn("DiBooks profile check mislukt.", profileError);
+            if (mounted) setUser(mappedUser);
+          });
+      } else {
+        setUser(null);
       }
     });
 
@@ -242,12 +306,14 @@ export function useDemoAuth() {
     }
 
     const mappedUser = mapSupabaseUser(data.user);
+    let profiledUser = mappedUser;
     if (mappedUser) {
       const profileResult = await ensureSupabaseProfile(mappedUser);
       if (!profileResult.ok) return profileResult;
+      profiledUser = await applySupabaseProfile(mappedUser);
     }
 
-    setUser(mappedUser);
+    setUser(profiledUser);
     broadcastAuthChange();
     return { ok: true };
   }
@@ -291,12 +357,14 @@ export function useDemoAuth() {
     }
 
     const mappedUser = mapSupabaseUser(data.user);
+    let profiledUser = mappedUser;
     if (mappedUser) {
       const profileResult = await ensureSupabaseProfile(mappedUser);
       if (!profileResult.ok) return profileResult;
+      profiledUser = await applySupabaseProfile(mappedUser);
     }
 
-    setUser(mappedUser);
+    setUser(profiledUser);
     broadcastAuthChange();
     return { ok: true, message: "Account aangemaakt en ingelogd." };
   }

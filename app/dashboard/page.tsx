@@ -10,7 +10,15 @@ import {
   type DiBook,
 } from "@/lib/books";
 import AuthModal from "@/components/AuthModal";
-import { canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
+import {
+  FREE_NODE_LIMIT,
+  FULL_BOOK_NODE_BADGE_THRESHOLD,
+  MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH,
+  canAccessOwnedResource,
+  getPlanLabel,
+  isMemberUser,
+  useDemoAuth,
+} from "@/lib/auth";
 import {
   deleteDashboardBookFromSupabase,
   fetchDashboardBooksFromSupabase,
@@ -129,6 +137,281 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "") || `boek-${Date.now()}`;
 }
 
+
+function stripValidationHtml(value: string) {
+  return value
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getProjectNodes(projectData: any) {
+  return Array.isArray(projectData?.nodes) ? projectData.nodes : [];
+}
+
+function getProjectEdges(projectData: any) {
+  return Array.isArray(projectData?.edges) ? projectData.edges : [];
+}
+
+function getNodeType(node: any) {
+  return node?.data?.type ?? node?.type ?? "";
+}
+
+function getNodeTitle(node: any) {
+  return node?.data?.label ?? node?.title ?? node?.id ?? "Onbekende node";
+}
+
+function getNodeText(node: any) {
+  return (
+    node?.data?.text ??
+    stripValidationHtml(node?.data?.textHtml ?? "") ??
+    node?.content?.text ??
+    stripValidationHtml(node?.content?.textHtml ?? "") ??
+    ""
+  );
+}
+
+function getNodeVideoUrl(node: any) {
+  return node?.data?.videoUrl ?? node?.content?.videoUrl ?? "";
+}
+
+function getNodeChoices(node: any) {
+  const choices = node?.data?.choices ?? node?.content?.choices ?? [];
+  return Array.isArray(choices) ? choices : [];
+}
+
+function getMiniGameTarget(node: any, route: "success" | "fail") {
+  if (route === "success") {
+    return node?.data?.miniGameSuccessTargetNodeId ?? node?.content?.miniGameSuccessTargetNodeId ?? "";
+  }
+
+  return node?.data?.miniGameFailTargetNodeId ?? node?.content?.miniGameFailTargetNodeId ?? "";
+}
+
+function isCompletePublishNode(node: any) {
+  const nodeType = getNodeType(node);
+
+  if (nodeType === "text" || nodeType === "special") {
+    return getNodeText(node).trim().length > 0;
+  }
+
+  if (nodeType === "cutscene") {
+    return getNodeVideoUrl(node).trim().length > 0;
+  }
+
+  if (nodeType === "choice") {
+    return getNodeChoices(node)
+      .slice(0, 3)
+      .some((choice: any) => String(choice?.label ?? "").trim().length > 0 && String(choice?.targetNodeId ?? "").trim().length > 0);
+  }
+
+  if (nodeType === "minigame") {
+    return Boolean(getMiniGameTarget(node, "success") && getMiniGameTarget(node, "fail"));
+  }
+
+  return false;
+}
+
+function getPublishNodeStats(projectData: any) {
+  const nodes = getProjectNodes(projectData);
+  const completeNodes = nodes.filter(isCompletePublishNode);
+
+  return {
+    totalNodes: nodes.length,
+    completeNodes: completeNodes.length,
+    isFullBook: nodes.length >= FULL_BOOK_NODE_BADGE_THRESHOLD,
+  };
+}
+
+function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof useDemoAuth>["user"]) {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const projectData = book.projectData;
+
+  if (!user) {
+    errors.push("Je moet ingelogd zijn om te publiceren.");
+  } else if (!isMemberUser(user)) {
+    errors.push("Publiceren naar de publieke Library is alleen beschikbaar voor Member accounts. Free accounts kunnen wel bouwen, testen en lokaal exporteren.");
+  }
+
+  if (!projectData) {
+    return {
+      valid: false,
+      errors: ["Dit boek heeft nog geen projectdata. Open het boek in de Studio en sla het eerst op."],
+      warnings,
+    };
+  }
+
+  const nodes = getProjectNodes(projectData);
+  const edges = getProjectEdges(projectData);
+  const publishStats = getPublishNodeStats(projectData);
+  const nodeIds = new Set(nodes.map((node: any) => node?.id).filter(Boolean));
+  const startNodeId = projectData.startNodeId;
+  const startNode = nodes.find((node: any) => node?.id === startNodeId);
+
+  if (nodes.length === 0) {
+    errors.push("Het boek heeft nog geen nodes. Maak minimaal één tekstnode in de Studio.");
+  }
+
+  if (publishStats.completeNodes < MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH) {
+    errors.push(
+      `Publiceren vereist minimaal ${MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH} complete nodes. Dit boek heeft nu ${publishStats.completeNodes} complete node(s).`,
+    );
+  }
+
+  if (nodes.length < FULL_BOOK_NODE_BADGE_THRESHOLD) {
+    warnings.push(
+      `Dit boek heeft ${nodes.length} node(s). Vanaf ${FULL_BOOK_NODE_BADGE_THRESHOLD} nodes krijgt het later de status/badge 'volledig interactief boek'.`,
+    );
+  }
+
+  if (!startNodeId) {
+    errors.push("Start-node ontbreekt. Kies in de Studio welke node het begin van het boek is.");
+  } else if (!startNode) {
+    errors.push(`Start-node '${startNodeId}' bestaat niet meer. Kies opnieuw een start-node in de Studio.`);
+  }
+
+  const textNodes = nodes.filter((node: any) => {
+    const type = getNodeType(node);
+    return type === "text" || type === "special";
+  });
+
+  const filledTextNodes = textNodes.filter((node: any) => getNodeText(node).trim().length > 0);
+
+  if (filledTextNodes.length === 0) {
+    errors.push("Er is nog geen tekstinhoud. Vul minimaal één tekstnode of speciale pagina met tekst.");
+  }
+
+  textNodes.forEach((node: any) => {
+    if (getNodeText(node).trim().length === 0) {
+      errors.push(`Tekstnode '${getNodeTitle(node)}' is leeg.`);
+    }
+  });
+
+  nodes.forEach((node: any) => {
+    const nodeType = getNodeType(node);
+    const title = getNodeTitle(node);
+
+    if (nodeType === "cutscene" && !getNodeVideoUrl(node).trim()) {
+      errors.push(`Cutscene '${title}' heeft nog geen video.`);
+    }
+
+    if (nodeType === "choice") {
+      const choices = getNodeChoices(node).slice(0, 3);
+      const filledChoices = choices.filter((choice: any) => String(choice?.label ?? "").trim().length > 0);
+
+      if (filledChoices.length === 0) {
+        errors.push(`Keuze-node '${title}' heeft nog geen ingevulde keuzes.`);
+      }
+
+      filledChoices.forEach((choice: any, index: number) => {
+        const label = String(choice?.label ?? `Keuze ${index + 1}`).trim();
+        const targetNodeId = String(choice?.targetNodeId ?? "").trim();
+
+        if (!targetNodeId) {
+          errors.push(`Keuze-node '${title}' heeft keuze '${label}' zonder doel-node.`);
+        } else if (!nodeIds.has(targetNodeId)) {
+          errors.push(`Keuze-node '${title}' verwijst met keuze '${label}' naar een node die niet bestaat.`);
+        }
+      });
+    }
+
+    if (nodeType === "minigame") {
+      const successTarget = String(getMiniGameTarget(node, "success") ?? "").trim();
+      const failTarget = String(getMiniGameTarget(node, "fail") ?? "").trim();
+
+      if (!successTarget) {
+        errors.push(`Mini game '${title}' mist een success-route.`);
+      } else if (!nodeIds.has(successTarget)) {
+        errors.push(`Mini game '${title}' heeft een success-route naar een node die niet bestaat.`);
+      }
+
+      if (!failTarget) {
+        errors.push(`Mini game '${title}' mist een fail-route.`);
+      } else if (!nodeIds.has(failTarget)) {
+        errors.push(`Mini game '${title}' heeft een fail-route naar een node die niet bestaat.`);
+      }
+    }
+  });
+
+  edges.forEach((edge: any) => {
+    if (!nodeIds.has(edge?.source)) {
+      errors.push(`Een path heeft een ontbrekende bron-node: ${edge?.source ?? "onbekend"}.`);
+    }
+
+    if (!nodeIds.has(edge?.target)) {
+      errors.push(`Een path verwijst naar een ontbrekende doel-node: ${edge?.target ?? "onbekend"}.`);
+    }
+  });
+
+  if (startNode && nodes.length > 1) {
+    const reachable = new Set<string>();
+    const queue = [startNode.id];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+      if (!currentId || reachable.has(currentId)) continue;
+
+      reachable.add(currentId);
+      edges
+        .filter((edge: any) => edge?.source === currentId && nodeIds.has(edge?.target))
+        .forEach((edge: any) => queue.push(edge.target));
+
+      const currentNode = nodes.find((node: any) => node?.id === currentId);
+      if (getNodeType(currentNode) === "choice") {
+        getNodeChoices(currentNode).forEach((choice: any) => {
+          if (choice?.targetNodeId && nodeIds.has(choice.targetNodeId)) queue.push(choice.targetNodeId);
+        });
+      }
+
+      if (getNodeType(currentNode) === "minigame") {
+        const successTarget = getMiniGameTarget(currentNode, "success");
+        const failTarget = getMiniGameTarget(currentNode, "fail");
+        if (successTarget && nodeIds.has(successTarget)) queue.push(successTarget);
+        if (failTarget && nodeIds.has(failTarget)) queue.push(failTarget);
+      }
+    }
+
+    const unreachableNodes = nodes.filter((node: any) => node?.id && !reachable.has(node.id));
+    if (unreachableNodes.length > 0) {
+      warnings.push(
+        `Let op: ${unreachableNodes.length} node(s) zijn niet bereikbaar vanaf de start-node: ${unreachableNodes
+          .slice(0, 4)
+          .map((node: any) => `'${getNodeTitle(node)}'`)
+          .join(", ")}${unreachableNodes.length > 4 ? ", ..." : ""}.`,
+      );
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+function formatPublishValidationMessage(result: ReturnType<typeof validateBookBeforePublish>) {
+  const lines = ["Kan nog niet publiceren:", ""];
+
+  result.errors.forEach((error, index) => {
+    lines.push(`${index + 1}. ${error}`);
+  });
+
+  if (result.warnings.length > 0) {
+    lines.push("", "Let ook op:");
+    result.warnings.forEach((warning, index) => {
+      lines.push(`${index + 1}. ${warning}`);
+    });
+  }
+
+  lines.push("", "Open het boek in de Studio, los dit op en sla daarna opnieuw op in je Dashboard.");
+
+  return lines.join("\n");
+}
+
 function DiBooksLogo() {
   return (
     <Link href="/" className="group flex items-end leading-none" aria-label="Terug naar DiBooks Library">
@@ -193,9 +476,11 @@ function BookDashboardCard({
   onRemoveFromLibrary,
   onDeleteDraft,
   onOpenMedia,
+  canPublish,
 }: {
   book: DashboardBook;
   onPublish: (bookId: string) => void;
+  canPublish: boolean;
   onRemoveFromLibrary: (bookId: string) => void;
   onDeleteDraft: (bookId: string) => void;
   onOpenMedia: (book: DashboardBook) => void;
@@ -234,6 +519,13 @@ function BookDashboardCard({
             <p className="mt-1 font-black text-white">{book.readTime ?? "-"}</p>
           </div>
         </div>
+
+        {book.projectData && (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-neutral-300">
+            Project: {getPublishNodeStats(book.projectData).totalNodes} nodes • {getPublishNodeStats(book.projectData).completeNodes} compleet
+            {getPublishNodeStats(book.projectData).isFullBook ? " • Volledig interactief" : ""}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           {book.genres.map((genre) => (
@@ -291,8 +583,16 @@ function BookDashboardCard({
           )}
 
           {canEdit && isDashboardBook && (
-            <button onClick={() => onPublish(book.id)} className="rounded-2xl border border-emerald-500/35 bg-emerald-500/15 px-5 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-500/25">
-              Publiceer naar Library
+            <button
+              onClick={() => onPublish(book.id)}
+              className={`rounded-2xl border px-5 py-3 text-sm font-black ${
+                canPublish
+                  ? "border-emerald-500/35 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
+                  : "border-neutral-600/50 bg-neutral-800/60 text-neutral-400 hover:bg-neutral-800"
+              }`}
+              title={canPublish ? "Publiceer naar Library" : "Alleen Member accounts kunnen publiceren"}
+            >
+              {canPublish ? "Publiceer naar Library" : "Member nodig"}
             </button>
           )}
 
@@ -993,8 +1293,23 @@ export default function DashboardPage() {
       return;
     }
 
+    if (!permissions.canPublishBook) {
+      alert("Publiceren is alleen beschikbaar voor Member accounts. Free accounts kunnen wel bouwen, testen en lokaal exporteren.");
+      return;
+    }
+
+    const validationResult = validateBookBeforePublish(targetBook, user);
+    if (!validationResult.valid) {
+      alert(formatPublishValidationMessage(validationResult));
+      return;
+    }
+
+    const warningText = validationResult.warnings.length > 0
+      ? `\n\nLet op:\n${validationResult.warnings.map((warning) => `- ${warning}`).join("\n")}`
+      : "";
+
     const confirmed = window.confirm(
-      `Weet je zeker dat je "${targetBook.title}" naar de Library wilt publiceren?\n\nNa publicatie wordt dit boek vergrendeld. Je kunt het dan niet meer aanpassen zolang het live staat.`,
+      `Weet je zeker dat je "${targetBook.title}" naar de Library wilt publiceren?\n\nNa publicatie wordt dit boek vergrendeld. Je kunt het dan niet meer aanpassen zolang het live staat.${warningText}`,
     );
 
     if (!confirmed) return;
@@ -1168,22 +1483,26 @@ export default function DashboardPage() {
               Beheer concepten en live boeken veilig.
             </h1>
             <p className="mt-5 max-w-3xl text-lg font-semibold leading-8 text-neutral-300">
-              Nieuwe boeken start je als concept. Zodra je publiceert naar de Library wordt dat boek vergrendeld. Wil je later iets wijzigen, dan haal je het eerst uit de Library.
+Nieuwe boeken start je als concept. Free accounts kunnen bouwen en testen tot 15 nodes. Publiceren naar de Library is voor Member accounts.
             </p>
           </div>
 
           <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl sm:p-6">
-            <h2 className="text-xl font-black">Publicatie-regel</h2>
+            <h2 className="text-xl font-black">Plan & publicatie</h2>
             <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
-              <strong>Concepten mag je bewerken.</strong> Zodra een boek live is gepusht naar de Library, wordt die versie vergrendeld.
+              <strong>Free:</strong> bouwen/testen tot {FREE_NODE_LIMIT} nodes. Publiceren is vergrendeld.
             </div>
             <div className="rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm leading-6 text-blue-100">
-              Aanpassen kan pas nadat een boek <strong>uit de Library is verwijderd</strong>. Zo blijft een live verhaal stabiel voor lezers.
+              <strong>Member:</strong> publiceren mogelijk vanaf {MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH} complete nodes. Vanaf {FULL_BOOK_NODE_BADGE_THRESHOLD} nodes telt het later als volledig interactief boek.
             </div>
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <div className="mt-8 grid gap-4 sm:grid-cols-4">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Account plan</p>
+            <p className="mt-2 text-3xl font-black text-cyan-300">{getPlanLabel(user)}</p>
+          </div>
           <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
             <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Totaal boeken</p>
             <p className="mt-2 text-4xl font-black">{allBooks.length}</p>
@@ -1225,7 +1544,7 @@ export default function DashboardPage() {
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
           {allBooks.map((book) => (
-            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} onOpenMedia={setMediaBook} />
+            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} canPublish={permissions.canPublishBook} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} onOpenMedia={setMediaBook} />
           ))}
         </div>
       </section>
