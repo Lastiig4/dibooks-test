@@ -260,12 +260,22 @@ export default function LibraryPage() {
                 </button>
               </>
             ) : (
-              <button
-                onClick={logout}
-                className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20"
-              >
-                Uitloggen
-              </button>
+              <>
+                <Link
+                  href="/favorites"
+                  className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 hover:bg-yellow-500/20"
+                  title="Favorieten"
+                  aria-label="Favorieten"
+                >
+                  ★
+                </Link>
+                <button
+                  onClick={logout}
+                  className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20"
+                >
+                  Uitloggen
+                </button>
+              </>
             )}
           </nav>
         </div>

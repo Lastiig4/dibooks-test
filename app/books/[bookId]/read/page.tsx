@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { books } from "@/lib/books";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useDemoAuth } from "@/lib/auth";
+import { getReadingProgress, upsertReadingProgress } from "@/lib/supabase/readerFeatures";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 type ReaderNodeType = "text" | "special" | "cutscene" | "choice" | "minigame";
@@ -48,6 +50,7 @@ type ReaderBook = {
   author: string;
   subtitle?: string;
   description?: string;
+  accessType?: "free" | "premium";
   startNodeId: string;
   nodes: ReaderNode[];
   edges: ReaderEdge[];
@@ -138,6 +141,7 @@ function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBo
     author: fallback.author ?? rawProject?.author ?? "Auteur",
     subtitle: fallback.subtitle ?? rawProject?.subtitle ?? "",
     description: fallback.description ?? rawProject?.description ?? "",
+    accessType: (fallback as any).accessType ?? rawProject?.accessType ?? "free",
     startNodeId: rawProject?.startNodeId ?? nodes[0]?.id ?? "",
     nodes,
     edges,
@@ -166,28 +170,29 @@ async function loadStaticBook(bookId: string) {
 async function loadSupabaseBook(bookId: string) {
   const supabase = createSupabaseBrowserClient();
 
-  const { data, error } = await supabase
-    .from("dashboard_books")
-    .select("*")
-    .eq("id", bookId)
-    .eq("published", true)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("get_reader_book", {
+    input_book_id: bookId,
+  });
 
   if (error) throw error;
-  if (!data) return null;
 
-  if (!data.project_data) {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+
+  if (!row.project_data) {
     throw new Error("Dit boek is gepubliceerd, maar er is nog geen reader/project-data opgeslagen.");
   }
 
-  return normalizeBook(data.project_data, {
-    id: data.id,
-    title: data.title,
-    author: data.author,
-    subtitle: data.subtitle,
-    description: data.description,
-  });
+  return normalizeBook(row.project_data, {
+    id: row.id,
+    title: row.title,
+    author: row.author,
+    subtitle: row.subtitle,
+    description: row.description,
+    accessType: row.access_type === "premium" ? "premium" : "free",
+  } as any);
 }
+
 
 function paginateTextHtml(html: string, maxCharacters = 1450) {
   const plainText = stripHtml(html);
@@ -624,6 +629,7 @@ export default function ReadBookPage() {
   const [pageMode, setPageMode] = useState<ReaderPageMode>("auto");
   const [theme, setTheme] = useState<ReaderTheme>("dark");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const { user, loading: authLoading } = useDemoAuth();
 
   useEffect(() => {
     let active = true;
@@ -632,13 +638,20 @@ export default function ReadBookPage() {
       setLoadState({ status: "loading" });
 
       try {
+        if (authLoading) return;
+
+        if (!user) {
+          setLoadState({ status: "error", message: "Login gratis om dit boek te lezen. Zo kan DiBooks ook je leesvoortgang opslaan." });
+          return;
+        }
+
         const staticBook = await loadStaticBook(bookId);
         const book = staticBook ?? (await loadSupabaseBook(bookId));
 
         if (!active) return;
 
         if (!book) {
-          setLoadState({ status: "error", message: "Dit boek is niet gevonden of staat nog niet live." });
+          setLoadState({ status: "error", message: "Dit boek is niet gevonden, staat nog niet live, of je account heeft geen toegang." });
           return;
         }
 
@@ -647,9 +660,14 @@ export default function ReadBookPage() {
           return;
         }
 
+        const progress = await getReadingProgress(user, book.id);
+        const progressNodeExists = progress?.currentNodeId
+          ? book.nodes.some((node) => node.id === progress.currentNodeId)
+          : false;
+
         setLoadState({ status: "ready", book });
-        setCurrentNodeId(book.startNodeId);
-        setPageIndex(0);
+        setCurrentNodeId(progressNodeExists ? progress!.currentNodeId : book.startNodeId);
+        setPageIndex(progressNodeExists ? progress?.pageIndex ?? 0 : 0);
       } catch (error: any) {
         console.error(error);
         if (!active) return;
@@ -665,7 +683,7 @@ export default function ReadBookPage() {
     return () => {
       active = false;
     };
-  }, [bookId]);
+  }, [bookId, authLoading, user]);
 
   useEffect(() => {
     const savedTextSize = window.localStorage.getItem("dibooks-reader-text-size") as ReaderTextSize | null;
@@ -688,6 +706,18 @@ export default function ReadBookPage() {
   useEffect(() => {
     window.localStorage.setItem("dibooks-reader-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (loadState.status !== "ready" || !user || !currentNodeId) return;
+
+    const timeout = window.setTimeout(() => {
+      upsertReadingProgress(user, loadState.book.id, currentNodeId, pageIndex).catch((progressError) => {
+        console.warn("Leesvoortgang opslaan mislukt.", progressError);
+      });
+    }, 450);
+
+    return () => window.clearTimeout(timeout);
+  }, [currentNodeId, loadState, pageIndex, user]);
 
   const reader = useMemo(() => {
     if (loadState.status !== "ready") return null;

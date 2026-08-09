@@ -7,6 +7,16 @@ import type { DiBook } from "@/lib/books";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
+import {
+  canUserReadBookAccess,
+  getAccessLabel,
+  getReadingProgress,
+  getReadBlockReason,
+  isBookFavorite,
+  setBookFavorite,
+  type BookAccessType,
+  type ReadingProgress,
+} from "@/lib/supabase/readerFeatures";
 
 type DetailBook = DiBook & {
   source?: "library" | "dashboard";
@@ -18,6 +28,7 @@ type DetailBook = DiBook & {
   publishedAt?: string;
   projectData?: any;
   colorTheme?: string;
+  accessType?: BookAccessType;
 };
 
 const FALLBACK_COVER_CLASS = "from-blue-950 via-slate-950 to-purple-950";
@@ -43,6 +54,7 @@ function mapSupabaseBook(row: any): DetailBook {
     featured: !!row.featured,
     mostRead: !!row.most_read,
     published: !!row.published,
+    accessType: row.access_type === "premium" ? "premium" : "free",
     source: "dashboard",
     ownerId: row.owner_id,
     ownerName: row.owner_name ?? "Auteur",
@@ -90,9 +102,7 @@ function getStatusLabel(book: DetailBook) {
   return book.status;
 }
 
-function canReadBook(book: DetailBook) {
-  // Voor Supabase-boeken staat de project_data in book_projects en wordt die pas in de reader opgehaald.
-  // De detailpagina hoeft dus alleen te weten of het boek echt gepubliceerd/live is.
+function isPublishedBook(book: DetailBook) {
   return !!book.published;
 }
 
@@ -158,8 +168,11 @@ export default function BookDetailPage() {
   const [book, setBook] = useState<DetailBook | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
+  const { user, isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
+  const [favorite, setFavorite] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [readingProgress, setReadingProgress] = useState<ReadingProgress | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -200,7 +213,41 @@ export default function BookDetailPage() {
     };
   }, [bookId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReaderData() {
+      if (!book?.id || !user) {
+        setFavorite(false);
+        setReadingProgress(null);
+        return;
+      }
+
+      try {
+        const [nextFavorite, nextProgress] = await Promise.all([
+          isBookFavorite(user, book.id),
+          getReadingProgress(user, book.id),
+        ]);
+
+        if (!cancelled) {
+          setFavorite(nextFavorite);
+          setReadingProgress(nextProgress);
+        }
+      } catch (readerDataError) {
+        console.warn("Kon favoriet/leesvoortgang niet laden.", readerDataError);
+      }
+    }
+
+    void loadReaderData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [book?.id, user]);
+
   const readHref = useMemo(() => (book ? `/books/${book.id}/read` : "#"), [book]);
+  const canReadThisBook = !!book && isPublishedBook(book) && canUserReadBookAccess(user, book.accessType);
+  const readBlockReason = book ? getReadBlockReason(user, book.accessType) : null;
 
   if (loading) {
     return (
@@ -254,9 +301,14 @@ export default function BookDetailPage() {
                 </button>
               </>
             ) : (
-              <button onClick={logout} className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20">
-                Uitloggen
-              </button>
+              <>
+                <Link href="/favorites" className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 hover:bg-yellow-500/20" title="Favorieten">
+                  ★
+                </Link>
+                <button onClick={logout} className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20">
+                  Uitloggen
+                </button>
+              </>
             )}
           </nav>
         </div>
@@ -296,18 +348,54 @@ export default function BookDetailPage() {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              {canReadBook(book) ? (
+              {canReadThisBook ? (
                 <Link href={readHref} className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200">
-                  Lees nu
+                  {readingProgress ? "Verder lezen" : "Lees nu"}
                 </Link>
-              ) : (
+              ) : book.status === "Binnenkort" && !book.published ? (
                 <span className="rounded-2xl bg-neutral-700 px-7 py-4 text-lg font-black text-neutral-300">
-                  {book.status === "Binnenkort" && !book.published ? "Nog niet leesbaar" : "Binnenkort"}
+                  Nog niet leesbaar
                 </span>
+              ) : !isLoggedIn ? (
+                <button onClick={() => setAuthModalMode("register")} className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200">
+                  Login gratis om te lezen
+                </button>
+              ) : (
+                <button onClick={() => alert("Premium lezen komt straks via Reader Plus. Voor nu kun je jouw account in Supabase op reader_plus of author_pro zetten om te testen.")} className="rounded-2xl bg-yellow-500 px-7 py-4 text-lg font-black text-black hover:bg-yellow-400">
+                  {readBlockReason || "Upgrade nodig"}
+                </button>
               )}
               <Link href="/" className="rounded-2xl border border-white/15 bg-black/30 px-7 py-4 text-lg font-black text-white hover:bg-white/10">
                 Terug naar Library
               </Link>
+              {isLoggedIn ? (
+                <button
+                  onClick={async () => {
+                    if (!user || !book) return;
+                    setFavoriteBusy(true);
+                    try {
+                      const nextFavorite = await setBookFavorite(user, book.id, !favorite);
+                      setFavorite(nextFavorite);
+                    } catch (favoriteError: any) {
+                      alert(`Favoriet aanpassen mislukt: ${favoriteError?.message ?? "onbekende fout"}`);
+                    } finally {
+                      setFavoriteBusy(false);
+                    }
+                  }}
+                  disabled={favoriteBusy}
+                  className={`rounded-2xl border px-7 py-4 text-lg font-black transition disabled:opacity-50 ${
+                    favorite
+                      ? "border-yellow-400/40 bg-yellow-500/20 text-yellow-100 hover:bg-yellow-500/30"
+                      : "border-white/15 bg-black/30 text-white hover:bg-white/10"
+                  }`}
+                >
+                  {favorite ? "★ Favoriet" : "☆ Favoriet"}
+                </button>
+              ) : (
+                <button onClick={() => setAuthModalMode("login")} className="rounded-2xl border border-yellow-400/25 bg-yellow-500/10 px-7 py-4 text-lg font-black text-yellow-100 hover:bg-yellow-500/20">
+                  ☆ Favoriet
+                </button>
+              )}
             </div>
           </div>
 
@@ -326,6 +414,12 @@ export default function BookDetailPage() {
           <div className="mt-8 rounded-3xl border border-blue-500/20 bg-blue-500/10 p-5 text-sm font-semibold leading-7 text-blue-100">
             DiBooks-boeken kunnen tekst, keuzes, cutscenes en mini-games bevatten. Boeken met de status Binnenkort zijn alleen een aankondiging; lezen kan pas zodra de auteur het boek publiceert.
           </div>
+
+          {readingProgress && (
+            <div className="mt-4 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm font-semibold leading-7 text-emerald-100">
+              Je hebt al leesvoortgang in dit boek. Klik op <strong>Verder lezen</strong> om door te gaan waar je ongeveer gebleven was.
+            </div>
+          )}
         </article>
 
         <aside className="grid content-start gap-4">
@@ -335,6 +429,7 @@ export default function BookDetailPage() {
               <InfoTile label="Auteur" value={book.author} />
               <InfoTile label="Hoofdgenre" value={book.primaryGenre} />
               <InfoTile label="Status" value={getStatusLabel(book)} />
+              <InfoTile label="Toegang" value={getAccessLabel(book.accessType)} />
               <InfoTile label="Leeftijd" value={book.ageRating} />
               <InfoTile label="Leestijd" value={book.readTime} />
               {book.source === "dashboard" && <InfoTile label="Bron" value="Dashboard publicatie" />}
