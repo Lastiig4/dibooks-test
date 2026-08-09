@@ -15,7 +15,8 @@ import {
   FULL_BOOK_NODE_BADGE_THRESHOLD,
   AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH,
   canAccessOwnedResource,
-  getAccountLabel,
+  getRoleLabel,
+  getPlanLabel,
   isAuthorProUser,
   useDemoAuth,
 } from "@/lib/auth";
@@ -1499,10 +1500,14 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-4">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Account</p>
-            <p className="mt-2 text-3xl font-black text-cyan-300">{getAccountLabel(user)}</p>
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Rol</p>
+            <p className="mt-2 text-3xl font-black text-cyan-300">{getRoleLabel(user)}</p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Plan</p>
+            <p className="mt-2 text-3xl font-black text-blue-300">{getPlanLabel(user)}</p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
             <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Totaal boeken</p>
