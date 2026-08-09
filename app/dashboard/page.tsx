@@ -17,6 +17,7 @@ import {
   publishDashboardBookInSupabase,
   removeDashboardBookFromLibraryInSupabase,
   saveDashboardBookToSupabase,
+  updateDashboardBookMediaInSupabase,
 } from "@/lib/supabase/dashboardBooks";
 
 type DashboardBook = DiBook & {
@@ -151,16 +152,53 @@ function statusClass(book: DashboardBook) {
   return "border-blue-500/40 bg-blue-500/10 text-blue-200";
 }
 
+type MediaSavePayload = {
+  coverImage: string;
+  bannerImage: string;
+  coverClass: string;
+  accentClass: string;
+  colorTheme: string;
+};
+
+function BookMediaPreview({ book }: { book: DashboardBook }) {
+  return (
+    <div className={`relative h-40 overflow-hidden rounded-t-3xl bg-gradient-to-br ${book.coverClass || "from-blue-950 via-slate-950 to-purple-950"}`}>
+      {book.bannerImage && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={book.bannerImage}
+          alt={`Banner van ${book.title}`}
+          className="absolute inset-0 h-full w-full object-cover opacity-85"
+        />
+      )}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.18),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.15),rgba(0,0,0,0.86))]" />
+      <div className="absolute bottom-4 left-4 right-4">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-widest ${statusClass(book)}`}>
+            {book.published ? "Live / vergrendeld" : book.status}
+          </span>
+          <span className="rounded-full bg-black/55 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/85">
+            {book.primaryGenre}
+          </span>
+        </div>
+        <h2 className="line-clamp-1 text-3xl font-black text-white drop-shadow-lg">{book.title}</h2>
+      </div>
+    </div>
+  );
+}
+
 function BookDashboardCard({
   book,
   onPublish,
   onRemoveFromLibrary,
   onDeleteDraft,
+  onOpenMedia,
 }: {
   book: DashboardBook;
   onPublish: (bookId: string) => void;
   onRemoveFromLibrary: (bookId: string) => void;
   onDeleteDraft: (bookId: string) => void;
+  onOpenMedia: (book: DashboardBook) => void;
 }) {
   const isPublished = !!book.published;
   const canEdit = !isPublished;
@@ -170,33 +208,7 @@ function BookDashboardCard({
 
   return (
     <article className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-2xl">
-      <div className={`relative h-40 overflow-hidden bg-gradient-to-br ${book.coverClass}`}>
-        {book.bannerImage && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={book.bannerImage}
-            alt={`Banner van ${book.title}`}
-            className="absolute inset-0 h-full w-full object-cover opacity-75"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
-        <div className="absolute bottom-4 left-4 right-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-widest ${statusClass(book)}`}>
-              {isPublished ? "Live / vergrendeld" : book.status}
-            </span>
-            <span className="rounded-full bg-black/55 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/85">
-              {book.primaryGenre}
-            </span>
-            {book.source === "dashboard" && (
-              <span className="rounded-full border border-blue-400/25 bg-blue-500/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-blue-200">
-                Dashboard concept
-              </span>
-            )}
-          </div>
-          <h2 className="mt-3 line-clamp-1 text-3xl font-black text-white">{book.title}</h2>
-        </div>
-      </div>
+      <BookMediaPreview book={book} />
 
       <div className="grid gap-5 p-5">
         <div>
@@ -214,8 +226,8 @@ function BookDashboardCard({
             <p className="mt-1 font-black text-white">{canEdit ? "Open" : "Locked"}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Leeftijd</p>
-            <p className="mt-1 font-black text-white">{book.ageRating ?? "-"}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Media</p>
+            <p className="mt-1 font-black text-white">{book.coverImage || book.bannerImage ? "Eigen" : "Template"}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Leestijd</p>
@@ -233,100 +245,380 @@ function BookDashboardCard({
 
         {isPublished ? (
           <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
-            <strong>Live in de Library = vergrendeld.</strong> Dit boek kan niet worden aangepast zolang het live staat. Wil je toch wijzigen, dan moet het boek eerst uit de Library worden gehaald. Zo voorkom je dat lezers midden in een veranderend verhaal zitten.
+            <strong>Live in de Library = vergrendeld.</strong> Media aanpassen is daarom ook vergrendeld. Haal het boek eerst uit de Library als je cover of banner wilt wijzigen.
           </div>
         ) : (
           <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
-            <strong>Concept / testfase.</strong> Dit boek mag je vrij aanpassen in de Studio. Pas bij publiceren wordt het vergrendeld.
+            <strong>Concept / testfase.</strong> Je mag tekst, routes, cover en banner vrij aanpassen totdat je publiceert.
           </div>
         )}
 
         <div className="flex flex-wrap gap-3">
           {canEdit ? (
-            <Link
-              href={`/editor?book=${book.id}`}
-              className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500"
-            >
+            <Link href={`/editor?book=${book.id}`} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500">
               Bewerk in Studio
             </Link>
           ) : (
-            <button
-              disabled
-              className="cursor-not-allowed rounded-2xl bg-neutral-800 px-5 py-3 text-sm font-black text-neutral-500"
-              title="Live boeken kun je niet aanpassen. Haal het boek eerst uit de Library."
-            >
+            <button disabled className="cursor-not-allowed rounded-2xl bg-neutral-800 px-5 py-3 text-sm font-black text-neutral-500">
               Bewerken vergrendeld
             </button>
           )}
 
-          {book.source === "dashboard" ? (
+          {canEdit && isDashboardBook && (
             <button
-              disabled
-              className="cursor-not-allowed rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-neutral-500"
-              title="Boekpagina komt zodra dit boek echt gepubliceerd is."
+              onClick={() => onOpenMedia(book)}
+              className="rounded-2xl border border-cyan-400/35 bg-cyan-500/10 px-5 py-3 text-sm font-black text-cyan-100 hover:bg-cyan-500/20"
+              title="Cover en banner aanpassen"
             >
+              Cover & banner
+            </button>
+          )}
+
+          {book.source === "dashboard" ? (
+            <button disabled className="cursor-not-allowed rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-neutral-500">
               Boekpagina later
             </button>
           ) : (
-            <Link
-              href={detailHref}
-              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
-            >
+            <Link href={detailHref} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
               Boekpagina
             </Link>
           )}
 
           {book.storyFile && readHref && (
-            <Link
-              href={readHref}
-              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
-            >
+            <Link href={readHref} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
               Preview lezen
             </Link>
           )}
 
           {canEdit && isDashboardBook && (
-            <button
-              onClick={() => onPublish(book.id)}
-              className="rounded-2xl border border-emerald-500/35 bg-emerald-500/15 px-5 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-500/25"
-              title="Publiceer dit boek naar de Library en vergrendel het."
-            >
+            <button onClick={() => onPublish(book.id)} className="rounded-2xl border border-emerald-500/35 bg-emerald-500/15 px-5 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-500/25">
               Publiceer naar Library
             </button>
           )}
 
           {canEdit && isDashboardBook && (
-            <button
-              onClick={() => onDeleteDraft(book.id)}
-              className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-sm font-black text-red-100 hover:bg-red-500/20"
-              title="Verwijder dit concept uit je dashboard."
-            >
+            <button onClick={() => onDeleteDraft(book.id)} className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-sm font-black text-red-100 hover:bg-red-500/20">
               Verwijder concept
             </button>
           )}
 
           {isPublished && isDashboardBook && (
-            <button
-              onClick={() => onRemoveFromLibrary(book.id)}
-              className="rounded-2xl border border-red-500/35 bg-red-500/15 px-5 py-3 text-sm font-black text-red-100 hover:bg-red-500/25"
-              title="Haal dit boek uit de Library. Daarna kun je het weer aanpassen als concept."
-            >
+            <button onClick={() => onRemoveFromLibrary(book.id)} className="rounded-2xl border border-red-500/35 bg-red-500/15 px-5 py-3 text-sm font-black text-red-100 hover:bg-red-500/25">
               Verwijder uit Library
-            </button>
-          )}
-
-          {isPublished && !isDashboardBook && (
-            <button
-              disabled
-              className="cursor-not-allowed rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-3 text-sm font-black text-red-300/60"
-              title="Dit live boek komt nu nog uit lib/books.ts. Later verwijderen we live boeken via het dashboard/admin systeem."
-            >
-              Verwijderen later
             </button>
           )}
         </div>
       </div>
     </article>
+  );
+}
+
+type CropDraft = {
+  source: string;
+  fileName: string;
+  zoom: number;
+  x: number;
+  y: number;
+};
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Afbeelding kon niet worden gelezen."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function cropImageToDataUrl(
+  source: string,
+  outputWidth: number,
+  outputHeight: number,
+  zoom: number,
+  offsetX: number,
+  offsetY: number,
+) {
+  return new Promise<string>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("Canvas kon niet worden gemaakt."));
+        return;
+      }
+
+      const canvasRatio = outputWidth / outputHeight;
+      const imageRatio = image.width / image.height;
+      const baseWidth = imageRatio > canvasRatio ? outputHeight * imageRatio : outputWidth;
+      const baseHeight = imageRatio > canvasRatio ? outputHeight : outputWidth / imageRatio;
+      const drawWidth = baseWidth * zoom;
+      const drawHeight = baseHeight * zoom;
+      const maxShiftX = Math.max(0, (drawWidth - outputWidth) / 2);
+      const maxShiftY = Math.max(0, (drawHeight - outputHeight) / 2);
+      const drawX = (outputWidth - drawWidth) / 2 + (offsetX / 100) * maxShiftX;
+      const drawY = (outputHeight - drawHeight) / 2 + (offsetY / 100) * maxShiftY;
+
+      context.fillStyle = "#05070d";
+      context.fillRect(0, 0, outputWidth, outputHeight);
+      context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+      resolve(canvas.toDataURL("image/jpeg", 0.86));
+    };
+    image.onerror = () => reject(new Error("Afbeelding kon niet worden geladen."));
+    image.src = source;
+  });
+}
+
+function CropPreview({
+  title,
+  draft,
+  ratioClass,
+  onDraftChange,
+}: {
+  title: string;
+  draft: CropDraft | null;
+  ratioClass: string;
+  onDraftChange: (draft: CropDraft) => void;
+}) {
+  if (!draft) return null;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-white">{title}</p>
+          <p className="text-xs font-bold text-neutral-500">{draft.fileName}</p>
+        </div>
+        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-black text-cyan-200">Crop preview</span>
+      </div>
+      <div className={`relative overflow-hidden rounded-2xl border border-white/10 bg-neutral-950 ${ratioClass}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={draft.source}
+          alt={title}
+          className="absolute left-1/2 top-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 object-cover"
+          style={{
+            transform: `translate(-50%, -50%) scale(${draft.zoom}) translate(${draft.x / 5}%, ${draft.y / 5}%)`,
+          }}
+        />
+        <div className="absolute inset-0 ring-1 ring-inset ring-white/20" />
+      </div>
+      <div className="mt-4 grid gap-3">
+        <label className="text-xs font-black uppercase tracking-widest text-neutral-400">
+          Zoom
+          <input
+            type="range"
+            min="1"
+            max="2.5"
+            step="0.05"
+            value={draft.zoom}
+            onChange={(event) => onDraftChange({ ...draft, zoom: Number(event.target.value) })}
+            className="mt-2 w-full accent-cyan-400"
+          />
+        </label>
+        <label className="text-xs font-black uppercase tracking-widest text-neutral-400">
+          Horizontaal snijden
+          <input
+            type="range"
+            min="-100"
+            max="100"
+            step="1"
+            value={draft.x}
+            onChange={(event) => onDraftChange({ ...draft, x: Number(event.target.value) })}
+            className="mt-2 w-full accent-cyan-400"
+          />
+        </label>
+        <label className="text-xs font-black uppercase tracking-widest text-neutral-400">
+          Verticaal snijden
+          <input
+            type="range"
+            min="-100"
+            max="100"
+            step="1"
+            value={draft.y}
+            onChange={(event) => onDraftChange({ ...draft, y: Number(event.target.value) })}
+            className="mt-2 w-full accent-cyan-400"
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function MediaManagerModal({
+  book,
+  onClose,
+  onSave,
+}: {
+  book: DashboardBook;
+  onClose: () => void;
+  onSave: (payload: MediaSavePayload) => Promise<void>;
+}) {
+  const [selectedTheme, setSelectedTheme] = useState(book.colorTheme || "blue");
+  const [coverDraft, setCoverDraft] = useState<CropDraft | null>(null);
+  const [bannerDraft, setBannerDraft] = useState<CropDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const activeTheme = colorThemes[selectedTheme] ?? colorThemes.blue;
+
+  async function handleFile(file: File | undefined, type: "cover" | "banner") {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Kies een afbeelding, bijvoorbeeld .jpg, .png of .webp.");
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Deze afbeelding is groter dan 8MB. Gebruik liever een kleinere afbeelding.");
+      return;
+    }
+
+    const source = await readFileAsDataUrl(file);
+    const nextDraft: CropDraft = { source, fileName: file.name, zoom: 1, x: 0, y: 0 };
+    if (type === "cover") setCoverDraft(nextDraft);
+    if (type === "banner") setBannerDraft(nextDraft);
+  }
+
+  async function saveStandardTemplate() {
+    setSaving(true);
+    try {
+      await onSave({
+        coverImage: "",
+        bannerImage: "",
+        coverClass: activeTheme.coverClass,
+        accentClass: activeTheme.accentClass,
+        colorTheme: selectedTheme,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveCustomMedia() {
+    setSaving(true);
+    try {
+      const coverImage = coverDraft
+        ? await cropImageToDataUrl(coverDraft.source, 900, 1350, coverDraft.zoom, coverDraft.x, coverDraft.y)
+        : book.coverImage || "";
+      const bannerImage = bannerDraft
+        ? await cropImageToDataUrl(bannerDraft.source, 1800, 675, bannerDraft.zoom, bannerDraft.x, bannerDraft.y)
+        : book.bannerImage || "";
+
+      await onSave({
+        coverImage,
+        bannerImage,
+        coverClass: activeTheme.coverClass,
+        accentClass: activeTheme.accentClass,
+        colorTheme: selectedTheme,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
+      <div className="mx-auto max-w-6xl rounded-3xl border border-white/10 bg-[#080b13] p-5 shadow-2xl sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-cyan-300">Book Media Manager</p>
+            <h2 className="mt-2 text-3xl font-black sm:text-5xl">Cover & banner</h2>
+            <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-neutral-400">
+              Gebruik een standaard DiBooks-template of upload eigen beeld. De crop-tool snijdt automatisch naar vaste verhoudingen: cover 2:3 en banner breed.
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-500">
+            Sluiten
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <h3 className="text-lg font-black">Standaard DiBooks banners</h3>
+              <p className="mt-2 text-sm font-semibold leading-6 text-neutral-400">
+                Kies een standaard stijl. Dit is licht, strak en geeft geen dubbele tekst-overlays.
+              </p>
+              <div className="mt-4 grid gap-2">
+                {Object.entries(colorThemes).map(([value, theme]) => (
+                  <button
+                    key={value}
+                    onClick={() => setSelectedTheme(value)}
+                    className={`rounded-2xl border p-3 text-left text-sm font-black transition ${
+                      selectedTheme === value
+                        ? "border-cyan-300 bg-cyan-500/15 text-cyan-100"
+                        : "border-white/10 bg-black/25 text-neutral-300 hover:bg-white/10"
+                    }`}
+                  >
+                    <span className={`mr-3 inline-block h-5 w-10 rounded-full bg-gradient-to-r ${theme.coverClass}`} />
+                    {theme.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={saveStandardTemplate}
+                disabled={saving}
+                className="mt-4 w-full rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Gebruik standaard template
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <h3 className="text-lg font-black">Eigen beeld uploaden</h3>
+              <p className="mt-2 text-sm font-semibold leading-6 text-neutral-400">
+                Cover is voor boekkaarten. Banner is voor brede hero/detailweergave.
+              </p>
+              <div className="mt-4 grid gap-3">
+                <label className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm font-black text-white hover:bg-white/10">
+                  Upload coverbeeld
+                  <input type="file" accept="image/*" onChange={(event) => void handleFile(event.target.files?.[0], "cover")} className="mt-3 block w-full text-xs text-neutral-400 file:mr-3 file:rounded-xl file:border-0 file:bg-cyan-600 file:px-3 file:py-2 file:font-black file:text-white" />
+                </label>
+                <label className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm font-black text-white hover:bg-white/10">
+                  Upload bannerbeeld
+                  <input type="file" accept="image/*" onChange={(event) => void handleFile(event.target.files?.[0], "banner")} className="mt-3 block w-full text-xs text-neutral-400 file:mr-3 file:rounded-xl file:border-0 file:bg-cyan-600 file:px-3 file:py-2 file:font-black file:text-white" />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <h3 className="text-lg font-black">Preview standaard stijl</h3>
+              <div className={`mt-3 overflow-hidden rounded-2xl border ${activeTheme.accentClass} bg-gradient-to-br ${activeTheme.coverClass} p-5`}>
+                <div className="h-48 rounded-2xl bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.78))] p-5">
+                  <div className="inline-flex rounded-full bg-black/45 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/90">{book.primaryGenre}</div>
+                  <h3 className="mt-20 line-clamp-2 text-4xl font-black leading-none text-white">{book.title}</h3>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <CropPreview title="Cover 2:3" draft={coverDraft} ratioClass="aspect-[2/3]" onDraftChange={setCoverDraft} />
+              <CropPreview title="Banner breed" draft={bannerDraft} ratioClass="aspect-[8/3]" onDraftChange={setBannerDraft} />
+            </div>
+
+            <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-4 text-sm leading-6 text-cyan-100">
+              <strong>Tip:</strong> gebruik bij banners liever sfeerbeeld zonder titeltekst. DiBooks zet titel en knoppen er zelf netjes overheen.
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <button onClick={onClose} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
+                Annuleren
+              </button>
+              <button
+                onClick={saveCustomMedia}
+                disabled={saving || (!coverDraft && !bannerDraft)}
+                className="rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-black text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+              >
+                {saving ? "Opslaan..." : "Eigen cover/banner opslaan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -581,6 +873,7 @@ export default function DashboardPage() {
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [draftDashboardBooks, setDraftDashboardBooks] = useState<DashboardBook[]>([]);
   const [newBookOpen, setNewBookOpen] = useState(false);
+  const [mediaBook, setMediaBook] = useState<DashboardBook | null>(null);
   const [form, setForm] = useState<NewBookForm>(defaultForm);
 
   const [dashboardLoading, setDashboardLoading] = useState(false);
@@ -655,8 +948,8 @@ export default function DashboardPage() {
         status: form.status,
         ageRating: form.ageRating,
         readTime: form.readTime.trim() || "Concept",
-        coverImage: theme.coverImage,
-        bannerImage: theme.bannerImage,
+        coverImage: "",
+        bannerImage: "",
         coverClass: theme.coverClass,
         accentClass: theme.accentClass,
         colorTheme: form.colorTheme,
@@ -765,6 +1058,28 @@ export default function DashboardPage() {
     } catch (error) {
       console.error(error);
       alert(error instanceof Error ? `Concept verwijderen mislukt: ${error.message}` : "Concept verwijderen mislukt.");
+    }
+  }
+
+
+  async function saveBookMedia(bookId: string, payload: MediaSavePayload) {
+    const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
+    if (!targetBook) return;
+
+    if (!user || !canAccessOwnedResource(user, targetBook.ownerId)) {
+      alert("Je kunt alleen media van je eigen dashboardboeken aanpassen.");
+      return;
+    }
+
+    try {
+      const savedBook = await updateDashboardBookMediaInSupabase(user, bookId, payload);
+      setDraftDashboardBooks((currentBooks) =>
+        currentBooks.map((book) => (book.id === bookId ? (savedBook as DashboardBook) : book)),
+      );
+      setMediaBook(null);
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Media opslaan mislukt: ${error.message}` : "Media opslaan mislukt.");
     }
   }
 
@@ -910,7 +1225,7 @@ export default function DashboardPage() {
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
           {allBooks.map((book) => (
-            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} />
+            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} onOpenMedia={setMediaBook} />
           ))}
         </div>
       </section>
@@ -921,6 +1236,13 @@ export default function DashboardPage() {
           setForm={setForm}
           onClose={() => setNewBookOpen(false)}
           onSave={saveNewBook}
+        />
+      )}
+      {mediaBook && (
+        <MediaManagerModal
+          book={mediaBook}
+          onClose={() => setMediaBook(null)}
+          onSave={(payload) => saveBookMedia(mediaBook.id, payload)}
         />
       )}
       {authModalMode && (

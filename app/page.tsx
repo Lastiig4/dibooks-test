@@ -2,13 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  books,
-  getBookDetailPath,
-  getBookReadPath,
-  type DiBook,
-  type BookStatus,
-} from "@/lib/books";
+import { books, type DiBook } from "@/lib/books";
+import { fetchPublishedDashboardBooksFromSupabase } from "@/lib/supabase/dashboardBooks";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
 
@@ -21,31 +16,8 @@ type DashboardBook = DiBook & {
   colorTheme?: string;
 };
 
-const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
-
-function getPublishedDashboardBooks(): DashboardBook[] {
-  if (typeof window === "undefined") return [] as DashboardBook[];
-
-  try {
-    const savedBooks = window.localStorage.getItem(DASHBOARD_BOOKS_STORAGE_KEY);
-    if (!savedBooks) return [];
-
-    const parsedBooks = JSON.parse(savedBooks) as DashboardBook[];
-    if (!Array.isArray(parsedBooks)) return [];
-
-    return parsedBooks
-      .filter((book) => book && book.published)
-      .map((book) => ({
-        ...book,
-        source: "dashboard" as const,
-        status: "Testversie" as BookStatus,
-        mostRead: true,
-      }));
-  } catch (error) {
-    console.error("Kon dashboardboeken niet laden voor de Library.", error);
-    return [];
-  }
-}
+const FALLBACK_COVER_CLASS = "from-blue-950 via-slate-950 to-purple-950";
+const FALLBACK_ACCENT_CLASS = "border-blue-500/50";
 
 function DiBooksLogo() {
   return (
@@ -63,34 +35,58 @@ function DiBooksLogo() {
   );
 }
 
-function BookCover({ book, large = false }: { book: DashboardBook; large?: boolean }) {
+function getBookStatusLabel(book: DashboardBook) {
+  if (book.source === "dashboard") return book.published ? "Live" : book.status;
+  return book.status;
+}
+
+function BookBadge({ children, light = false }: { children: React.ReactNode; light?: boolean }) {
+  return (
+    <span
+      className={
+        light
+          ? "rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black shadow-sm"
+          : "rounded-full bg-black/45 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white/90 ring-1 ring-white/10 backdrop-blur-sm"
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+function GeneratedCover({ book, large = false }: { book: DashboardBook; large?: boolean }) {
+  const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
+  const titleSize = large ? "text-5xl sm:text-6xl" : "text-3xl";
+  const hasCustomCover = !!book.coverImage;
+
   return (
     <div
-      className={`relative flex ${large ? "h-56" : "h-40"} flex-col justify-between overflow-hidden rounded-t-2xl bg-gradient-to-br ${book.coverClass} p-5`}
+      className={`relative isolate flex ${large ? "h-72" : "h-44"} flex-col justify-between overflow-hidden rounded-t-2xl bg-gradient-to-br ${coverClass} p-5`}
     >
-      {book.coverImage && (
+      {hasCustomCover && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={book.coverImage}
-          alt={`Cover van ${book.title}`}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <img src={book.coverImage} alt={`Cover van ${book.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover" />
       )}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.18),rgba(0,0,0,0.72))]" />
-      <div className="relative flex items-start justify-between gap-3">
-        <span className="rounded-full bg-black/55 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/90 backdrop-blur-sm">
-          {book.primaryGenre}
-        </span>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-black">
-          {book.source === "dashboard" ? "Live" : book.status}
-        </span>
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.16),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.18),rgba(0,0,0,0.78))]" />
+      {!hasCustomCover && (
+        <>
+          <div className="absolute -right-16 top-7 -z-10 h-44 w-44 rounded-full border border-white/10" />
+          <div className="absolute -right-8 top-20 -z-10 h-64 w-64 rounded-full border border-white/10" />
+        </>
+      )}
+      <div className="absolute bottom-0 left-0 right-0 -z-10 h-24 bg-black/45" />
+
+      <div className="flex items-start justify-between gap-3">
+        <BookBadge>{book.primaryGenre}</BookBadge>
+        <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
       </div>
-      <div className="relative">
-        <h3 className={`${large ? "text-5xl" : "text-3xl"} font-black leading-none text-white drop-shadow-lg`}>
+
+      <div>
+        <h3 className={`${titleSize} max-w-[90%] font-black leading-[0.95] text-white drop-shadow-lg`}>
           {book.title}
         </h3>
-        <p className="mt-2 text-xs font-bold uppercase tracking-[0.25em] text-white/65">
-          {book.source === "dashboard" ? "Dashboard publicatie" : "Interactive book"}
+        <p className="mt-3 text-[11px] font-black uppercase tracking-[0.32em] text-white/55">
+          Interactive story
         </p>
       </div>
     </div>
@@ -99,26 +95,44 @@ function BookCover({ book, large = false }: { book: DashboardBook; large?: boole
 
 function BookCard({ book, large = false }: { book: DashboardBook; large?: boolean }) {
   const href = `/books/${book.id}`;
+  const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
 
   return (
     <Link
       href={href}
-      className={`group relative shrink-0 overflow-hidden rounded-2xl border ${book.accentClass} bg-neutral-900 shadow-2xl transition hover:-translate-y-1 hover:scale-[1.01] hover:border-white/60 ${
+      className={`group relative shrink-0 overflow-hidden rounded-2xl border ${accentClass} bg-neutral-950 shadow-2xl transition hover:-translate-y-1 hover:scale-[1.01] hover:border-white/60 ${
         large ? "w-[330px] sm:w-[400px]" : "w-[250px] sm:w-[290px]"
       }`}
     >
-      <BookCover book={book} large={large} />
-      <div className="min-h-[142px] bg-neutral-950 p-5">
+      <GeneratedCover book={book} large={large} />
+      <div className="min-h-[154px] bg-neutral-950 p-5">
         <p className="line-clamp-3 text-sm font-semibold leading-6 text-neutral-300">
           {book.subtitle}
         </p>
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <span className="text-xs font-black uppercase tracking-widest text-neutral-500">
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <span className="truncate text-xs font-black uppercase tracking-widest text-neutral-500">
             {book.author}
           </span>
           <span className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white group-hover:bg-blue-500">
             Bekijk
           </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function FeaturedPanel({ book }: { book: DashboardBook }) {
+  const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
+
+  return (
+    <Link href={`/books/${book.id}`} className="hidden lg:block">
+      <div className={`rounded-3xl border ${accentClass} bg-black/25 p-4 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
+        <GeneratedCover book={book} large />
+        <div className="rounded-b-2xl bg-neutral-950 p-5">
+          <p className="line-clamp-4 text-sm font-bold leading-6 text-neutral-300">
+            {book.description}
+          </p>
         </div>
       </div>
     </Link>
@@ -162,13 +176,21 @@ export default function LibraryPage() {
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
 
   useEffect(() => {
-    const loadDashboardBooks = () => setDashboardBooks(getPublishedDashboardBooks());
+    let cancelled = false;
 
-    loadDashboardBooks();
-    window.addEventListener("storage", loadDashboardBooks);
+    async function loadDashboardBooks() {
+      try {
+        const publishedBooks = await fetchPublishedDashboardBooksFromSupabase();
+        if (!cancelled) setDashboardBooks(publishedBooks as DashboardBook[]);
+      } catch (error) {
+        console.error("Kon gepubliceerde dashboardboeken niet laden uit Supabase.", error);
+      }
+    }
+
+    void loadDashboardBooks();
 
     return () => {
-      window.removeEventListener("storage", loadDashboardBooks);
+      cancelled = true;
     };
   }, []);
 
@@ -233,17 +255,15 @@ export default function LibraryPage() {
       </header>
 
       <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
-        <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-950 shadow-2xl">
-          <div className={`absolute inset-0 bg-gradient-to-br ${featuredBook.coverClass}`} />
+        <div className={`relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
           {featuredBook.bannerImage && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={featuredBook.bannerImage}
-              alt={`Banner van ${featuredBook.title}`}
-              className="absolute inset-0 h-full w-full object-cover opacity-80"
-            />
+            <img src={featuredBook.bannerImage} alt={`Banner van ${featuredBook.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover opacity-85" />
           )}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.16),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.94),rgba(0,0,0,0.62),rgba(0,0,0,0.2))]" />
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.16),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(37,99,235,0.26),transparent_34%),linear-gradient(90deg,rgba(0,0,0,0.90),rgba(0,0,0,0.62),rgba(0,0,0,0.24))]" />
+          <div className="absolute -right-28 top-10 -z-10 h-[480px] w-[480px] rounded-full border border-white/10" />
+          <div className="absolute -right-8 top-28 -z-10 h-[620px] w-[620px] rounded-full border border-white/5" />
+
           <div className="relative grid min-h-[430px] items-end gap-8 p-6 sm:p-10 lg:grid-cols-[1fr_420px] lg:p-12">
             <div className="max-w-3xl">
               {featuredBook.source === "dashboard" && (
@@ -253,9 +273,7 @@ export default function LibraryPage() {
               )}
               <div className="mb-5 flex flex-wrap gap-2">
                 {featuredBook.genres.map((genre) => (
-                  <span key={genre} className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/80">
-                    {genre}
-                  </span>
+                  <BookBadge key={genre}>{genre}</BookBadge>
                 ))}
               </div>
               <h1 className="text-5xl font-black leading-none sm:text-7xl lg:text-8xl">
@@ -286,21 +304,12 @@ export default function LibraryPage() {
               </div>
             </div>
 
-            <Link href={`/books/${featuredBook.id}`} className="hidden lg:block">
-              <div className={`rounded-3xl border ${featuredBook.accentClass} bg-black/30 p-4 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
-                <BookCover book={featuredBook} large />
-                <div className="rounded-b-2xl bg-neutral-950 p-5">
-                  <p className="text-sm font-bold leading-6 text-neutral-300">{featuredBook.description}</p>
-                </div>
-              </div>
-            </Link>
+            <FeaturedPanel book={featuredBook} />
           </div>
         </div>
       </section>
 
-      {dashboardBooks.length > 0 && (
-        <BookRow title="Nieuw uit het Dashboard" rowBooks={dashboardBooks} />
-      )}
+      {dashboardBooks.length > 0 && <BookRow title="Nieuw uit het Dashboard" rowBooks={dashboardBooks} />}
 
       <BookRow title="Meest gelezen boeken" rowBooks={mostReadBooks} />
 
@@ -314,7 +323,7 @@ export default function LibraryPage() {
             <p className="text-sm font-black uppercase tracking-widest text-blue-300">Auteur?</p>
             <h2 className="mt-2 text-2xl font-black">Open je Dashboard of Auteur Studio</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
-              Iedereen kan in de Auteur Studio een boek maken en lokaal opslaan. Met account krijg je later Dashboard-opslag en publicatie naar de Library.
+              Iedereen kan in de Auteur Studio een boek maken en lokaal opslaan. Met account krijg je Dashboard-opslag en publicatie naar de Library.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -330,19 +339,18 @@ export default function LibraryPage() {
         </div>
       </section>
 
+      <footer className="border-t border-white/5 px-5 py-8 text-sm font-bold text-neutral-500 sm:px-8 lg:px-10">
+        DiBooks Library • {allBooks.length} boeken in catalogus • {dashboardBooks.length} dashboard publicaties
+      </footer>
+
       {authModalMode && (
         <AuthModal
-          mode={authModalMode}
-          onModeChange={setAuthModalMode}
+          initialMode={authModalMode}
           onClose={() => setAuthModalMode(null)}
           onLogin={loginWithCredentials}
           onRegister={registerWithCredentials}
         />
       )}
-
-      <footer className="border-t border-white/5 px-5 py-8 text-sm font-bold text-neutral-500 sm:px-8 lg:px-10">
-        DiBooks Library • {allBooks.length} boeken in catalogus • {dashboardBooks.length} dashboard publicaties
-      </footer>
     </main>
   );
 }

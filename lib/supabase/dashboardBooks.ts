@@ -192,6 +192,60 @@ export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: Das
   return freshBook ?? mapRowToDashboardBook(savedBook);
 }
 
+export type DashboardBookMediaInput = {
+  coverImage?: string;
+  bannerImage?: string;
+  coverClass?: string;
+  accentClass?: string;
+  colorTheme?: string;
+};
+
+export async function updateDashboardBookMediaInSupabase(
+  user: DemoAuthUser,
+  bookId: string,
+  media: DashboardBookMediaInput,
+) {
+  const profileResult = await ensureSupabaseProfile(user);
+  if (!profileResult.ok) {
+    throw new Error(profileResult.message || "DiBooks profile kon niet worden aangemaakt.");
+  }
+
+  const supabase = createSupabaseBrowserClient();
+
+  const { data, error } = await supabase
+    .from("books")
+    .update({
+      cover_image: media.coverImage ?? "",
+      banner_image: media.bannerImage ?? "",
+      cover_class: media.coverClass || "from-blue-950 via-slate-950 to-purple-950",
+      accent_class: media.accentClass || "border-blue-500/60",
+      color_theme: media.colorTheme || "blue",
+    })
+    .eq("id", bookId)
+    .eq("owner_id", user.id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+
+  const freshBook = await fetchDashboardBookFromSupabase(bookId);
+  return freshBook ?? mapRowToDashboardBook(data);
+}
+
+export async function fetchPublishedDashboardBooksFromSupabase() {
+  const supabase = createSupabaseBrowserClient();
+
+  const { data, error } = await supabase
+    .from("dashboard_books")
+    .select("*")
+    .eq("published", true)
+    .order("published_at", { ascending: false, nullsFirst: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map(mapRowToDashboardBook);
+}
+
 export async function publishDashboardBookInSupabase(bookId: string) {
   const supabase = createSupabaseBrowserClient();
 
