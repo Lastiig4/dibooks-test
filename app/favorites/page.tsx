@@ -110,6 +110,7 @@ export default function FavoritesPage() {
           <DiBooksLogo />
           <nav className="flex items-center gap-3">
             <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white">Library</Link>
+            <Link href="/account" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white">Account</Link>
             {permissions.canUseDashboard && <Link href="/dashboard" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white">Dashboard</Link>}
             {!isLoggedIn ? (
               <button onClick={() => setAuthModalMode("login")} className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500">Login</button>

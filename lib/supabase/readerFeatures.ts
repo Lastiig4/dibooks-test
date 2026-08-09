@@ -182,3 +182,13 @@ export async function upsertReadingProgress(
 
   if (error) throw error;
 }
+
+export async function fetchReadingProgressBooks(user: DemoAuthUser | null) {
+  if (!user) return [] as FavoriteBook[];
+  const supabase = createSupabaseBrowserClient();
+
+  const { data, error } = await supabase.rpc("get_reading_progress_books");
+  if (error) throw error;
+
+  return (data ?? []).map(mapFavoriteRow);
+}
