@@ -442,12 +442,17 @@ export default function ReadBookPage() {
   }
 
   if (loadState.status === "error" || !reader) {
+    const errorMessage =
+      loadState.status === "error"
+        ? loadState.message
+        : "De reader kon geen geldige start-node of boekdata vinden.";
+
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#05070d] p-5 text-white">
         <div className="max-w-2xl rounded-3xl border border-red-500/25 bg-red-500/10 p-8 text-center shadow-2xl">
           <p className="text-sm font-black uppercase tracking-[0.32em] text-red-200">Reader fout</p>
           <h1 className="mt-3 text-4xl font-black">Kan boek niet openen</h1>
-          <p className="mt-4 text-sm font-semibold leading-6 text-red-100/85">{loadState.message}</p>
+          <p className="mt-4 text-sm font-semibold leading-6 text-red-100/85">{errorMessage}</p>
           <Link href={`/books/${bookId}`} className="mt-6 inline-flex rounded-2xl bg-white px-5 py-3 font-black text-black hover:bg-neutral-200">
             Terug naar boekpagina
           </Link>
