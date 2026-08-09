@@ -286,3 +286,50 @@ export async function deleteDashboardBookFromSupabase(bookId: string) {
   const { error } = await supabase.from("books").delete().eq("id", bookId);
   if (error) throw error;
 }
+
+export async function updateDashboardBookProjectInSupabase(
+  user: DemoAuthUser,
+  bookId: string,
+  projectData: any,
+) {
+  const profileResult = await ensureSupabaseProfile(user);
+  if (!profileResult.ok) {
+    throw new Error(profileResult.message || "DiBooks profile kon niet worden aangemaakt.");
+  }
+
+  const supabase = createSupabaseBrowserClient();
+
+  const { data: book, error: bookError } = await supabase
+    .from("books")
+    .select("id, owner_id, published")
+    .eq("id", bookId)
+    .maybeSingle();
+
+  if (bookError) throw bookError;
+  if (!book) throw new Error("Dashboardboek niet gevonden of geen toegang.");
+  if (book.published) {
+    throw new Error("Dit boek staat live. Haal het eerst uit de Library voordat je het concept overschrijft.");
+  }
+
+  const projectPayload = {
+    book_id: book.id,
+    owner_id: book.owner_id || user.id,
+    project_data: projectData,
+    version: projectData?.version ?? 1,
+  };
+
+  const { error: projectError } = await supabase
+    .from("book_projects")
+    .upsert(projectPayload, { onConflict: "book_id" });
+
+  if (projectError) throw projectError;
+
+  const { error: updateError } = await supabase
+    .from("books")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", book.id);
+
+  if (updateError) throw updateError;
+
+  return true;
+}

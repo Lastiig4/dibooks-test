@@ -28,6 +28,7 @@ import { FREE_NODE_LIMIT, getPlanLabel, getMaxNodesForUser, canAccessOwnedResour
 import {
   fetchDashboardBookFromSupabase,
   saveDashboardBookToSupabase,
+  updateDashboardBookProjectInSupabase,
 } from "@/lib/supabase/dashboardBooks";
 
 declare module "@tiptap/core" {
@@ -2059,6 +2060,22 @@ export default function Home() {
       return;
     }
 
+    const projectData = getCurrentProjectData();
+
+    // Bestaand dashboardconcept: alleen de verhaalinhoud/project_data bijwerken.
+    // De metadata zoals titel, genres, cover/banner en publicatiestatus blijft hierdoor intact.
+    if (dashboardBookId) {
+      try {
+        await updateDashboardBookProjectInSupabase(user, dashboardBookId, projectData);
+        setSaveDashboardOpen(false);
+        alert("Concept bijgewerkt in je Dashboard.");
+      } catch (error) {
+        console.error(error);
+        alert(error instanceof Error ? `Opslaan in Supabase mislukt: ${error.message}` : "Opslaan in Supabase mislukt.");
+      }
+      return;
+    }
+
     const title = dashboardSaveForm.title.trim();
     if (!title) {
       alert("Geef je boek eerst een titel.");
@@ -2072,10 +2089,9 @@ export default function Home() {
 
     try {
       const theme = dashboardColorThemes[dashboardSaveForm.colorTheme] ?? dashboardColorThemes.blue;
-      const projectData = getCurrentProjectData();
 
       const savedBook = await saveDashboardBookToSupabase(user, {
-        id: dashboardBookId,
+        id: null,
         title,
         author: dashboardSaveForm.author.trim() || user.name || "Onbekende auteur",
         subtitle: dashboardSaveForm.subtitle.trim() || "Nieuw interactief boek in concept.",
