@@ -867,6 +867,9 @@ export default function ReadBookPage() {
             <Link href="/account" className="hidden rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10 sm:inline-flex">
               Account
             </Link>
+            <Link href="/chat" className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-xs font-black text-blue-100 hover:bg-blue-500/20 sm:inline-flex">
+              Chat
+            </Link>
             <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10">
               Library
             </Link>

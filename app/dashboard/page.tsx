@@ -1873,6 +1873,9 @@ export default function DashboardPage() {
             <Link href="/account" className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white hover:bg-white/10">
               Account
             </Link>
+            <Link href="/chat" className="rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-100 hover:bg-blue-500/20">
+              Chat
+            </Link>
             <button
               onClick={logout}
               className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-black text-red-100 hover:bg-red-500/20"

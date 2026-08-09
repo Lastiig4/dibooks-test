@@ -302,6 +302,12 @@ export default function LibraryPage() {
                 >
                   Account
                 </Link>
+                <Link
+                  href="/chat"
+                  className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-100 hover:bg-blue-500/20 sm:block"
+                >
+                  Chat
+                </Link>
                 <button
                   onClick={logout}
                   className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20"

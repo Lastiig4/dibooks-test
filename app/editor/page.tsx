@@ -2932,6 +2932,17 @@ ${formatSaveError(error)}`);
                 Account
               </button>
               <button
+                onClick={() => { window.location.href = "/chat"; }}
+                className={`rounded-full px-3 py-1 transition ${
+                  editorDarkMode
+                    ? "bg-blue-500/15 text-blue-200 hover:bg-blue-500/25"
+                    : "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20"
+                }`}
+                title="Naar Chat"
+              >
+                Chat
+              </button>
+              <button
                 onClick={isLoggedIn ? handleDemoLogout : handleDemoLogin}
                 className={`rounded-full px-3 py-1 transition ${
                   isLoggedIn

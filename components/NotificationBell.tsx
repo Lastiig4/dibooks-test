@@ -39,7 +39,7 @@ export default function NotificationBell() {
   return (
     <Link
       href="/notifications"
-      className="fixed right-4 top-4 z-[80] flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/70 text-xl text-white shadow-2xl backdrop-blur transition hover:-translate-y-0.5 hover:border-yellow-300/50 hover:bg-neutral-900 md:right-6 md:top-6"
+      className="fixed bottom-4 right-4 z-[90] flex h-12 w-12 items-center justify-center rounded-full border border-yellow-300/25 bg-black/80 text-xl text-white shadow-2xl backdrop-blur transition hover:-translate-y-0.5 hover:border-yellow-300/60 hover:bg-neutral-900 md:bottom-6 md:right-6"
       aria-label={count > 0 ? `${count} ongelezen meldingen` : "Meldingen"}
       title={count > 0 ? `${count} ongelezen meldingen` : "Meldingen"}
     >
