@@ -172,17 +172,16 @@ export default function BookDetailPage() {
 
       try {
         const supabase = createSupabaseBrowserClient();
-        const { data, error: supabaseError } = await supabase
-          .from("books")
-          .select("*")
-          .eq("id", bookId)
-          .or("published.eq.true,status.eq.Binnenkort")
-          .maybeSingle();
+        const { data, error: supabaseError } = await supabase.rpc("get_public_library_book", {
+          input_book_id: bookId,
+        });
 
         if (supabaseError) throw supabaseError;
 
+        const publicBook = Array.isArray(data) ? data[0] : data;
+
         if (!cancelled) {
-          setBook(data ? mapSupabaseBook(data) : null);
+          setBook(publicBook ? mapSupabaseBook(publicBook) : null);
           setLoading(false);
         }
       } catch (loadError) {

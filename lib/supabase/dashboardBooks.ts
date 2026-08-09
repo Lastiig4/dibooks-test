@@ -254,51 +254,27 @@ export async function updateDashboardBookMediaInSupabase(
   return freshBook ?? mapRowToDashboardBook(data);
 }
 
-export async function fetchPublishedDashboardBooksFromSupabase() {
-  const supabase = createSupabaseBrowserClient();
-
-  // Publieke Library gebruikt bewust de books-tabel, niet de dashboard_books-view.
-  // Concepten blijven privé; live boeken zijn openbaar zichtbaar.
-  const { data, error } = await supabase
-    .from("books")
-    .select("*")
-    .eq("published", true)
-    .order("published_at", { ascending: false, nullsFirst: false });
-
-  if (error) throw error;
-
-  return (data ?? []).map(mapRowToDashboardBook);
-}
-
-export async function fetchComingSoonDashboardBooksFromSupabase() {
-  const supabase = createSupabaseBrowserClient();
-
-  // Binnenkort-boeken moeten openbaar zichtbaar zijn voor iedereen,
-  // net als live boeken. Het enige verschil: reader/project_data blijft geblokkeerd.
-  const { data, error } = await supabase
-    .from("books")
-    .select("*")
-    .eq("published", false)
-    .eq("status", "Binnenkort")
-    .order("updated_at", { ascending: false });
-
-  if (error) throw error;
-
-  return (data ?? []).map(mapRowToDashboardBook);
-}
-
 export async function fetchLibraryDashboardBooksFromSupabase() {
   const supabase = createSupabaseBrowserClient();
 
-  const { data, error } = await supabase
-    .from("books")
-    .select("*")
-    .or("published.eq.true,status.eq.Binnenkort")
-    .order("updated_at", { ascending: false });
+  // Belangrijk: publieke Library-boeken worden via een SECURITY DEFINER RPC geladen.
+  // Daardoor zijn Binnenkort-boeken zichtbaar voor iedereen, ook zonder account,
+  // terwijl conceptboeken privé blijven.
+  const { data, error } = await supabase.rpc("get_public_library_books");
 
   if (error) throw error;
 
   return (data ?? []).map(mapRowToDashboardBook);
+}
+
+export async function fetchPublishedDashboardBooksFromSupabase() {
+  const allBooks = await fetchLibraryDashboardBooksFromSupabase();
+  return allBooks.filter((book: any) => !!book.published);
+}
+
+export async function fetchComingSoonDashboardBooksFromSupabase() {
+  const allBooks = await fetchLibraryDashboardBooksFromSupabase();
+  return allBooks.filter((book: any) => !book.published && book.status === "Binnenkort");
 }
 
 export async function publishDashboardBookInSupabase(bookId: string) {
