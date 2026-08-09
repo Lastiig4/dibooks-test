@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -56,6 +57,10 @@ type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; book: ReaderBook };
+
+type ReaderTextSize = "small" | "normal" | "large";
+type ReaderPageMode = "auto" | "single" | "double";
+type ReaderTheme = "dark" | "light" | "sepia";
 
 function escapeHtml(value: string) {
   return value
@@ -227,6 +232,122 @@ function paginateTextHtml(html: string, maxCharacters = 1450) {
   return pages.length ? pages : ["<p>Deze pagina is nog leeg.</p>"];
 }
 
+
+function BookPageReader({
+  html,
+  pageIndex,
+  setPageIndex,
+  onPageCountChange,
+  onVisiblePageCountChange,
+  textSize,
+  pageMode,
+  theme,
+}: {
+  html: string;
+  pageIndex: number;
+  setPageIndex: React.Dispatch<React.SetStateAction<number>>;
+  onPageCountChange: (pageCount: number) => void;
+  onVisiblePageCountChange: (visiblePageCount: number) => void;
+  textSize: ReaderTextSize;
+  pageMode: ReaderPageMode;
+  theme: ReaderTheme;
+}) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [pages, setPages] = useState<string[]>(["<p>Deze pagina is nog leeg.</p>"]);
+  const [visiblePageCount, setVisiblePageCount] = useState(1);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [html, setPageIndex]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const measure = () => {
+      const width = viewport.clientWidth;
+      const height = viewport.clientHeight;
+      if (width <= 0 || height <= 0) return;
+
+      const shouldDouble =
+        pageMode === "double" || (pageMode === "auto" && width >= 1120);
+      const nextVisiblePageCount = shouldDouble ? 2 : 1;
+
+      setVisiblePageCount(nextVisiblePageCount);
+      onVisiblePageCountChange(nextVisiblePageCount);
+
+      if (nextVisiblePageCount === 2) {
+        setPageIndex((current) => current - (current % 2));
+      }
+
+      const fontMultiplier = textSize === "small" ? 1.12 : textSize === "large" ? 0.78 : 0.95;
+      const baseMaxCharacters = nextVisiblePageCount === 2 ? 1180 : 1450;
+      const heightMultiplier = Math.max(0.65, Math.min(1.3, height / 760));
+      const nextPages = paginateTextHtml(html, Math.floor(baseMaxCharacters * fontMultiplier * heightMultiplier));
+
+      setPages(nextPages);
+      onPageCountChange(nextPages.length);
+    };
+
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(viewport);
+    return () => resizeObserver.disconnect();
+  }, [html, onPageCountChange, onVisiblePageCountChange, pageMode, setPageIndex, textSize]);
+
+  useEffect(() => {
+    if (pageIndex > pages.length - 1) {
+      setPageIndex(Math.max(0, pages.length - 1));
+    }
+  }, [pageIndex, pages.length, setPageIndex]);
+
+  const visiblePages = pages.slice(pageIndex, pageIndex + visiblePageCount);
+
+  const pageClass =
+    theme === "light"
+      ? "border-neutral-300 bg-[#fffaf0] text-neutral-950 shadow-xl"
+      : theme === "sepia"
+        ? "border-[#8f6b38]/35 bg-[#3a2a19] text-[#f3e4c9] shadow-2xl"
+        : "border-white/10 bg-neutral-950/95 text-white shadow-2xl";
+
+  const contentSizeClass =
+    textSize === "small"
+      ? "text-[16px] leading-8 sm:text-[18px] sm:leading-9"
+      : textSize === "large"
+        ? "text-[22px] leading-10 sm:text-[24px] sm:leading-[2.9rem]"
+        : "text-[18px] leading-9 sm:text-[20px] sm:leading-10";
+
+  return (
+    <div className="mx-auto flex h-full w-full flex-col px-3 py-3 sm:px-6">
+      <div ref={viewportRef} className="min-h-0 flex-1 overflow-hidden">
+        <div
+          className={
+            visiblePageCount === 2
+              ? "mx-auto grid h-full max-w-[1500px] grid-cols-2 gap-7"
+              : "mx-auto grid h-full max-w-[860px] grid-cols-1"
+          }
+        >
+          {visiblePages.map((pageHtml, index) => (
+            <article
+              key={`${pageIndex}-${index}`}
+              className={`h-full overflow-hidden rounded-2xl border px-8 pb-20 pt-8 sm:px-12 sm:pb-24 sm:pt-10 md:px-16 ${pageClass}`}
+            >
+              <div
+                className={`dibooks-reader-content prose max-w-none ${theme === "light" ? "prose-neutral" : "prose-invert"} ${contentSizeClass} [&_p]:mb-6 [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0`}
+                dangerouslySetInnerHTML={{ __html: pageHtml }}
+              />
+            </article>
+          ))}
+
+          {visiblePageCount === 2 && visiblePages.length === 1 && (
+            <article className="h-full rounded-2xl border border-white/5 bg-black/10" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StabilizeLineMiniGame({
   node,
   onSuccess,
@@ -326,6 +447,12 @@ export default function ReadBookPage() {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [currentNodeId, setCurrentNodeId] = useState<string>("");
   const [pageIndex, setPageIndex] = useState(0);
+  const [readerPageCount, setReaderPageCount] = useState(1);
+  const [readerVisiblePageCount, setReaderVisiblePageCount] = useState(1);
+  const [textSize, setTextSize] = useState<ReaderTextSize>("normal");
+  const [pageMode, setPageMode] = useState<ReaderPageMode>("auto");
+  const [theme, setTheme] = useState<ReaderTheme>("dark");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -369,6 +496,28 @@ export default function ReadBookPage() {
     };
   }, [bookId]);
 
+  useEffect(() => {
+    const savedTextSize = window.localStorage.getItem("dibooks-reader-text-size") as ReaderTextSize | null;
+    const savedPageMode = window.localStorage.getItem("dibooks-reader-page-mode") as ReaderPageMode | null;
+    const savedTheme = window.localStorage.getItem("dibooks-reader-theme") as ReaderTheme | null;
+
+    if (savedTextSize === "small" || savedTextSize === "normal" || savedTextSize === "large") setTextSize(savedTextSize);
+    if (savedPageMode === "auto" || savedPageMode === "single" || savedPageMode === "double") setPageMode(savedPageMode);
+    if (savedTheme === "dark" || savedTheme === "light" || savedTheme === "sepia") setTheme(savedTheme);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("dibooks-reader-text-size", textSize);
+  }, [textSize]);
+
+  useEffect(() => {
+    window.localStorage.setItem("dibooks-reader-page-mode", pageMode);
+  }, [pageMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem("dibooks-reader-theme", theme);
+  }, [theme]);
+
   const reader = useMemo(() => {
     if (loadState.status !== "ready") return null;
     const { book } = loadState;
@@ -386,7 +535,7 @@ export default function ReadBookPage() {
       textNodes.push(cursor);
       const nodeHtml = cursor.textHtml || cursor.text || "Deze tekst-node is nog leeg.";
       const className = cursor.type === "special" ? "dibooks-special-page" : "dibooks-reader-section";
-      htmlParts.push(`<section class="${className}">${nodeHtml}</section>`);
+      htmlParts.push(`<section class="${className}" data-node-type="${cursor.type}">${nodeHtml}</section>`);
 
       const outgoing = book.edges.filter((edge) => edge.source === cursor!.id);
       if (outgoing.length !== 1) break;
@@ -413,10 +562,6 @@ export default function ReadBookPage() {
     };
   }, [currentNodeId, loadState]);
 
-  const textPages = useMemo(() => {
-    if (!reader?.textHtml) return [];
-    return paginateTextHtml(reader.textHtml, 1500);
-  }, [reader?.textHtml]);
 
   function goToNode(nodeId: string) {
     if (loadState.status !== "ready") return;
@@ -464,38 +609,102 @@ export default function ReadBookPage() {
   const { book, node } = reader;
   const isTextNode = node.type === "text" || node.type === "special";
   const canGoPreviousPage = isTextNode && pageIndex > 0;
-  const canGoNextPage = isTextNode && pageIndex < textPages.length - 1;
-  const visiblePage = textPages[pageIndex] ?? "<p>Deze pagina is nog leeg.</p>";
+  const canGoNextPage = isTextNode && pageIndex < Math.max(1, readerPageCount) - readerVisiblePageCount;
+  const readerShellClass =
+    theme === "light"
+      ? "bg-[#efe9dc] text-neutral-950"
+      : theme === "sepia"
+        ? "bg-[#2b2116] text-[#f3e4c9]"
+        : "bg-[#05070d] text-white";
+  const readerChromeClass =
+    theme === "light"
+      ? "border-neutral-300 bg-[#f8f5ee]/90 text-neutral-950"
+      : theme === "sepia"
+        ? "border-[#8f6b38]/35 bg-[#23190f]/90 text-[#f3e4c9]"
+        : "border-white/10 bg-[#05070d]/90 text-white";
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-[#05070d] text-white">
-      <header className="shrink-0 border-b border-white/10 bg-[#05070d]/90 px-4 py-3 backdrop-blur-xl sm:px-6">
+    <main className={`flex h-screen flex-col overflow-hidden ${readerShellClass}`}>
+      <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">DiBooks Reader</p>
             <h1 className="truncate text-xl font-black sm:text-2xl">{book.title}</h1>
           </div>
+
           <div className="flex shrink-0 items-center gap-2">
-            <Link href={`/books/${book.id}`} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-neutral-200 hover:bg-white/10">
+            <button
+              onClick={() => setSettingsOpen((current) => !current)}
+              className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10"
+              title="Reader instellingen"
+            >
+              Aa
+            </button>
+            <Link href={`/books/${book.id}`} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10">
               Boekinfo
             </Link>
-            <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-neutral-200 hover:bg-white/10">
+            <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10">
               Library
             </Link>
           </div>
         </div>
+
+        {settingsOpen && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-black uppercase tracking-widest">
+            <div className="flex items-center gap-2">
+              <span className="opacity-60">Tekst</span>
+              {(["small", "normal", "large"] as ReaderTextSize[]).map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setTextSize(value)}
+                  className={`rounded-full px-3 py-2 ${textSize === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
+                >
+                  {value === "small" ? "Klein" : value === "large" ? "Groot" : "Normaal"}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="opacity-60">Pagina</span>
+              {(["auto", "single", "double"] as ReaderPageMode[]).map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setPageMode(value)}
+                  className={`rounded-full px-3 py-2 ${pageMode === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
+                >
+                  {value === "single" ? "Enkel" : value === "double" ? "Dubbel" : "Auto"}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="opacity-60">Thema</span>
+              {(["dark", "sepia", "light"] as ReaderTheme[]).map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setTheme(value)}
+                  className={`rounded-full px-3 py-2 ${theme === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
+                >
+                  {value === "dark" ? "Donker" : value === "sepia" ? "Oud boek" : "Licht"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
       <section className="min-h-0 flex-1 overflow-hidden">
         {isTextNode && (
-          <div className="mx-auto flex h-full max-w-5xl flex-col p-3 sm:p-6">
-            <article className="min-h-0 flex-1 overflow-y-auto rounded-[2rem] border border-white/10 bg-neutral-950/95 px-7 py-8 shadow-2xl sm:px-12 sm:py-10 md:px-16">
-              <div
-                className="dibooks-reader-content prose prose-invert max-w-none text-[18px] leading-8 sm:text-[20px] sm:leading-9 [&_p]:mb-6 [&_p]:mt-0 [&_h1]:mb-5 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0"
-                dangerouslySetInnerHTML={{ __html: visiblePage }}
-              />
-            </article>
-          </div>
+          <BookPageReader
+            html={reader.textHtml}
+            pageIndex={pageIndex}
+            setPageIndex={setPageIndex}
+            onPageCountChange={setReaderPageCount}
+            onVisiblePageCountChange={setReaderVisiblePageCount}
+            textSize={textSize}
+            pageMode={pageMode}
+            theme={theme}
+          />
         )}
 
         {node.type === "cutscene" && (
@@ -564,11 +773,11 @@ export default function ReadBookPage() {
         )}
       </section>
 
-      <footer className="shrink-0 border-t border-white/10 bg-[#05070d]/95 px-4 py-3 sm:px-6">
+      <footer className={`shrink-0 border-t px-4 py-3 sm:px-6 ${readerChromeClass}`}>
         {isTextNode ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
-              onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+              onClick={() => setPageIndex((current) => Math.max(0, current - readerVisiblePageCount))}
               disabled={!canGoPreviousPage}
               className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
             >
@@ -576,12 +785,12 @@ export default function ReadBookPage() {
             </button>
 
             <div className="text-center text-sm font-bold text-neutral-400">
-              <div>Pagina {pageIndex + 1} van {Math.max(1, textPages.length)}</div>
+              <div>{readerVisiblePageCount === 2 && pageIndex + 1 < readerPageCount ? `Pagina ${pageIndex + 1}–${Math.min(pageIndex + 2, readerPageCount)} van ${readerPageCount}` : `Pagina ${pageIndex + 1} van ${readerPageCount}`}</div>
               <div className="text-xs text-neutral-600">{book.author}</div>
             </div>
 
             {canGoNextPage && (
-              <button onClick={() => setPageIndex((current) => current + 1)} className="rounded-2xl bg-blue-600 px-5 py-3 font-black text-white hover:bg-blue-500">
+              <button onClick={() => setPageIndex((current) => Math.min(Math.max(0, readerPageCount - 1), current + readerVisiblePageCount))} className="rounded-2xl bg-blue-600 px-5 py-3 font-black text-white hover:bg-blue-500">
                 Volgende pagina
               </button>
             )}
