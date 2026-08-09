@@ -91,7 +91,9 @@ function getStatusLabel(book: DetailBook) {
 }
 
 function canReadBook(book: DetailBook) {
-  return !!book.published && (!!book.storyFile || !!book.projectData);
+  // Voor Supabase-boeken staat de project_data in book_projects en wordt die pas in de reader opgehaald.
+  // De detailpagina hoeft dus alleen te weten of het boek echt gepubliceerd/live is.
+  return !!book.published;
 }
 
 function ArtworkPanel({ book }: { book: DetailBook }) {

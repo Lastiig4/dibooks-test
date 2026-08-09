@@ -301,7 +301,7 @@ export default function LibraryPage() {
                 {featuredBook.subtitle}
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
-                {featuredBook.published && (featuredBook.storyFile || featuredBook.projectData) ? (
+                {featuredBook.published ? (
                   <Link
                     href={`/books/${featuredBook.id}/read`}
                     className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200"
