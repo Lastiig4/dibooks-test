@@ -1785,6 +1785,7 @@ export default function Home() {
           ageRating: dashboardBook.ageRating ?? "12+",
           readTime: dashboardBook.readTime ?? "Concept",
           colorTheme: dashboardBook.colorTheme ?? "blue",
+          accessType: dashboardBook.accessType ?? "free",
         });
 
         const projectData = dashboardBook.projectData;
