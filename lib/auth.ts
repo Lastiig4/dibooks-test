@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-export type UserRole = "guest" | "author" | "admin";
-export type UserPlan = "free" | "member";
+export type UserRole = "guest" | "reader" | "author" | "admin";
+export type UserPlan = "free" | "reader_plus" | "author_pro" | "member"; // member = oude naam, wordt als author_pro behandeld
 
 export type AuthActionResult = { ok: boolean; message?: string };
 
@@ -73,21 +73,38 @@ function broadcastAuthChange() {
 }
 
 export const FREE_NODE_LIMIT = 15;
-export const MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH = 5;
+export const AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH = 5;
 export const FULL_BOOK_NODE_BADGE_THRESHOLD = 20;
 
-export function isMemberUser(user: DemoAuthUser | null) {
-  return !!user && (user.role === "admin" || user.plan === "member");
+export function isAuthorProUser(user: DemoAuthUser | null) {
+  return !!user && (user.role === "admin" || user.plan === "author_pro" || user.plan === "member");
+}
+
+export function canReadPremiumBooks(user: DemoAuthUser | null) {
+  return !!user && (user.role === "admin" || user.plan === "reader_plus" || user.plan === "author_pro" || user.plan === "member");
 }
 
 export function getMaxNodesForUser(user: DemoAuthUser | null) {
-  return isMemberUser(user) ? null : FREE_NODE_LIMIT;
+  return isAuthorProUser(user) ? null : FREE_NODE_LIMIT;
+}
+
+export function getRoleLabel(user: DemoAuthUser | null) {
+  if (!user) return "Gast";
+  if (user.role === "admin") return "Admin";
+  if (user.role === "author") return "Auteur";
+  return "Lezer";
 }
 
 export function getPlanLabel(user: DemoAuthUser | null) {
-  if (!user) return "Gast / Free";
-  if (user.role === "admin") return "Admin";
-  return user.plan === "member" ? "Member" : "Free";
+  if (!user) return "Gratis";
+  if (user.plan === "reader_plus") return "Reader Plus";
+  if (user.plan === "author_pro" || user.plan === "member") return "Author Pro";
+  return "Gratis";
+}
+
+export function getAccountLabel(user: DemoAuthUser | null) {
+  if (!user) return "Gast • Gratis";
+  return `${getRoleLabel(user)} • ${getPlanLabel(user)}`;
 }
 
 function mapSupabaseUser(user: User | null): DemoAuthUser | null {
@@ -97,9 +114,14 @@ function mapSupabaseUser(user: User | null): DemoAuthUser | null {
   const appMetadata = user.app_metadata ?? {};
   const metadataRole = metadata.role || appMetadata.role;
   const role: Exclude<UserRole, "guest"> =
-    metadataRole === "admin" ? "admin" : "author";
+    metadataRole === "admin" ? "admin" : metadataRole === "reader" ? "reader" : "author";
   const metadataPlan = metadata.plan || appMetadata.plan;
-  const plan: UserPlan = metadataPlan === "member" ? "member" : "free";
+  const plan: UserPlan =
+    metadataPlan === "reader_plus"
+      ? "reader_plus"
+      : metadataPlan === "author_pro" || metadataPlan === "member"
+        ? "author_pro"
+        : "free";
 
   return {
     id: user.id,
@@ -142,8 +164,14 @@ async function applySupabaseProfile(user: DemoAuthUser | null): Promise<DemoAuth
 
   if (!data) return user;
 
-  const role: Exclude<UserRole, "guest"> = data.role === "admin" ? "admin" : "author";
-  const plan: UserPlan = data.plan === "member" ? "member" : "free";
+  const role: Exclude<UserRole, "guest"> =
+    data.role === "admin" ? "admin" : data.role === "reader" ? "reader" : "author";
+  const plan: UserPlan =
+    data.plan === "reader_plus"
+      ? "reader_plus"
+      : data.plan === "author_pro" || data.plan === "member"
+        ? "author_pro"
+        : "free";
 
   return {
     ...user,
@@ -158,7 +186,7 @@ export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
   const role: UserRole = user?.role ?? "guest";
   const isAuthor = role === "author" || role === "admin";
   const isAdmin = role === "admin";
-  const isMember = isMemberUser(user);
+  const isAuthorPro = isAuthorProUser(user);
 
   return {
     canReadLibrary: true,
@@ -168,8 +196,8 @@ export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
     canSaveToDashboard: isAuthor,
     canCreateBook: isAuthor,
     canEditConceptBook: isAuthor,
-    canPublishBook: isMember,
-    canRemoveFromLibrary: isMember,
+    canPublishBook: isAuthorPro,
+    canRemoveFromLibrary: isAuthorPro,
     canManageUsers: isAdmin,
     maxNodesPerBook: getMaxNodesForUser(user),
   };
@@ -188,8 +216,8 @@ export async function ensureSupabaseProfile(user: DemoAuthUser): Promise<AuthAct
       id: user.id,
       email: user.email,
       display_name: displayName,
-      role: user.role === "admin" ? "admin" : "author",
-      plan: user.plan || "free",
+      role: user.role === "admin" ? "admin" : user.role === "reader" ? "reader" : "author",
+      plan: user.plan === "member" ? "author_pro" : user.plan || "free",
     },
     { onConflict: "id", ignoreDuplicates: true },
   );

@@ -13,10 +13,10 @@ import AuthModal from "@/components/AuthModal";
 import {
   FREE_NODE_LIMIT,
   FULL_BOOK_NODE_BADGE_THRESHOLD,
-  MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH,
+  AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH,
   canAccessOwnedResource,
-  getPlanLabel,
-  isMemberUser,
+  getAccountLabel,
+  isAuthorProUser,
   useDemoAuth,
 } from "@/lib/auth";
 import {
@@ -39,6 +39,7 @@ type DashboardBook = DiBook & {
   removedFromLibraryAt?: string;
   projectData?: any;
   colorTheme?: string;
+  accessType?: "free" | "premium";
 };
 
 type NewBookForm = {
@@ -233,8 +234,8 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
 
   if (!user) {
     errors.push("Je moet ingelogd zijn om te publiceren.");
-  } else if (!isMemberUser(user)) {
-    errors.push("Publiceren naar de publieke Library is alleen beschikbaar voor Member accounts. Free accounts kunnen wel bouwen, testen en lokaal exporteren.");
+  } else if (!isAuthorProUser(user)) {
+    errors.push("Publiceren naar de publieke Library is alleen beschikbaar voor Author Pro accounts. Gratis en Reader Plus accounts kunnen wel lezen; gratis auteurs kunnen bouwen, testen en lokaal exporteren.");
   }
 
   if (!projectData) {
@@ -256,9 +257,9 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
     errors.push("Het boek heeft nog geen nodes. Maak minimaal één tekstnode in de Studio.");
   }
 
-  if (publishStats.completeNodes < MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH) {
+  if (publishStats.completeNodes < AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH) {
     errors.push(
-      `Publiceren vereist minimaal ${MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH} complete nodes. Dit boek heeft nu ${publishStats.completeNodes} complete node(s).`,
+      `Publiceren vereist minimaal ${AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH} complete nodes. Dit boek heeft nu ${publishStats.completeNodes} complete node(s).`,
     );
   }
 
@@ -590,9 +591,9 @@ function BookDashboardCard({
                   ? "border-emerald-500/35 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
                   : "border-neutral-600/50 bg-neutral-800/60 text-neutral-400 hover:bg-neutral-800"
               }`}
-              title={canPublish ? "Publiceer naar Library" : "Alleen Member accounts kunnen publiceren"}
+              title={canPublish ? "Publiceer naar Library" : "Alleen Author Pro accounts kunnen publiceren"}
             >
-              {canPublish ? "Publiceer naar Library" : "Member nodig"}
+              {canPublish ? "Publiceer naar Library" : "Author Pro nodig"}
             </button>
           )}
 
@@ -1294,7 +1295,7 @@ export default function DashboardPage() {
     }
 
     if (!permissions.canPublishBook) {
-      alert("Publiceren is alleen beschikbaar voor Member accounts. Free accounts kunnen wel bouwen, testen en lokaal exporteren.");
+      alert("Publiceren is alleen beschikbaar voor Author Pro accounts. Gratis en Reader Plus accounts kunnen wel lezen; gratis auteurs kunnen bouwen, testen en lokaal exporteren.");
       return;
     }
 
@@ -1483,25 +1484,25 @@ export default function DashboardPage() {
               Beheer concepten en live boeken veilig.
             </h1>
             <p className="mt-5 max-w-3xl text-lg font-semibold leading-8 text-neutral-300">
-Nieuwe boeken start je als concept. Free accounts kunnen bouwen en testen tot 15 nodes. Publiceren naar de Library is voor Member accounts.
+Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 15 nodes. Reader Plus is voor lezen. Publiceren naar de Library is voor Author Pro accounts.
             </p>
           </div>
 
           <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl sm:p-6">
             <h2 className="text-xl font-black">Plan & publicatie</h2>
             <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
-              <strong>Free:</strong> bouwen/testen tot {FREE_NODE_LIMIT} nodes. Publiceren is vergrendeld.
+              <strong>Free:</strong> gratis boeken lezen en bouwen/testen tot {FREE_NODE_LIMIT} nodes. Publiceren is vergrendeld.
             </div>
             <div className="rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm leading-6 text-blue-100">
-              <strong>Member:</strong> publiceren mogelijk vanaf {MEMBER_MIN_COMPLETE_NODES_TO_PUBLISH} complete nodes. Vanaf {FULL_BOOK_NODE_BADGE_THRESHOLD} nodes telt het later als volledig interactief boek.
+              <strong>Reader Plus:</strong> premium boeken lezen. <strong>Author Pro:</strong> publiceren vanaf {AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH} complete nodes. Vanaf {FULL_BOOK_NODE_BADGE_THRESHOLD} nodes telt het later als volledig interactief boek.
             </div>
           </div>
         </div>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-4">
           <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Account plan</p>
-            <p className="mt-2 text-3xl font-black text-cyan-300">{getPlanLabel(user)}</p>
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Account</p>
+            <p className="mt-2 text-3xl font-black text-cyan-300">{getAccountLabel(user)}</p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
             <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Totaal boeken</p>

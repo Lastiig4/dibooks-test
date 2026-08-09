@@ -26,6 +26,7 @@ export type DashboardBookInput = {
   mostRead?: boolean;
   publishedAt?: string | null;
   removedFromLibraryAt?: string | null;
+  accessType?: "free" | "premium";
   projectData?: any;
 };
 
@@ -58,6 +59,7 @@ function mapRowToDashboardBook(row: any) {
     coverClass: row.cover_class ?? "from-blue-950 via-slate-950 to-purple-950",
     accentClass: row.accent_class ?? "border-blue-500/60",
     colorTheme: row.color_theme ?? "blue",
+    accessType: row.access_type ?? "free",
     published: !!row.published,
     featured: !!row.featured,
     mostRead: !!row.most_read,
@@ -163,6 +165,7 @@ export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: Das
     most_read: !!input.mostRead,
     published_at: input.publishedAt ?? null,
     removed_from_library_at: input.removedFromLibraryAt ?? null,
+    access_type: input.accessType || "free",
   };
 
   if (slug) bookPayload.slug = slug;

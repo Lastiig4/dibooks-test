@@ -1967,7 +1967,7 @@ export default function Home() {
 
     const maxNodes = getMaxNodesForUser(user);
     if (maxNodes !== null && nodes.length > maxNodes) {
-      alert(`Free accounts kunnen maximaal ${FREE_NODE_LIMIT} nodes opslaan in Dashboard. Verwijder nodes of upgrade later naar Member voor onbeperkt bouwen.`);
+      alert(`Gratis accounts kunnen maximaal ${FREE_NODE_LIMIT} nodes opslaan in Dashboard. Verwijder nodes of upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
@@ -2110,7 +2110,7 @@ export default function Home() {
   function createNode(type: DiNodeType) {
     const maxNodes = getMaxNodesForUser(user);
     if (maxNodes !== null && nodes.length >= maxNodes) {
-      alert(`Free accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} nodes gebruiken. Upgrade later naar Member voor onbeperkt bouwen.`);
+      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} nodes gebruiken. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
