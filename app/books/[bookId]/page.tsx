@@ -171,7 +171,7 @@ export default function BookDetailPage() {
       try {
         const supabase = createSupabaseBrowserClient();
         const { data, error: supabaseError } = await supabase
-          .from("dashboard_books")
+          .from("books")
           .select("*")
           .eq("id", bookId)
           .or("published.eq.true,status.eq.Binnenkort")

@@ -1250,6 +1250,7 @@ type DashboardSaveForm = {
   ageRating: string;
   readTime: string;
   colorTheme: string;
+  accessType: "free" | "premium";
 };
 
 const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
@@ -1323,6 +1324,7 @@ const defaultDashboardSaveForm: DashboardSaveForm = {
   ageRating: "12+",
   readTime: "Concept",
   colorTheme: "blue",
+  accessType: "free",
 };
 
 function slugifyDashboardBook(value: string) {
@@ -1617,6 +1619,19 @@ function SaveToDashboardModal({
                   <option value="Binnenkort">Binnenkort</option>
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Toegang</label>
+              <select
+                value={form.accessType}
+                onChange={(event) => updateField("accessType", event.target.value as "free" | "premium")}
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
+              >
+                <option value="free">Gratis leesbaar</option>
+                <option value="premium">Premium / abonnement</option>
+              </select>
+              <p className="mt-2 text-xs font-semibold leading-5 text-neutral-500">Concept is alleen voor jou. Binnenkort verschijnt als aankondiging. Premium-lezen koppelen we aan Reader Plus/Author Pro.</p>
             </div>
 
             <div>
@@ -2090,6 +2105,7 @@ ${formatSaveError(error)}`);
         coverClass: theme.coverClass,
         accentClass: theme.accentClass,
         colorTheme: dashboardSaveForm.colorTheme,
+        accessType: dashboardSaveForm.accessType,
         published: false,
         featured: false,
         mostRead: false,

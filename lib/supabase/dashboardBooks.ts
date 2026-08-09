@@ -249,8 +249,10 @@ export async function updateDashboardBookMediaInSupabase(
 export async function fetchPublishedDashboardBooksFromSupabase() {
   const supabase = createSupabaseBrowserClient();
 
+  // Publieke Library gebruikt bewust de books-tabel, niet de dashboard_books-view.
+  // De view joinet project_data en die hoeft voor cards/shelves niet publiek mee.
   const { data, error } = await supabase
-    .from("dashboard_books")
+    .from("books")
     .select("*")
     .eq("published", true)
     .order("published_at", { ascending: false, nullsFirst: false });
@@ -263,8 +265,10 @@ export async function fetchPublishedDashboardBooksFromSupabase() {
 export async function fetchComingSoonDashboardBooksFromSupabase() {
   const supabase = createSupabaseBrowserClient();
 
+  // Binnenkort-boeken moeten zichtbaar zijn voor iedereen, maar niet leesbaar.
+  // Daarom halen we alleen publieke boekmetadata uit books op.
   const { data, error } = await supabase
-    .from("dashboard_books")
+    .from("books")
     .select("*")
     .eq("published", false)
     .eq("status", "Binnenkort")
@@ -279,7 +283,7 @@ export async function fetchLibraryDashboardBooksFromSupabase() {
   const supabase = createSupabaseBrowserClient();
 
   const { data, error } = await supabase
-    .from("dashboard_books")
+    .from("books")
     .select("*")
     .or("published.eq.true,status.eq.Binnenkort")
     .order("updated_at", { ascending: false });

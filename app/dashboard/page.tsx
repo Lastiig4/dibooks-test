@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  books,
   getBookDetailPath,
   getBookReadPath,
   type BookStatus,
@@ -55,6 +54,7 @@ type NewBookForm = {
   ageRating: string;
   readTime: string;
   colorTheme: string;
+  accessType: "free" | "premium";
 };
 
 const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
@@ -71,6 +71,7 @@ const defaultForm: NewBookForm = {
   ageRating: "12+",
   readTime: "Concept",
   colorTheme: "blue",
+  accessType: "free",
 };
 
 const ageRatings = ["AL", "6+", "9+", "12+", "16+", "18+"];
@@ -478,6 +479,7 @@ function BookDashboardCard({
   onRemoveFromLibrary,
   onDeleteDraft,
   onOpenMedia,
+  onOpenDetails,
   canPublish,
 }: {
   book: DashboardBook;
@@ -486,11 +488,13 @@ function BookDashboardCard({
   onRemoveFromLibrary: (bookId: string) => void;
   onDeleteDraft: (bookId: string) => void;
   onOpenMedia: (book: DashboardBook) => void;
+  onOpenDetails: (book: DashboardBook) => void;
 }) {
   const isPublished = !!book.published;
   const canEdit = !isPublished;
   const isDashboardBook = book.source === "dashboard";
-  const detailHref = book.source === "dashboard" ? "/dashboard" : getBookDetailPath(book);
+  const canShowBookPage = book.source !== "dashboard" || book.published || book.status === "Binnenkort";
+  const detailHref = book.source === "dashboard" ? `/books/${book.id}` : getBookDetailPath(book);
   const readHref = book.source === "dashboard" ? "" : getBookReadPath(book);
 
   return (
@@ -503,7 +507,7 @@ function BookDashboardCard({
           <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-neutral-300">{book.subtitle}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
           <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Status</p>
             <p className="mt-1 font-black text-white">{isPublished ? "Live" : book.status}</p>
@@ -511,6 +515,10 @@ function BookDashboardCard({
           <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Bewerken</p>
             <p className="mt-1 font-black text-white">{canEdit ? "Open" : "Locked"}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Toegang</p>
+            <p className="mt-1 font-black text-white">{book.accessType === "premium" ? "Premium" : "Gratis"}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Media</p>
@@ -568,14 +576,25 @@ function BookDashboardCard({
             </button>
           )}
 
-          {book.source === "dashboard" ? (
-            <button disabled className="cursor-not-allowed rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-neutral-500">
-              Boekpagina later
+          {canEdit && isDashboardBook && (
+            <button
+              onClick={() => onOpenDetails(book)}
+              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+              title="Titel, status, genres en toegang aanpassen"
+            >
+              Boekgegevens
             </button>
-          ) : (
+          )}
+
+
+          {canShowBookPage ? (
             <Link href={detailHref} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
               Boekpagina
             </Link>
+          ) : (
+            <button disabled className="cursor-not-allowed rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-neutral-500">
+              Boekpagina later
+            </button>
           )}
 
           {book.storyFile && readHref && (
@@ -929,11 +948,13 @@ function NewBookModal({
   setForm,
   onClose,
   onSave,
+  mode = "new",
 }: {
   form: NewBookForm;
   setForm: React.Dispatch<React.SetStateAction<NewBookForm>>;
   onClose: () => void;
   onSave: () => void;
+  mode?: "new" | "edit";
 }) {
   function updateField<K extends keyof NewBookForm>(key: K, value: NewBookForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -974,10 +995,12 @@ function NewBookModal({
       <div className="mx-auto max-w-4xl rounded-3xl border border-white/10 bg-[#080b13] p-5 shadow-2xl sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Nieuw boek</p>
-            <h2 className="mt-2 text-3xl font-black sm:text-5xl">Boek opslaan in dashboard</h2>
+            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">{mode === "edit" ? "Boekgegevens" : "Nieuw boek"}</p>
+            <h2 className="mt-2 text-3xl font-black sm:text-5xl">{mode === "edit" ? "Boekgegevens aanpassen" : "Boek opslaan in dashboard"}</h2>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
-              Dit maakt nu alvast een dashboard-concept aan. Later koppelen we deze flow aan echte accounts, database en editor-save.
+              {mode === "edit"
+                ? "Pas metadata, status en toegang aan. Concept is alleen voor jou zichtbaar; Binnenkort verschijnt op de openbare Binnenkort-plank; publiceren blijft een aparte stap."
+                : "Dit maakt nu alvast een dashboard-concept aan. Concept is alleen voor jou zichtbaar; Binnenkort kan alvast als aankondiging in de Library verschijnen."}
             </p>
           </div>
           <button
@@ -1123,6 +1146,19 @@ function NewBookModal({
             </div>
 
             <div>
+              <label className="mb-2 block text-sm font-black text-neutral-300">Toegang</label>
+              <select
+                value={form.accessType}
+                onChange={(event) => updateField("accessType", event.target.value as "free" | "premium")}
+                className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
+              >
+                <option value="free">Gratis leesbaar</option>
+                <option value="premium">Premium / abonnement</option>
+              </select>
+              <p className="mt-2 text-xs font-semibold leading-5 text-neutral-500">Premium boeken zijn later alleen leesbaar voor Reader Plus, Author Pro of Admin.</p>
+            </div>
+
+            <div>
               <label className="mb-2 block text-sm font-black text-neutral-300">Leestijd</label>
               <input
                 value={form.readTime}
@@ -1148,7 +1184,7 @@ function NewBookModal({
         </div>
 
         <div className="mt-6 rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm leading-6 text-blue-100">
-          Later wordt dit: <strong>Nieuw boek → metadata invullen → boek verschijnt in dashboard → openen in Studio → opslaan als concept → publiceren naar Library.</strong>
+          {mode === "edit" ? <><strong>Concept</strong> = alleen zichtbaar voor jou. <strong>Binnenkort</strong> = zichtbaar in de Library als aankondiging, maar nog niet leesbaar.</> : <>Later wordt dit: <strong>Nieuw boek → metadata invullen → boek verschijnt in dashboard → openen in Studio → opslaan als concept → publiceren naar Library.</strong></>}
         </div>
 
         <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -1162,7 +1198,7 @@ function NewBookModal({
             onClick={onSave}
             className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
           >
-            Opslaan in dashboard
+            {mode === "edit" ? "Wijzigingen opslaan" : "Opslaan in dashboard"}
           </button>
         </div>
       </div>
@@ -1176,6 +1212,8 @@ export default function DashboardPage() {
   const [draftDashboardBooks, setDraftDashboardBooks] = useState<DashboardBook[]>([]);
   const [newBookOpen, setNewBookOpen] = useState(false);
   const [mediaBook, setMediaBook] = useState<DashboardBook | null>(null);
+  const [detailsBook, setDetailsBook] = useState<DashboardBook | null>(null);
+  const [detailsForm, setDetailsForm] = useState<NewBookForm>(defaultForm);
   const [form, setForm] = useState<NewBookForm>(defaultForm);
 
   const [dashboardLoading, setDashboardLoading] = useState(false);
@@ -1209,12 +1247,15 @@ export default function DashboardPage() {
   }, [user?.id]);
 
   const visibleDashboardBooks = useMemo<DashboardBook[]>(() => {
-    return draftDashboardBooks.filter((book) => canAccessOwnedResource(user, book.ownerId));
+    if (!user) return [];
+
+    // "Mijn boeken" moet echt alleen de boeken van deze auteur tonen.
+    // Admin krijgt later een aparte beheerpagina; anders ziet admin oude/testboeken tussen eigen boeken.
+    return draftDashboardBooks.filter((book) => book.ownerId === user.id);
   }, [draftDashboardBooks, user]);
 
   const allBooks = useMemo<DashboardBook[]>(() => {
-    const staticBooks: DashboardBook[] = books.map((book) => ({ ...book, source: "library" }));
-    return [...visibleDashboardBooks, ...staticBooks];
+    return [...visibleDashboardBooks];
   }, [visibleDashboardBooks]);
 
   const liveBooks = allBooks.filter((book) => book.published);
@@ -1255,6 +1296,7 @@ export default function DashboardPage() {
         coverClass: theme.coverClass,
         accentClass: theme.accentClass,
         colorTheme: form.colorTheme,
+        accessType: form.accessType,
         published: false,
         featured: false,
         mostRead: false,
@@ -1286,6 +1328,81 @@ export default function DashboardPage() {
   }
 
 
+
+
+
+  function openBookDetails(book: DashboardBook) {
+    if (book.published) {
+      alert("Live boeken zijn vergrendeld. Haal het boek eerst uit de Library als je metadata wilt wijzigen.");
+      return;
+    }
+
+    setDetailsBook(book);
+    setDetailsForm({
+      title: book.title ?? "",
+      author: book.author ?? user?.name ?? "Giovanni",
+      subtitle: book.subtitle ?? "",
+      description: book.description ?? "",
+      genres: Array.isArray(book.genres) && book.genres.length > 0 ? book.genres : ["Interactief"],
+      genreInput: "",
+      primaryGenre: book.primaryGenre ?? book.genres?.[0] ?? "Interactief",
+      status: (book.status as BookStatus) ?? "Concept",
+      ageRating: book.ageRating ?? "12+",
+      readTime: book.readTime ?? "Concept",
+      colorTheme: book.colorTheme ?? "blue",
+      accessType: book.accessType ?? "free",
+    });
+  }
+
+  async function saveBookDetails() {
+    if (!user || !detailsBook) return;
+
+    const title = detailsForm.title.trim();
+    if (!title) {
+      alert("Geef je boek eerst een titel.");
+      return;
+    }
+
+    if (detailsForm.genres.length === 0) {
+      alert("Voeg minimaal één genre label toe.");
+      return;
+    }
+
+    const theme = colorThemes[detailsForm.colorTheme] ?? colorThemes.blue;
+
+    try {
+      const savedBook = await saveDashboardBookToSupabase(user, {
+        id: detailsBook.id,
+        title,
+        author: detailsForm.author.trim() || user.name || "Onbekende auteur",
+        subtitle: detailsForm.subtitle.trim() || "Nieuw interactief boek in concept.",
+        description: detailsForm.description.trim() || "Nog geen beschrijving ingevuld.",
+        genres: detailsForm.genres,
+        primaryGenre: detailsForm.primaryGenre || detailsForm.genres[0],
+        status: detailsForm.status,
+        ageRating: detailsForm.ageRating,
+        readTime: detailsForm.readTime.trim() || "Concept",
+        coverImage: detailsBook.coverImage ?? "",
+        bannerImage: detailsBook.bannerImage ?? "",
+        coverClass: detailsBook.coverClass || theme.coverClass,
+        accentClass: detailsBook.accentClass || theme.accentClass,
+        colorTheme: detailsForm.colorTheme,
+        accessType: detailsForm.accessType,
+        published: false,
+        featured: detailsBook.featured ?? false,
+        mostRead: detailsBook.mostRead ?? false,
+        projectData: detailsBook.projectData,
+      });
+
+      setDraftDashboardBooks((currentBooks) =>
+        currentBooks.map((book) => (book.id === savedBook.id ? (savedBook as DashboardBook) : book)),
+      );
+      setDetailsBook(null);
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? `Boekgegevens opslaan mislukt: ${error.message}` : "Boekgegevens opslaan mislukt.");
+    }
+  }
 
   async function publishBookToLibrary(bookId: string) {
     const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
@@ -1550,7 +1667,7 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
           {allBooks.map((book) => (
-            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} canPublish={permissions.canPublishBook} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} onOpenMedia={setMediaBook} />
+            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} canPublish={permissions.canPublishBook} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} onOpenMedia={setMediaBook} onOpenDetails={openBookDetails} />
           ))}
         </div>
       </section>
@@ -1561,6 +1678,17 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
           setForm={setForm}
           onClose={() => setNewBookOpen(false)}
           onSave={saveNewBook}
+          mode="new"
+        />
+      )}
+
+      {detailsBook && (
+        <NewBookModal
+          form={detailsForm}
+          setForm={setDetailsForm}
+          onClose={() => setDetailsBook(null)}
+          onSave={saveBookDetails}
+          mode="edit"
         />
       )}
       {mediaBook && (
