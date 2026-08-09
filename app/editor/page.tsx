@@ -1386,6 +1386,94 @@ function SaveToDashboardModal({
     });
   }
 
+  if (existingBookId) {
+    return (
+      <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.32em] text-cyan-300">Bestaand concept</p>
+              <h2 className="mt-2 text-3xl font-black sm:text-5xl">Concept bijwerken</h2>
+              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
+                Je werkt al aan <strong className="text-white">{form.title || "Naamloos boek"}</strong>. Daarom hoef je de boekgegevens niet opnieuw in te vullen. Sla alleen je huidige nodes, teksten, paden, keuzes, cutscenes en minigames over dit dashboardconcept heen.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-500"
+            >
+              Sluiten
+            </button>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm leading-6 text-blue-100">
+            <strong>Boekgegevens aanpassen?</strong> Ga daarvoor naar het Dashboard. Deze snelle save is alleen bedoeld om je verhaalinhoud in de Studio bij te werken.
+          </div>
+
+          <div className="mt-6 grid gap-3 lg:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="mb-2 text-sm font-black uppercase tracking-widest text-cyan-300">Backup</div>
+              <p className="text-sm font-semibold leading-6 text-neutral-400">
+                Download een bewerkbare <strong>.dibooks-project.json</strong> als lokale backup.
+              </p>
+              <button
+                onClick={onDownloadProject}
+                className="mt-4 w-full rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 text-sm font-black text-cyan-100 hover:bg-cyan-500/20"
+              >
+                Download backup
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="mb-2 text-sm font-black uppercase tracking-widest text-emerald-300">Reader-export</div>
+              <p className="text-sm font-semibold leading-6 text-neutral-400">
+                Download een losse <strong>story.json</strong> voor testen of handmatige publicatie.
+              </p>
+              <button
+                onClick={onDownloadReaderStory}
+                className="mt-4 w-full rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-500/20"
+              >
+                Export reader story
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-yellow-400/25 bg-yellow-500/10 p-4">
+              <div className="mb-2 text-sm font-black uppercase tracking-widest text-yellow-300">Dashboard save</div>
+              <p className="text-sm font-semibold leading-6 text-yellow-100/85">
+                Schrijf je huidige Studio-versie over dit bestaande concept heen.
+              </p>
+              <button
+                onClick={onSaveDashboard}
+                disabled={!isLoggedIn}
+                className="mt-4 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-black hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+              >
+                {!isLoggedIn ? "Login nodig" : "Concept bijwerken"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap justify-between gap-3">
+            <button
+              onClick={() => {
+                const confirmed = window.confirm("Terug naar het Dashboard? Sla eerst op als je je laatste wijzigingen wilt bewaren.");
+                if (confirmed) window.location.href = "/dashboard";
+              }}
+              className="rounded-2xl border border-blue-400/25 bg-blue-500/10 px-5 py-3 text-sm font-black text-blue-100 hover:bg-blue-500/20"
+            >
+              Naar Dashboard
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+            >
+              Sluiten
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
       <div className="mx-auto max-w-4xl rounded-3xl border border-white/10 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
@@ -2755,6 +2843,22 @@ export default function Home() {
               <span className={`rounded-full px-3 py-1 ${isLoggedIn ? "bg-emerald-500/15 text-emerald-300" : "bg-yellow-500/15 text-yellow-300"}`}>
                 {isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
               </span>
+              {isLoggedIn && (
+                <button
+                  onClick={() => {
+                    const confirmed = window.confirm("Naar het Dashboard? Sla eerst op als je je laatste wijzigingen wilt bewaren.");
+                    if (confirmed) window.location.href = "/dashboard";
+                  }}
+                  className={`rounded-full px-3 py-1 transition ${
+                    editorDarkMode
+                      ? "bg-purple-500/15 text-purple-200 hover:bg-purple-500/25"
+                      : "bg-purple-600/10 text-purple-700 hover:bg-purple-600/20"
+                  }`}
+                  title="Naar Dashboard"
+                >
+                  Dashboard
+                </button>
+              )}
               <button
                 onClick={isLoggedIn ? handleDemoLogout : handleDemoLogin}
                 className={`rounded-full px-3 py-1 transition ${
