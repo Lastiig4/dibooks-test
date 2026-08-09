@@ -17,6 +17,7 @@ type DashboardBook = DiBook & {
   publishedAt?: string;
   projectData?: any;
   colorTheme?: string;
+  accessType?: "free" | "premium";
 };
 
 const FALLBACK_COVER_CLASS = "from-blue-950 via-slate-950 to-purple-950";
@@ -41,6 +42,24 @@ function DiBooksLogo() {
 function getBookStatusLabel(book: DashboardBook) {
   if (book.source === "dashboard") return book.published ? "Live" : book.status;
   return book.status;
+}
+
+function getAccessLabel(book: DashboardBook) {
+  return book.accessType === "premium" ? "Premium" : "Gratis";
+}
+
+function getAccessBadgeClass(book: DashboardBook) {
+  return book.accessType === "premium"
+    ? "border-yellow-400/35 bg-yellow-500/15 text-yellow-100"
+    : "border-emerald-400/30 bg-emerald-500/12 text-emerald-100";
+}
+
+function AccessBadge({ book }: { book: DashboardBook }) {
+  return (
+    <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${getAccessBadgeClass(book)}`}>
+      {getAccessLabel(book)}
+    </span>
+  );
 }
 
 function BookBadge({ children, light = false }: { children: React.ReactNode; light?: boolean }) {
@@ -94,7 +113,10 @@ function BookCard({ book, large = false }: { book: DashboardBook; large?: boolea
     >
       <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-4 py-3">
         <BookBadge>{book.primaryGenre}</BookBadge>
-        <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
+        <div className="flex items-center gap-2">
+          <AccessBadge book={book} />
+          <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
+        </div>
       </div>
 
       <CoverArtwork book={book} large={large} />
@@ -128,7 +150,10 @@ function FeaturedPanel({ book }: { book: DashboardBook }) {
       <div className={`overflow-hidden rounded-3xl border ${accentClass} bg-neutral-950 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
         <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-5 py-4">
           <BookBadge>{book.primaryGenre}</BookBadge>
-          <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
+          <div className="flex items-center gap-2">
+            <AccessBadge book={book} />
+            <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
+          </div>
         </div>
         <CoverArtwork book={book} large />
         <div className="flex min-h-[150px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-5 backdrop-blur-[2px]">
@@ -303,6 +328,8 @@ export default function LibraryPage() {
                 {featuredBook.genres.map((genre) => (
                   <BookBadge key={genre}>{genre}</BookBadge>
                 ))}
+                <AccessBadge book={featuredBook} />
+                <BookBadge light>{getBookStatusLabel(featuredBook)}</BookBadge>
               </div>
               <h1 className="text-5xl font-black leading-none sm:text-7xl lg:text-8xl">
                 {featuredBook.title}

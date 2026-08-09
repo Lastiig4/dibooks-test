@@ -102,6 +102,20 @@ function getStatusLabel(book: DetailBook) {
   return book.status;
 }
 
+function getAccessPillClass(book: DetailBook) {
+  return book.accessType === "premium"
+    ? "border-yellow-400/35 bg-yellow-500/15 text-yellow-100"
+    : "border-emerald-400/30 bg-emerald-500/12 text-emerald-100";
+}
+
+function AccessPill({ book }: { book: DetailBook }) {
+  return (
+    <span className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-widest ${getAccessPillClass(book)}`}>
+      {getAccessLabel(book.accessType)}
+    </span>
+  );
+}
+
 function isPublishedBook(book: DetailBook) {
   return !!book.published;
 }
@@ -338,6 +352,7 @@ export default function BookDetailPage() {
                 <Badge key={genre}>{genre}</Badge>
               ))}
               <Badge light>{getStatusLabel(book)}</Badge>
+              <AccessPill book={book} />
             </div>
 
             <h1 className="max-w-4xl text-5xl font-black leading-none sm:text-7xl lg:text-8xl">
@@ -361,8 +376,8 @@ export default function BookDetailPage() {
                   Login gratis om te lezen
                 </button>
               ) : (
-                <button onClick={() => alert("Premium lezen komt straks via Reader Plus. Voor nu kun je jouw account in Supabase op reader_plus of author_pro zetten om te testen.")} className="rounded-2xl bg-yellow-500 px-7 py-4 text-lg font-black text-black hover:bg-yellow-400">
-                  {readBlockReason || "Upgrade nodig"}
+                <button onClick={() => alert("Reader Plus is straks het goedkopere lezersabonnement voor premium boeken. Voor nu kun je dit testen door je account-plan in Supabase op reader_plus te zetten.")} className="rounded-2xl bg-yellow-500 px-7 py-4 text-lg font-black text-black hover:bg-yellow-400">
+                  {readBlockReason || "Reader Plus nodig"}
                 </button>
               )}
               <Link href="/" className="rounded-2xl border border-white/15 bg-black/30 px-7 py-4 text-lg font-black text-white hover:bg-white/10">
@@ -413,6 +428,16 @@ export default function BookDetailPage() {
 
           <div className="mt-8 rounded-3xl border border-blue-500/20 bg-blue-500/10 p-5 text-sm font-semibold leading-7 text-blue-100">
             DiBooks-boeken kunnen tekst, keuzes, cutscenes en mini-games bevatten. Boeken met de status Binnenkort zijn alleen een aankondiging; lezen kan pas zodra de auteur het boek publiceert.
+          </div>
+
+          <div className={`mt-4 rounded-3xl border p-5 text-sm font-semibold leading-7 ${
+            book.accessType === "premium"
+              ? "border-yellow-500/20 bg-yellow-500/10 text-yellow-100"
+              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+          }`}>
+            {book.accessType === "premium"
+              ? "Premium boek: zichtbaar in de Library, maar lezen vereist straks Reader Plus, Author Pro of Admin."
+              : "Gratis boek: zichtbaar in de Library en leesbaar met een gratis DiBooks-account, zodat je voortgang en favorieten bewaard blijven."}
           </div>
 
           {readingProgress && (
