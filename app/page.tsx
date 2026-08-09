@@ -345,7 +345,8 @@ export default function LibraryPage() {
 
       {authModalMode && (
         <AuthModal
-          initialMode={authModalMode}
+          mode={authModalMode}
+          onModeChange={setAuthModalMode}
           onClose={() => setAuthModalMode(null)}
           onLogin={loginWithCredentials}
           onRegister={registerWithCredentials}
