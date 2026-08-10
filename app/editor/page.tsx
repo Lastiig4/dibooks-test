@@ -275,6 +275,16 @@ function MoonIcon({ darkMode }: { darkMode: boolean }) {
   );
 }
 
+function ResetEditorIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-8 w-8 fill-none stroke-current stroke-[2.5]" aria-hidden="true">
+      <path d="M4 7v5h5" />
+      <path d="M5.5 11A7 7 0 1 0 7 5.8L4 7" />
+      <path d="M9 9l6 6M15 9l-6 6" />
+    </svg>
+  );
+}
+
 function stripHtml(html: string) {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -1754,7 +1764,7 @@ export default function Home() {
   const nodeLimitReached = maxNodesForCurrentUser !== null && nodes.length >= maxNodesForCurrentUser;
   const autosaveReadyRef = useRef(false);
   const lastAutosavePayloadRef = useRef<string>("");
-  const [autosaveStatus, setAutosaveStatus] = useState("Autosave wordt geladen...");
+  const [autosaveStatus, setAutosaveStatus] = useState("Sessiesave wordt geladen...");
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
@@ -1777,7 +1787,7 @@ export default function Home() {
       if (!bookId && !sharedBookId) {
         restoreEditorAutosaveDraftIfNeeded();
         autosaveReadyRef.current = true;
-        setAutosaveStatus((current) => current === "Autosave wordt geladen..." ? "Autosave actief" : current);
+        setAutosaveStatus((current) => current === "Sessiesave wordt geladen..." ? "Sessiesave actief" : current);
         return;
       }
 
@@ -1840,7 +1850,7 @@ export default function Home() {
 
         restoreEditorAutosaveDraftIfNeeded();
         autosaveReadyRef.current = true;
-        setAutosaveStatus((current) => current === "Autosave wordt geladen..." ? "Autosave actief" : current);
+        setAutosaveStatus((current) => current === "Sessiesave wordt geladen..." ? "Sessiesave actief" : current);
       } catch (error) {
         console.error("Kon boek niet openen in de editor", error);
         alert(error instanceof Error ? `Kon boek niet openen: ${error.message}` : "Kon boek niet openen.");
@@ -2088,7 +2098,7 @@ export default function Home() {
   }
 
   function getEditorAutosaveKey() {
-    if (typeof window === "undefined") return "dibooks-editor-autosave:v2:server:new";
+    if (typeof window === "undefined") return "dibooks-editor-session:v3:server:new";
 
     const params = new URLSearchParams(window.location.search);
     const sharedBookId = params.get("shared");
@@ -2096,12 +2106,12 @@ export default function Home() {
     const scope = sharedBookId ? `shared:${sharedBookId}` : bookId ? `book:${bookId}` : "new";
     const userScope = user?.id || user?.email || "guest";
 
-    return `dibooks-editor-autosave:v2:${userScope}:${scope}`;
+    return `dibooks-editor-session:v3:${userScope}:${scope}`;
   }
 
   function getEditorAutosavePayload() {
     return {
-      version: 2,
+      version: 3,
       updatedAt: new Date().toISOString(),
       dashboardBookId,
       sharedEditBookId,
@@ -2142,7 +2152,7 @@ export default function Home() {
     if (typeof window === "undefined") return false;
 
     const key = getEditorAutosaveKey();
-    const rawDraft = window.localStorage.getItem(key);
+    const rawDraft = window.sessionStorage.getItem(key);
     if (!rawDraft) return false;
 
     try {
@@ -2152,23 +2162,15 @@ export default function Home() {
         ? updatedAt.toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })
         : "onbekend moment";
 
-      const shouldRestore = window.confirm(
-        `Er staat nog een automatisch opgeslagen versie van dit project in je browsergeheugen.\n\nLaatst opgeslagen: ${updatedLabel}\n\nWil je die versie herstellen?`,
-      );
-
-      if (!shouldRestore) {
-        setAutosaveStatus("Autosave actief");
-        return false;
-      }
-
       const restored = applyEditorAutosaveDraft(draft);
       if (restored) {
         lastAutosavePayloadRef.current = rawDraft;
-        setAutosaveStatus(`Concept hersteld • ${updatedLabel}`);
+        setAutosaveStatus(`Sessiesave hersteld • ${updatedLabel}`);
         return true;
       }
     } catch (error) {
-      console.warn("Kon editor-autosave niet herstellen", error);
+      console.warn("Kon editor-sessiesave niet herstellen", error);
+      window.sessionStorage.removeItem(key);
     }
 
     return false;
@@ -2182,17 +2184,47 @@ export default function Home() {
 
     if (serialized === lastAutosavePayloadRef.current) return;
 
-    window.localStorage.setItem(getEditorAutosaveKey(), serialized);
+    window.sessionStorage.setItem(getEditorAutosaveKey(), serialized);
     lastAutosavePayloadRef.current = serialized;
-    setAutosaveStatus(`Autosave • ${new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`);
+    setAutosaveStatus(`Sessiesave • ${new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`);
   }
 
   function clearEditorAutosaveDraft() {
     if (typeof window === "undefined") return;
 
-    window.localStorage.removeItem(getEditorAutosaveKey());
+    window.sessionStorage.removeItem(getEditorAutosaveKey());
     lastAutosavePayloadRef.current = "";
-    setAutosaveStatus("Opgeslagen • autosave schoon");
+    setAutosaveStatus("Opgeslagen • sessiesave schoon");
+  }
+
+
+  function resetEditorToBlankProject() {
+    const confirmed = window.confirm(
+      "Weet je zeker dat je de editor wilt resetten? Je huidige sessiesave wordt gewist en je krijgt weer een leeg startproject.",
+    );
+
+    if (!confirmed) return;
+
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(getEditorAutosaveKey());
+    }
+
+    setNodes(initialNodes);
+    setEdges([]);
+    setStartNodeId("node_1");
+    setSelectedNodeId("node_1");
+    setDashboardBookId(null);
+    setSharedEditBookId(null);
+    setSharedEditOwnerName("");
+    setSharedEditPermission("");
+    setDashboardSaveForm(defaultDashboardSaveForm);
+    setEditingTextNodeId(null);
+    setPreviewOpen(false);
+    setPreviewNodeId(null);
+    setFlowViewport({ x: 0, y: 0, zoom: 1 });
+    lastAutosavePayloadRef.current = "";
+    autosaveReadyRef.current = true;
+    setAutosaveStatus("Nieuwe sessie gestart");
   }
 
   function downloadProjectFile() {
@@ -2366,7 +2398,7 @@ ${formatSaveError(error)}`);
         }));
 
         autosaveReadyRef.current = true;
-        setAutosaveStatus("Project geladen • autosave actief");
+        setAutosaveStatus("Project geladen • sessiesave actief");
         alert("Project geladen.");
       } catch (error) {
         console.error(error);
@@ -3055,6 +3087,14 @@ ${formatSaveError(error)}`);
               }
               icon={<MoonIcon darkMode={editorDarkMode} />}
             />
+
+
+            <SidebarButton
+              onClick={resetEditorToBlankProject}
+              label="Reset editor"
+              className="bg-red-950 text-red-100 hover:bg-red-900"
+              icon={<ResetEditorIcon />}
+            />
           </div>
         </aside>
 
@@ -3074,7 +3114,7 @@ ${formatSaveError(error)}`);
                 {sharedEditBookId ? "Voorstelmodus • origineel blijft veilig" : isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
               </span>
               <span
-                title="Automatische lokale noodopslag in je browser. Handig als je tabblad herlaadt of je per ongeluk weg navigeert."
+                title="Automatische sessie-opslag. Wordt direct hersteld zolang deze browsersessie open blijft."
                 className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-600/10 text-emerald-700"}`}
               >
                 {autosaveStatus}
@@ -3744,11 +3784,20 @@ ${formatSaveError(error)}`);
                 <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5">
                   <h3 className="mb-4 text-lg font-black">Project knoppen</h3>
                   <div className="grid gap-3 text-sm text-neutral-300">
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-600"><SaveIcon /></span><span><strong className="text-white">Save project</strong><br />Downloadt je project als DiBooks JSON.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-700"><FolderIcon /></span><span><strong className="text-white">Load project</strong><br />Laadt een eerder opgeslagen projectbestand.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-600"><SaveIcon /></span><span><strong className="text-white">Save menu</strong><br />Sla op in Dashboard, download een backup of exporteer een reader-versie.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-700"><FolderIcon /></span><span><strong className="text-white">Load project</strong><br />Laadt een eerder opgeslagen DiBooks projectbestand.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600"><PlayIcon /></span><span><strong className="text-white">Play project</strong><br />Test je verhaal vanuit de start-node.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black"><ExportIcon /></span><span><strong className="text-white">Export JSON</strong><br />Zet een reader/export versie in de browser console.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-200 text-slate-950"><MoonIcon darkMode={false} /></span><span><strong className="text-white">Grid thema</strong><br />Wissel tussen lichte en donkere editor-grid.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-950 text-red-100"><ResetEditorIcon /></span><span><strong className="text-white">Reset editor</strong><br />Wist de huidige sessie en start weer met een lege begin-node.</span></div>
                   </div>
+                </section>
+
+                <section className="rounded-2xl border border-emerald-900/70 bg-emerald-950/20 p-5 md:col-span-2">
+                  <h3 className="mb-3 text-lg font-black">Sessiesave</h3>
+                  <p className="text-sm leading-6 text-neutral-300">
+                    De editor herstelt automatisch de meest recente versie uit deze browsersessie. Je krijgt dus geen herstelvraag meer. Sluit je browser helemaal af of klik <strong className="text-white">Reset editor</strong> om de sessie te wissen.
+                    Dashboard opslaan blijft de veilige online opslag.
+                  </p>
                 </section>
 
                 <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5 md:col-span-2">
@@ -3760,6 +3809,8 @@ ${formatSaveError(error)}`);
                     <li className="list-decimal">Gebruik <strong className="text-white">Keuze menu</strong> voor echte lezerskeuzes.</li>
                     <li className="list-decimal">Gebruik <strong className="text-white">Mini game</strong> voor success/fail-routes.</li>
                     <li className="list-decimal">Klik <strong className="text-white">Play</strong> om je verhaal te testen.</li>
+                    <li className="list-decimal">Gebruik <strong className="text-white">Save menu</strong> voor Dashboard opslag, backup of export.</li>
+                    <li className="list-decimal">Gebruik <strong className="text-white">Reset editor</strong> alleen als je bewust opnieuw wilt beginnen.</li>
                   </ol>
                 </section>
               </div>
