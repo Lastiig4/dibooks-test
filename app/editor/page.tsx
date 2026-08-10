@@ -1752,6 +1752,9 @@ export default function Home() {
   const nodeTypes = useMemo(() => ({ bullet: BulletNode }), []);
   const maxNodesForCurrentUser = getMaxNodesForUser(user);
   const nodeLimitReached = maxNodesForCurrentUser !== null && nodes.length >= maxNodesForCurrentUser;
+  const autosaveReadyRef = useRef(false);
+  const lastAutosavePayloadRef = useRef<string>("");
+  const [autosaveStatus, setAutosaveStatus] = useState("Autosave wordt geladen...");
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
@@ -1770,7 +1773,19 @@ export default function Home() {
       const params = new URLSearchParams(window.location.search);
       const sharedBookId = params.get("shared");
       const bookId = params.get("book");
-      if ((!bookId && !sharedBookId) || !user) return;
+
+      if (!bookId && !sharedBookId) {
+        restoreEditorAutosaveDraftIfNeeded();
+        autosaveReadyRef.current = true;
+        setAutosaveStatus((current) => current === "Autosave wordt geladen..." ? "Autosave actief" : current);
+        return;
+      }
+
+      if (!user) {
+        restoreEditorAutosaveDraftIfNeeded();
+        autosaveReadyRef.current = true;
+        return;
+      }
 
       try {
         const dashboardBook = sharedBookId
@@ -1822,9 +1837,15 @@ export default function Home() {
           setStartNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? "");
           setSelectedNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? null);
         }
+
+        restoreEditorAutosaveDraftIfNeeded();
+        autosaveReadyRef.current = true;
+        setAutosaveStatus((current) => current === "Autosave wordt geladen..." ? "Autosave actief" : current);
       } catch (error) {
         console.error("Kon boek niet openen in de editor", error);
         alert(error instanceof Error ? `Kon boek niet openen: ${error.message}` : "Kon boek niet openen.");
+        restoreEditorAutosaveDraftIfNeeded();
+        autosaveReadyRef.current = true;
       }
     }
 
@@ -1834,6 +1855,36 @@ export default function Home() {
       cancelled = true;
     };
   }, [setEdges, setNodes, user]);
+
+  useEffect(() => {
+    if (!autosaveReadyRef.current) return;
+
+    const timeout = window.setTimeout(() => {
+      writeEditorAutosaveDraft();
+    }, 900);
+
+    return () => window.clearTimeout(timeout);
+  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport]);
+
+  useEffect(() => {
+    function saveBeforeLeaving() {
+      if (autosaveReadyRef.current) writeEditorAutosaveDraft();
+    }
+
+    function saveWhenHidden() {
+      if (document.visibilityState === "hidden") saveBeforeLeaving();
+    }
+
+    window.addEventListener("beforeunload", saveBeforeLeaving);
+    window.addEventListener("pagehide", saveBeforeLeaving);
+    document.addEventListener("visibilitychange", saveWhenHidden);
+
+    return () => {
+      window.removeEventListener("beforeunload", saveBeforeLeaving);
+      window.removeEventListener("pagehide", saveBeforeLeaving);
+      document.removeEventListener("visibilitychange", saveWhenHidden);
+    };
+  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport]);
 
   const previewNode = nodes.find((node) => node.id === previewNodeId);
 
@@ -2036,6 +2087,114 @@ export default function Home() {
     };
   }
 
+  function getEditorAutosaveKey() {
+    if (typeof window === "undefined") return "dibooks-editor-autosave:v2:server:new";
+
+    const params = new URLSearchParams(window.location.search);
+    const sharedBookId = params.get("shared");
+    const bookId = params.get("book");
+    const scope = sharedBookId ? `shared:${sharedBookId}` : bookId ? `book:${bookId}` : "new";
+    const userScope = user?.id || user?.email || "guest";
+
+    return `dibooks-editor-autosave:v2:${userScope}:${scope}`;
+  }
+
+  function getEditorAutosavePayload() {
+    return {
+      version: 2,
+      updatedAt: new Date().toISOString(),
+      dashboardBookId,
+      sharedEditBookId,
+      sharedEditOwnerName,
+      sharedEditPermission,
+      selectedNodeId,
+      startNodeId,
+      flowViewport,
+      dashboardSaveForm,
+      projectData: getCurrentProjectData(),
+    };
+  }
+
+  function applyEditorAutosaveDraft(draft: any) {
+    const projectData = draft?.projectData;
+    if (!projectData || projectData.type !== "dibooks-project") return false;
+
+    setNodes(projectData.nodes ?? []);
+    setEdges(projectData.edges ?? []);
+    setStartNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? "node_1");
+    setSelectedNodeId(draft.selectedNodeId ?? projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? null);
+    setDashboardSaveForm((current) => ({
+      ...current,
+      ...(draft.dashboardSaveForm ?? {}),
+      genreInput: "",
+    }));
+
+    if (draft.dashboardBookId) setDashboardBookId(draft.dashboardBookId);
+    if (draft.sharedEditBookId) setSharedEditBookId(draft.sharedEditBookId);
+    if (draft.sharedEditOwnerName) setSharedEditOwnerName(draft.sharedEditOwnerName);
+    if (draft.sharedEditPermission) setSharedEditPermission(draft.sharedEditPermission);
+    if (draft.flowViewport) setFlowViewport(draft.flowViewport);
+
+    return true;
+  }
+
+  function restoreEditorAutosaveDraftIfNeeded() {
+    if (typeof window === "undefined") return false;
+
+    const key = getEditorAutosaveKey();
+    const rawDraft = window.localStorage.getItem(key);
+    if (!rawDraft) return false;
+
+    try {
+      const draft = JSON.parse(rawDraft);
+      const updatedAt = draft?.updatedAt ? new Date(draft.updatedAt) : null;
+      const updatedLabel = updatedAt && !Number.isNaN(updatedAt.getTime())
+        ? updatedAt.toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })
+        : "onbekend moment";
+
+      const shouldRestore = window.confirm(
+        `Er staat nog een automatisch opgeslagen versie van dit project in je browsergeheugen.\n\nLaatst opgeslagen: ${updatedLabel}\n\nWil je die versie herstellen?`,
+      );
+
+      if (!shouldRestore) {
+        setAutosaveStatus("Autosave actief");
+        return false;
+      }
+
+      const restored = applyEditorAutosaveDraft(draft);
+      if (restored) {
+        lastAutosavePayloadRef.current = rawDraft;
+        setAutosaveStatus(`Concept hersteld • ${updatedLabel}`);
+        return true;
+      }
+    } catch (error) {
+      console.warn("Kon editor-autosave niet herstellen", error);
+    }
+
+    return false;
+  }
+
+  function writeEditorAutosaveDraft() {
+    if (typeof window === "undefined") return;
+
+    const payload = getEditorAutosavePayload();
+    const serialized = JSON.stringify(payload);
+
+    if (serialized === lastAutosavePayloadRef.current) return;
+
+    window.localStorage.setItem(getEditorAutosaveKey(), serialized);
+    lastAutosavePayloadRef.current = serialized;
+    setAutosaveStatus(`Autosave • ${new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`);
+  }
+
+  function clearEditorAutosaveDraft() {
+    if (typeof window === "undefined") return;
+
+    window.localStorage.removeItem(getEditorAutosaveKey());
+    lastAutosavePayloadRef.current = "";
+    setAutosaveStatus("Opgeslagen • autosave schoon");
+  }
+
   function downloadProjectFile() {
     const projectData = getCurrentProjectData();
     const json = JSON.stringify(projectData, null, 2);
@@ -2099,6 +2258,7 @@ export default function Home() {
       try {
         await submitBookRevision(user, sharedEditBookId, projectData, note);
         setSaveDashboardOpen(false);
+        clearEditorAutosaveDraft();
         alert("Voorstel teruggestuurd naar de eigenaar. Het originele boek is niet overschreven.");
       } catch (error) {
         console.error(error);
@@ -2114,6 +2274,7 @@ ${formatSaveError(error)}`);
       try {
         await updateDashboardBookProjectInSupabase(user, dashboardBookId, projectData);
         setSaveDashboardOpen(false);
+        clearEditorAutosaveDraft();
         alert("Concept bijgewerkt in je Dashboard.");
       } catch (error) {
         console.error(error);
@@ -2162,6 +2323,7 @@ ${formatSaveError(error)}`);
 
       setDashboardBookId(savedBook.id);
       setSaveDashboardOpen(false);
+      clearEditorAutosaveDraft();
       alert("Boek opgeslagen in Supabase Dashboard.");
     } catch (error) {
       console.error(error);
@@ -2203,6 +2365,8 @@ ${formatSaveError(error)}`);
           title: projectData.bookTitle && projectData.bookTitle !== "Nieuw DiBooks verhaal" ? projectData.bookTitle : current.title,
         }));
 
+        autosaveReadyRef.current = true;
+        setAutosaveStatus("Project geladen • autosave actief");
         alert("Project geladen.");
       } catch (error) {
         console.error(error);
@@ -2908,6 +3072,12 @@ ${formatSaveError(error)}`);
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs font-black">
               <span className={`rounded-full px-3 py-1 ${isLoggedIn ? "bg-emerald-500/15 text-emerald-300" : "bg-yellow-500/15 text-yellow-300"}`}>
                 {sharedEditBookId ? "Voorstelmodus • origineel blijft veilig" : isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
+              </span>
+              <span
+                title="Automatische lokale noodopslag in je browser. Handig als je tabblad herlaadt of je per ongeluk weg navigeert."
+                className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-600/10 text-emerald-700"}`}
+              >
+                {autosaveStatus}
               </span>
               <button
                 onClick={() => { window.location.href = "/dashboard"; }}
