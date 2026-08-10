@@ -43,6 +43,7 @@ export type AuthPermissions = {
 };
 
 export const DIBOOKS_AUTH_CHANGED_EVENT = "dibooks-auth-changed";
+const AUTH_CACHE_KEY = "dibooks-auth-user-cache-v2";
 
 export type OwnedResourceFields = {
   ownerId: string;
@@ -107,6 +108,68 @@ export function getAccountLabel(user: DemoAuthUser | null) {
   return `${getRoleLabel(user)} • ${getPlanLabel(user)}`;
 }
 
+function readCachedUser(): DemoAuthUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(AUTH_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<DemoAuthUser>;
+    if (!parsed.id || !parsed.email) return null;
+    const role: Exclude<UserRole, "guest"> =
+      parsed.role === "admin" ? "admin" : parsed.role === "reader" ? "reader" : "author";
+    const plan: UserPlan =
+      parsed.plan === "reader_plus"
+        ? "reader_plus"
+        : parsed.plan === "author_pro" || parsed.plan === "member"
+          ? "author_pro"
+          : "free";
+
+    return {
+      id: parsed.id,
+      name: parsed.name || parsed.email.split("@")[0] || "Auteur",
+      email: parsed.email,
+      role,
+      plan,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUser(user: DemoAuthUser | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (!user) {
+      window.localStorage.removeItem(AUTH_CACHE_KEY);
+      return;
+    }
+    window.localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(user));
+  } catch {
+    // Browseropslag kan vol of geblokkeerd zijn. Auth blijft dan via Supabase werken.
+  }
+}
+
+type AuthSnapshot = {
+  user: DemoAuthUser | null;
+  loading: boolean;
+  initialized: boolean;
+};
+
+const cachedUser = typeof window !== "undefined" ? readCachedUser() : null;
+let authSnapshot: AuthSnapshot = {
+  user: cachedUser,
+  loading: !cachedUser,
+  initialized: false,
+};
+let authBootPromise: Promise<void> | null = null;
+const authSubscribers = new Set<() => void>();
+
+function emitAuthSnapshot(next: Partial<AuthSnapshot>) {
+  authSnapshot = { ...authSnapshot, ...next };
+  writeCachedUser(authSnapshot.user);
+  authSubscribers.forEach((subscriber) => subscriber());
+}
+
 function mapSupabaseUser(user: User | null): DemoAuthUser | null {
   if (!user) return null;
 
@@ -125,8 +188,7 @@ function mapSupabaseUser(user: User | null): DemoAuthUser | null {
 
   return {
     id: user.id,
-    name:
-      String(metadata.full_name || metadata.name || user.email?.split("@")[0] || "Auteur"),
+    name: String(metadata.full_name || metadata.name || user.email?.split("@")[0] || "Auteur"),
     email: user.email ?? "",
     role,
     plan,
@@ -180,6 +242,55 @@ async function applySupabaseProfile(user: DemoAuthUser | null): Promise<DemoAuth
     role,
     plan,
   };
+}
+
+async function refreshProfileFromSupabase(mappedUser: DemoAuthUser | null) {
+  if (!mappedUser) {
+    emitAuthSnapshot({ user: null, loading: false, initialized: true });
+    broadcastAuthChange();
+    return;
+  }
+
+  // Zet direct de Supabase sessie-user, zodat de UI niet kort naar "uitgelogd" springt.
+  emitAuthSnapshot({ user: mappedUser, loading: false, initialized: true });
+  broadcastAuthChange();
+
+  try {
+    await ensureSupabaseProfile(mappedUser);
+    const profiledUser = await applySupabaseProfile(mappedUser);
+    emitAuthSnapshot({ user: profiledUser ?? mappedUser, loading: false, initialized: true });
+    broadcastAuthChange();
+  } catch (profileError) {
+    console.warn("DiBooks profile check mislukt.", profileError);
+    emitAuthSnapshot({ user: mappedUser, loading: false, initialized: true });
+  }
+}
+
+function bootAuthOnce() {
+  if (authBootPromise) return authBootPromise;
+
+  authBootPromise = (async () => {
+    const supabase = getSupabaseOrAlert();
+    if (!supabase) {
+      emitAuthSnapshot({ loading: false, initialized: true });
+      return;
+    }
+
+    // Belangrijk: niet naar guest resetten tijdens route/tab wissels. We houden cache vast
+    // tot Supabase echt bevestigt dat er geen sessie meer is.
+    supabase.auth.getSession().then(async ({ data, error }) => {
+      if (error) {
+        console.warn("Supabase getSession gaf geen actieve sessie.", error.message);
+      }
+      await refreshProfileFromSupabase(mapSupabaseUser(data.session?.user ?? null));
+    });
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      void refreshProfileFromSupabase(mapSupabaseUser(session?.user ?? null));
+    });
+  })();
+
+  return authBootPromise;
 }
 
 export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
@@ -257,62 +368,30 @@ async function promptForRegistration() {
 }
 
 export function useDemoAuth() {
-  const [user, setUser] = useState<DemoAuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState<AuthSnapshot>(() => authSnapshot);
 
   useEffect(() => {
-    let mounted = true;
-    const supabase = getSupabaseOrAlert();
-
-    if (!supabase) {
-      setLoading(false);
-      return;
+    function handleSnapshotUpdate() {
+      setSnapshot(authSnapshot);
     }
 
-    supabase.auth.getUser().then(async ({ data, error }) => {
-      if (!mounted) return;
+    authSubscribers.add(handleSnapshotUpdate);
+    void bootAuthOnce();
 
-      if (error) {
-        console.warn("Supabase getUser gaf geen actieve gebruiker.", error.message);
-      }
-
-      const mappedUser = mapSupabaseUser(data.user);
-      if (mappedUser) {
-        await ensureSupabaseProfile(mappedUser);
-      }
-      const profiledUser = await applySupabaseProfile(mappedUser);
-      if (!mounted) return;
-      setUser(profiledUser);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
-      const mappedUser = mapSupabaseUser(session?.user ?? null);
-      setLoading(false);
-      broadcastAuthChange();
-
-      if (mappedUser) {
-        ensureSupabaseProfile(mappedUser)
-          .then(() => applySupabaseProfile(mappedUser))
-          .then((profiledUser) => {
-            if (mounted) setUser(profiledUser);
-          })
-          .catch((profileError) => {
-            console.warn("DiBooks profile check mislukt.", profileError);
-            if (mounted) setUser(mappedUser);
-          });
-      } else {
-        setUser(null);
-      }
-    });
+    const handleAuthChanged = () => {
+      void bootAuthOnce();
+      handleSnapshotUpdate();
+    };
+    window.addEventListener(DIBOOKS_AUTH_CHANGED_EVENT, handleAuthChanged);
 
     return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
+      authSubscribers.delete(handleSnapshotUpdate);
+      window.removeEventListener(DIBOOKS_AUTH_CHANGED_EVENT, handleAuthChanged);
     };
   }, []);
 
+  const user = snapshot.user;
+  const loading = snapshot.loading;
   const permissions = useMemo(() => getAuthPermissions(user), [user]);
 
   async function loginWithCredentials(credentials: LoginCredentials): Promise<AuthActionResult> {
@@ -334,15 +413,7 @@ export function useDemoAuth() {
     }
 
     const mappedUser = mapSupabaseUser(data.user);
-    let profiledUser = mappedUser;
-    if (mappedUser) {
-      const profileResult = await ensureSupabaseProfile(mappedUser);
-      if (!profileResult.ok) return profileResult;
-      profiledUser = await applySupabaseProfile(mappedUser);
-    }
-
-    setUser(profiledUser);
-    broadcastAuthChange();
+    await refreshProfileFromSupabase(mappedUser);
     return { ok: true };
   }
 
@@ -385,15 +456,7 @@ export function useDemoAuth() {
     }
 
     const mappedUser = mapSupabaseUser(data.user);
-    let profiledUser = mappedUser;
-    if (mappedUser) {
-      const profileResult = await ensureSupabaseProfile(mappedUser);
-      if (!profileResult.ok) return profileResult;
-      profiledUser = await applySupabaseProfile(mappedUser);
-    }
-
-    setUser(profiledUser);
-    broadcastAuthChange();
+    await refreshProfileFromSupabase(mappedUser);
     return { ok: true, message: "Account aangemaakt en ingelogd." };
   }
 
@@ -424,7 +487,8 @@ export function useDemoAuth() {
       return;
     }
 
-    setUser(null);
+    emitAuthSnapshot({ user: null, loading: false, initialized: true });
+    writeCachedUser(null);
     broadcastAuthChange();
   }
 
