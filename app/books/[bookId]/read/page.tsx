@@ -259,29 +259,98 @@ function calculateBookProgressPercent(book: ReaderBook, currentNodeId: string, p
 }
 
 
-function paginateTextHtml(html: string, maxCharacters = 1450) {
-  const normalizedHtml = normalizeManualPageBreakMarkers(html || "");
-  const manualBreakSegments = normalizedHtml.split(MANUAL_PAGE_BREAK_MARKER);
-  if (manualBreakSegments.length > 1) {
-    const manualPages: string[] = [];
+function plainTextToReaderHtml(value: string) {
+  const paragraphs = String(value || "")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
-    manualBreakSegments.forEach((segment) => {
-      const cleanedSegment = removeManualPageBreakMarkers(segment);
-      if (!stripHtml(cleanedSegment)) return;
-      manualPages.push(...paginateTextHtml(cleanedSegment, maxCharacters));
-    });
+  if (!paragraphs.length) return "<p>Deze pagina is nog leeg.</p>";
 
-    return manualPages.length > 0 ? manualPages : ["<p>Deze pagina is nog leeg.</p>"];
+  return paragraphs
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
+}
+
+function unwrapReaderSectionTags(html: string) {
+  // De reader combineert opeenvolgende tekstnodes in <section>-wrappers.
+  // Voor paginering willen we de echte alinea's/blokken splitsen, niet één complete section.
+  return html
+    .replace(/<section\b[^>]*>/gi, "")
+    .replace(/<\/section>/gi, "");
+}
+
+function splitHtmlIntoReadableBlocks(html: string) {
+  const cleanedHtml = unwrapReaderSectionTags(html || "").trim();
+  if (!cleanedHtml) return [];
+
+  if (typeof document === "undefined") {
+    return [cleanedHtml];
   }
 
-  html = removeManualPageBreakMarkers(html || "");
-  const plainText = stripHtml(html);
-  if (!plainText) return ["<p>Deze pagina is nog leeg.</p>"];
+  const container = document.createElement("div");
+  container.innerHTML = cleanedHtml;
 
-  if (plainText.length <= maxCharacters) return [html || `<p>${escapeHtml(plainText)}</p>`];
+  const blocks: string[] = [];
+  const blockTags = new Set([
+    "P",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "BLOCKQUOTE",
+    "UL",
+    "OL",
+    "PRE",
+    "TABLE",
+    "HR",
+    "DIV",
+  ]);
 
-  const paragraphs = plainText.split(/\n{2,}/).filter(Boolean);
-  const chunks = paragraphs.length > 1 ? paragraphs : plainText.match(/[^.!?…]+[.!?…"]*|.+$/g) ?? [plainText];
+  function pushHtmlBlock(value: string) {
+    const withoutMarkers = removeManualPageBreakMarkers(value);
+    if (!stripHtml(withoutMarkers)) return;
+    blocks.push(withoutMarkers);
+  }
+
+  function walk(node: ChildNode) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent ?? "";
+      if (text.trim()) pushHtmlBlock(plainTextToReaderHtml(text));
+      return;
+    }
+
+    if (!(node instanceof HTMLElement)) return;
+
+    const tagName = node.tagName.toUpperCase();
+    if (tagName === "BR") return;
+
+    if (blockTags.has(tagName)) {
+      pushHtmlBlock(node.outerHTML);
+      return;
+    }
+
+    if (node.childNodes.length) {
+      node.childNodes.forEach(walk);
+      return;
+    }
+
+    pushHtmlBlock(node.outerHTML);
+  }
+
+  container.childNodes.forEach(walk);
+
+  if (!blocks.length && stripHtml(cleanedHtml)) return [cleanedHtml];
+  return blocks;
+}
+
+function splitLongPlainBlock(blockHtml: string, maxCharacters: number) {
+  const plainText = stripHtml(blockHtml);
+  if (plainText.length <= maxCharacters) return [blockHtml];
+
+  const chunks = plainText.match(/[^.!?…]+[.!?…"]*|.+$/g) ?? [plainText];
   const pages: string[] = [];
   let current = "";
 
@@ -297,8 +366,7 @@ function paginateTextHtml(html: string, maxCharacters = 1450) {
     }
 
     if (cleanChunk.length > maxCharacters) {
-      const words = cleanChunk.split(/\s+/);
-      words.forEach((word) => {
+      cleanChunk.split(/\s+/).forEach((word) => {
         const nextWord = current ? `${current} ${word}` : word;
         if (nextWord.length > maxCharacters && current) {
           pages.push(`<p>${escapeHtml(current)}</p>`);
@@ -314,6 +382,64 @@ function paginateTextHtml(html: string, maxCharacters = 1450) {
   });
 
   if (current) pages.push(`<p>${escapeHtml(current)}</p>`);
+  return pages.length ? pages : [blockHtml];
+}
+
+function paginateTextHtml(html: string, maxCharacters = 1450) {
+  const normalizedHtml = normalizeManualPageBreakMarkers(html || "");
+  const manualBreakSegments = normalizedHtml.split(MANUAL_PAGE_BREAK_MARKER);
+
+  if (manualBreakSegments.length > 1) {
+    const manualPages: string[] = [];
+
+    manualBreakSegments.forEach((segment) => {
+      const cleanedSegment = removeManualPageBreakMarkers(segment);
+      if (!stripHtml(cleanedSegment)) return;
+      manualPages.push(...paginateTextHtml(cleanedSegment, maxCharacters));
+    });
+
+    return manualPages.length > 0 ? manualPages : ["<p>Deze pagina is nog leeg.</p>"];
+  }
+
+  const cleanedHtml = removeManualPageBreakMarkers(html || "");
+  const plainText = stripHtml(cleanedHtml);
+  if (!plainText) return ["<p>Deze pagina is nog leeg.</p>"];
+
+  const safeHtml = /<[^>]+>/.test(cleanedHtml)
+    ? cleanedHtml
+    : plainTextToReaderHtml(cleanedHtml);
+
+  const blocks = splitHtmlIntoReadableBlocks(safeHtml);
+  if (!blocks.length) return [plainTextToReaderHtml(plainText)];
+
+  const pages: string[] = [];
+  let currentHtml = "";
+  let currentTextLength = 0;
+
+  blocks.forEach((blockHtml) => {
+    const blockLength = Math.max(1, stripHtml(blockHtml).length);
+
+    if (blockLength > maxCharacters && currentTextLength === 0) {
+      pages.push(...splitLongPlainBlock(blockHtml, maxCharacters));
+      return;
+    }
+
+    if (currentTextLength > 0 && currentTextLength + blockLength > maxCharacters) {
+      pages.push(currentHtml.trim());
+      currentHtml = "";
+      currentTextLength = 0;
+    }
+
+    if (blockLength > maxCharacters) {
+      pages.push(...splitLongPlainBlock(blockHtml, maxCharacters));
+      return;
+    }
+
+    currentHtml += blockHtml;
+    currentTextLength += blockLength;
+  });
+
+  if (currentHtml.trim()) pages.push(currentHtml.trim());
   return pages.length ? pages : ["<p>Deze pagina is nog leeg.</p>"];
 }
 
