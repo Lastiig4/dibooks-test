@@ -453,6 +453,7 @@ function BookPageReader({
   textSize,
   pageMode,
   theme,
+  isSpecialPage = false,
 }: {
   html: string;
   pageIndex: number;
@@ -462,6 +463,7 @@ function BookPageReader({
   textSize: ReaderTextSize;
   pageMode: ReaderPageMode;
   theme: ReaderTheme;
+  isSpecialPage?: boolean;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<string[]>([]);
@@ -488,7 +490,17 @@ function BookPageReader({
       }
 
       const fontMultiplier = textSize === "small" ? 1.12 : textSize === "large" ? 0.78 : 0.95;
-      const baseMaxCharacters = nextVisiblePageCount === 2 ? 1180 : 1450;
+      // Speciale pagina's moeten altijd hun eigen reader-pagina's behouden.
+      // Daarom gebruiken ze een lagere pagineringsdrempel dan normale tekstnodes.
+      // Zo kan een lange logboek/chat/dossier-pagina netjes over meerdere pagina's
+      // verdergaan, zonder dat de volgende tekstnode op dezelfde pagina terechtkomt.
+      const baseMaxCharacters = isSpecialPage
+        ? nextVisiblePageCount === 2
+          ? 720
+          : 950
+        : nextVisiblePageCount === 2
+          ? 1180
+          : 1450;
       const heightMultiplier = Math.max(0.65, Math.min(1.3, height / 760));
       const nextPages = paginateTextHtml(html, Math.floor(baseMaxCharacters * fontMultiplier * heightMultiplier));
 
@@ -500,7 +512,7 @@ function BookPageReader({
     const resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(viewport);
     return () => resizeObserver.disconnect();
-  }, [html, onPageCountChange, onVisiblePageCountChange, pageMode, setPageIndex, textSize]);
+  }, [html, isSpecialPage, onPageCountChange, onVisiblePageCountChange, pageMode, setPageIndex, textSize]);
 
   useEffect(() => {
     // Wacht tot de echte paginering klaar is. Anders wordt een opgeslagen
@@ -1208,6 +1220,7 @@ export default function ReadBookPage() {
             textSize={textSize}
             pageMode={pageMode}
             theme={theme}
+            isSpecialPage={node.type === "special"}
           />
         )}
 
