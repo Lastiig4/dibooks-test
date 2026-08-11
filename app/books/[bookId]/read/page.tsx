@@ -443,6 +443,124 @@ function paginateTextHtml(html: string, maxCharacters = 1450) {
   return pages.length ? pages : ["<p>Deze pagina is nog leeg.</p>"];
 }
 
+function getReaderContentSize(textSize: ReaderTextSize) {
+  if (textSize === "small") return { fontSize: "18px", lineHeight: "36px" };
+  if (textSize === "large") return { fontSize: "24px", lineHeight: "46px" };
+  return { fontSize: "20px", lineHeight: "40px" };
+}
+
+function paginateTextHtmlMeasured(
+  html: string,
+  options: {
+    maxCharacters: number;
+    pageWidth: number;
+    pageHeight: number;
+    textSize: ReaderTextSize;
+    theme: ReaderTheme;
+  },
+) {
+  if (typeof document === "undefined") return paginateTextHtml(html, options.maxCharacters);
+
+  const normalizedHtml = normalizeManualPageBreakMarkers(html || "");
+  const manualBreakSegments = normalizedHtml.split(MANUAL_PAGE_BREAK_MARKER);
+
+  if (manualBreakSegments.length > 1) {
+    const manualPages: string[] = [];
+    manualBreakSegments.forEach((segment) => {
+      const cleanedSegment = removeManualPageBreakMarkers(segment);
+      if (!stripHtml(cleanedSegment)) return;
+      manualPages.push(...paginateTextHtmlMeasured(cleanedSegment, options));
+    });
+    return manualPages.length ? manualPages : ["<p>Deze pagina is nog leeg.</p>"];
+  }
+
+  const cleanedHtml = removeManualPageBreakMarkers(html || "");
+  const plainText = stripHtml(cleanedHtml);
+  if (!plainText) return ["<p>Deze pagina is nog leeg.</p>"];
+
+  const safeHtml = /<[^>]+>/.test(cleanedHtml)
+    ? cleanedHtml
+    : plainTextToReaderHtml(cleanedHtml);
+
+  const blocks = splitHtmlIntoReadableBlocks(safeHtml);
+  if (!blocks.length) return [plainTextToReaderHtml(plainText)];
+
+  const measuringBox = document.createElement("div");
+  const size = getReaderContentSize(options.textSize);
+  measuringBox.className = `dibooks-reader-content prose max-w-none ${options.theme === "light" ? "prose-neutral" : "prose-invert"}`;
+  measuringBox.style.position = "fixed";
+  measuringBox.style.left = "-100000px";
+  measuringBox.style.top = "0";
+  measuringBox.style.visibility = "hidden";
+  measuringBox.style.pointerEvents = "none";
+  measuringBox.style.zIndex = "-1";
+  measuringBox.style.boxSizing = "border-box";
+  measuringBox.style.width = `${Math.max(260, Math.floor(options.pageWidth))}px`;
+  measuringBox.style.fontSize = size.fontSize;
+  measuringBox.style.lineHeight = size.lineHeight;
+  measuringBox.style.maxWidth = "none";
+  measuringBox.style.padding = "0";
+  measuringBox.style.margin = "0";
+  document.body.appendChild(measuringBox);
+
+  function setAndMeasure(value: string) {
+    measuringBox.innerHTML = value;
+    measuringBox.querySelectorAll("p").forEach((paragraph) => {
+      const element = paragraph as HTMLElement;
+      element.style.marginTop = "0";
+      element.style.marginBottom = "24px";
+    });
+    measuringBox.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((heading) => {
+      const element = heading as HTMLElement;
+      element.style.marginTop = "0";
+      element.style.marginBottom = "16px";
+    });
+    return measuringBox.scrollHeight;
+  }
+
+  const pages: string[] = [];
+  let currentHtml = "";
+  const maxHeight = Math.max(260, Math.floor(options.pageHeight));
+
+  blocks.forEach((blockHtml) => {
+    const candidateHtml = currentHtml ? `${currentHtml}${blockHtml}` : blockHtml;
+    const candidateHeight = setAndMeasure(candidateHtml);
+
+    if (candidateHeight <= maxHeight) {
+      currentHtml = candidateHtml;
+      return;
+    }
+
+    if (currentHtml.trim()) {
+      pages.push(currentHtml.trim());
+      currentHtml = "";
+    }
+
+    const singleBlockHeight = setAndMeasure(blockHtml);
+    if (singleBlockHeight <= maxHeight) {
+      currentHtml = blockHtml;
+      return;
+    }
+
+    const splitBlocks = splitLongPlainBlock(blockHtml, Math.max(280, Math.floor(options.maxCharacters * 0.72)));
+    splitBlocks.forEach((splitBlock) => {
+      const splitCandidate = currentHtml ? `${currentHtml}${splitBlock}` : splitBlock;
+      if (setAndMeasure(splitCandidate) > maxHeight && currentHtml.trim()) {
+        pages.push(currentHtml.trim());
+        currentHtml = splitBlock;
+      } else {
+        currentHtml = splitCandidate;
+      }
+    });
+  });
+
+  if (currentHtml.trim()) pages.push(currentHtml.trim());
+  document.body.removeChild(measuringBox);
+
+  return pages.length ? pages : paginateTextHtml(html, options.maxCharacters);
+}
+
+
 
 function BookPageReader({
   html,
@@ -502,7 +620,20 @@ function BookPageReader({
           ? 1180
           : 1450;
       const heightMultiplier = Math.max(0.65, Math.min(1.3, height / 760));
-      const nextPages = paginateTextHtml(html, Math.floor(baseMaxCharacters * fontMultiplier * heightMultiplier));
+      const pageHorizontalPadding = window.innerWidth >= 768 ? 128 : window.innerWidth >= 640 ? 96 : 64;
+      const pageVerticalPadding = window.innerWidth >= 640 ? 136 : 112;
+      const gridWidth = nextVisiblePageCount === 2 ? Math.min(width, 1500) : Math.min(width, 860);
+      const pageOuterWidth = nextVisiblePageCount === 2 ? (gridWidth - 28) / 2 : gridWidth;
+      const pageContentWidth = Math.max(260, pageOuterWidth - pageHorizontalPadding);
+      const pageContentHeight = Math.max(260, height - pageVerticalPadding);
+      const maxCharacters = Math.floor(baseMaxCharacters * fontMultiplier * heightMultiplier);
+      const nextPages = paginateTextHtmlMeasured(html, {
+        maxCharacters,
+        pageWidth: pageContentWidth,
+        pageHeight: pageContentHeight,
+        textSize,
+        theme,
+      });
 
       setPages(nextPages);
       onPageCountChange(nextPages.length);
@@ -512,7 +643,7 @@ function BookPageReader({
     const resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(viewport);
     return () => resizeObserver.disconnect();
-  }, [html, isSpecialPage, onPageCountChange, onVisiblePageCountChange, pageMode, setPageIndex, textSize]);
+  }, [html, isSpecialPage, onPageCountChange, onVisiblePageCountChange, pageMode, setPageIndex, textSize, theme]);
 
   useEffect(() => {
     // Wacht tot de echte paginering klaar is. Anders wordt een opgeslagen
