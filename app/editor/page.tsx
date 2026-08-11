@@ -95,7 +95,7 @@ const FontSize = Extension.create({
   },
 });
 
-type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame";
+type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "scratchpad";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 
@@ -122,12 +122,29 @@ type DiNodeData = {
   miniGameFailTargetNodeId?: string;
 };
 
+const MANUAL_PAGE_BREAK_MARKER = "[[NIEUWE_PAGINA]]";
+const MANUAL_PAGE_BREAK_BLOCK_REGEX = /<p[^>]*>\s*(?:<(?:code|strong|em|span)[^>]*>\s*)*\[\[NIEUWE_PAGINA\]\](?:\s*<\/(?:code|strong|em|span)>)*\s*<\/p>/gi;
+
+function normalizeManualPageBreakMarkers(value: string) {
+  return value.replace(MANUAL_PAGE_BREAK_BLOCK_REGEX, MANUAL_PAGE_BREAK_MARKER);
+}
+
+function removeManualPageBreakMarkers(value: string) {
+  return normalizeManualPageBreakMarkers(value)
+    .split(MANUAL_PAGE_BREAK_MARKER)
+    .join("")
+    .replace(/<p>\s*<\/p>/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 const nodeColors: Record<DiNodeType, string> = {
   text: "#2563eb",
   special: "#eab308",
   cutscene: "#16a34a",
   choice: "#f97316",
   minigame: "#9333ea",
+  scratchpad: "#f8fafc",
 };
 
 const nodeLabels: Record<DiNodeType, string> = {
@@ -136,7 +153,35 @@ const nodeLabels: Record<DiNodeType, string> = {
   cutscene: "Cutscene",
   choice: "Keuze",
   minigame: "Mini game",
+  scratchpad: "Kladblok",
 };
+
+function isScratchpadNode(node: Node<DiNodeData> | undefined | null) {
+  return node?.data?.type === "scratchpad";
+}
+
+function getStoryNodes(currentNodes: Node<DiNodeData>[]) {
+  return currentNodes.filter((node) => !isScratchpadNode(node));
+}
+
+function getStoryNodeIds(currentNodes: Node<DiNodeData>[]) {
+  return new Set(getStoryNodes(currentNodes).map((node) => node.id));
+}
+
+function getStoryEdges(currentEdges: Edge[], currentNodes: Node<DiNodeData>[]) {
+  const storyNodeIds = getStoryNodeIds(currentNodes);
+  return currentEdges.filter(
+    (edge) => storyNodeIds.has(edge.source) && storyNodeIds.has(edge.target),
+  );
+}
+
+function getSafeStartNodeId(currentNodes: Node<DiNodeData>[], preferredStartId?: string | null) {
+  const storyNodes = getStoryNodes(currentNodes);
+  if (preferredStartId && storyNodes.some((node) => node.id === preferredStartId)) {
+    return preferredStartId;
+  }
+  return storyNodes[0]?.id ?? "";
+}
 
 
 function SidebarButton({
@@ -209,6 +254,21 @@ function JoystickIcon() {
       <path d="M6 15h4" />
       <circle cx="16.5" cy="14" r="0.7" />
       <circle cx="18.5" cy="16" r="0.7" />
+    </svg>
+  );
+}
+
+function ScratchpadIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7 fill-none stroke-current stroke-[2.4]"
+      aria-hidden="true"
+    >
+      <path d="M6 4h9l3 3v13H6V4Z" />
+      <path d="M15 4v4h4" />
+      <path d="M9 11h6" />
+      <path d="M9 15h5" />
     </svg>
   );
 }
@@ -294,6 +354,8 @@ function stripHtml(html: string) {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .split(MANUAL_PAGE_BREAK_MARKER)
+    .join(" ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ")
@@ -338,39 +400,44 @@ function BulletNode({ data }: NodeProps<Node<DiNodeData>>) {
         {data.label}
       </div>
 
-      <Handle
-        id="in"
-        type="target"
-        position={Position.Left}
-        style={{
-          opacity: 0,
-          width: 1,
-          height: 1,
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          pointerEvents: "none",
-        }}
-      />
+      {data.type !== "scratchpad" && (
+        <>
+          <Handle
+            id="in"
+            type="target"
+            position={Position.Left}
+            style={{
+              opacity: 0,
+              width: 1,
+              height: 1,
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              pointerEvents: "none",
+            }}
+          />
 
-      <Handle
-        id="out"
-        type="source"
-        position={Position.Right}
-        style={{
-          opacity: 0,
-          width: 1,
-          height: 1,
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          pointerEvents: "none",
-        }}
-      />
+          <Handle
+            id="out"
+            type="source"
+            position={Position.Right}
+            style={{
+              opacity: 0,
+              width: 1,
+              height: 1,
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              pointerEvents: "none",
+            }}
+          />
+        </>
+      )}
 
       <div
         style={{
           color: nodeColors[data.type],
+          WebkitTextStroke: data.type === "scratchpad" ? "3px #111827" : undefined,
           fontSize: 170,
           fontWeight: 450,
           lineHeight: 1,
@@ -455,12 +522,17 @@ function isNodeComplete(node: Node<DiNodeData> | undefined) {
     );
   }
 
+  if (node.data.type === "scratchpad") {
+    return true;
+  }
+
   return false;
 }
 
 type RichTextEditorModalProps = {
   title: string;
   initialHtml: string;
+  allowManualPageBreak?: boolean;
   onSave: (html: string, plainText: string) => void;
   onClose: () => void;
 };
@@ -468,6 +540,7 @@ type RichTextEditorModalProps = {
 function RichTextEditorModal({
   title,
   initialHtml,
+  allowManualPageBreak = false,
   onSave,
   onClose,
 }: RichTextEditorModalProps) {
@@ -514,7 +587,7 @@ function RichTextEditorModal({
           <div className="flex gap-3">
             <button
               onClick={() => {
-                onSave(editor.getHTML(), editor.getText());
+                onSave(editor.getHTML(), removeManualPageBreakMarkers(editor.getText()));
                 onClose();
               }}
               className="rounded-xl bg-blue-600 px-5 py-3 font-black hover:bg-blue-500"
@@ -596,6 +669,22 @@ function RichTextEditorModal({
           >
             Lijst
           </button>
+
+          {allowManualPageBreak && (
+            <button
+              onClick={() =>
+                editor
+                  .chain()
+                  .focus()
+                  .insertContent(`<p><code>${MANUAL_PAGE_BREAK_MARKER}</code></p>`)
+                  .run()
+              }
+              className="rounded-lg bg-indigo-700 px-3 py-2 text-sm font-black hover:bg-indigo-600"
+              title="Zet vanaf hier de volgende tekst op een nieuwe pagina"
+            >
+              Nieuwe pagina
+            </button>
+          )}
 
           <select
             onChange={(event) => {
@@ -713,6 +802,21 @@ function splitPlainTextIntoParagraphPages(text: string, maxCharacters: number) {
 function paginateHtml(html: string, maxCharacters: number) {
   if (typeof window === "undefined") return ["<p>Deze tekst is nog leeg.</p>"];
 
+  const normalizedHtml = normalizeManualPageBreakMarkers(html || "");
+  const manualBreakSegments = normalizedHtml.split(MANUAL_PAGE_BREAK_MARKER);
+  if (manualBreakSegments.length > 1) {
+    const manualPages: string[] = [];
+
+    manualBreakSegments.forEach((segment) => {
+      const cleanedSegment = removeManualPageBreakMarkers(segment);
+      if (!stripHtml(cleanedSegment)) return;
+      manualPages.push(...paginateHtml(cleanedSegment, maxCharacters));
+    });
+
+    return manualPages.length > 0 ? manualPages : ["<p>Deze tekst is nog leeg.</p>"];
+  }
+
+  html = removeManualPageBreakMarkers(html || "");
   const safeMax = Math.max(450, maxCharacters);
   const container = document.createElement("div");
   container.innerHTML = html || "<p>Deze tekst is nog leeg.</p>";
@@ -1794,7 +1898,9 @@ export default function Home() {
   const [flowViewport, setFlowViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const nodeTypes = useMemo(() => ({ bullet: BulletNode }), []);
   const maxNodesForCurrentUser = getMaxNodesForUser(user);
-  const nodeLimitReached = maxNodesForCurrentUser !== null && nodes.length >= maxNodesForCurrentUser;
+  const storyNodeCount = getStoryNodes(nodes).length;
+  const scratchpadNodeCount = nodes.length - storyNodeCount;
+  const nodeLimitReached = maxNodesForCurrentUser !== null && storyNodeCount >= maxNodesForCurrentUser;
   const autosaveReadyRef = useRef(false);
   const lastAutosavePayloadRef = useRef<string>("");
   const [autosaveStatus, setAutosaveStatus] = useState("Sessiesave wordt geladen...");
@@ -1876,10 +1982,12 @@ export default function Home() {
 
         const projectData = await resolveProjectCutsceneUrls(dashboardBook.projectData);
         if (projectData?.type === "dibooks-project") {
-          setNodes(projectData.nodes ?? []);
+          const projectNodes = projectData.nodes ?? [];
+          const safeStartNodeId = getSafeStartNodeId(projectNodes, projectData.startNodeId ?? projectNodes?.[0]?.id ?? "");
+          setNodes(projectNodes);
           setEdges(projectData.edges ?? []);
-          setStartNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? "");
-          setSelectedNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? null);
+          setStartNodeId(safeStartNodeId);
+          setSelectedNodeId(safeStartNodeId || projectNodes?.[0]?.id ?? null);
         }
 
         restoreEditorAutosaveDraftIfNeeded();
@@ -1960,13 +2068,13 @@ export default function Home() {
     }
   }, [previewPageIndex, previewPageCount]);
 
-  const previewPaths = previewNode
-    ? edges.filter((edge) => edge.source === previewNode.id)
+  const previewPaths = previewNode && !isScratchpadNode(previewNode)
+    ? getStoryEdges(edges, nodes).filter((edge) => edge.source === previewNode.id)
     : [];
 
   const textChainBranchPaths =
     previewNode?.data.type === "text" || previewNode?.data.type === "special"
-      ? edges.filter((edge) => {
+      ? getStoryEdges(edges, nodes).filter((edge) => {
           const lastTextNode = textChain.textNodes[textChain.textNodes.length - 1];
           return !!lastTextNode && edge.source === lastTextNode.id;
         })
@@ -1984,12 +2092,12 @@ export default function Home() {
     },
   }));
 
-  const selectedNodePaths = selectedNode
-    ? edges.filter((edge) => edge.source === selectedNode.id)
+  const selectedNodePaths = selectedNode && !isScratchpadNode(selectedNode)
+    ? getStoryEdges(edges, nodes).filter((edge) => edge.source === selectedNode.id)
     : [];
 
-  const availableTargetNodes = selectedNode
-    ? [...nodes.filter((node) => node.id !== selectedNode.id)].sort((a, b) => {
+  const availableTargetNodes = selectedNode && !isScratchpadNode(selectedNode)
+    ? [...nodes.filter((node) => node.id !== selectedNode.id && !isScratchpadNode(node))].sort((a, b) => {
         const aHasIncomingPath = edges.some((edge) => edge.target === a.id);
         const bHasIncomingPath = edges.some((edge) => edge.target === b.id);
 
@@ -2016,7 +2124,10 @@ export default function Home() {
     currentEdges: Edge[],
     currentNodes: Node<DiNodeData>[],
   ) {
-    return currentEdges.map((edge) => {
+    const storyNodeIds = getStoryNodeIds(currentNodes);
+    return currentEdges
+      .filter((edge) => storyNodeIds.has(edge.source) && storyNodeIds.has(edge.target))
+      .map((edge) => {
       const targetNode = currentNodes.find((node) => node.id === edge.target);
       const valid = isNodeComplete(targetNode);
 
@@ -2072,7 +2183,7 @@ export default function Home() {
         </section>
       `);
 
-      const outgoingPaths = edges.filter(
+      const outgoingPaths = getStoryEdges(edges, nodes).filter(
         (edge) => edge.source === currentNode!.id,
       );
 
@@ -2124,7 +2235,7 @@ export default function Home() {
       version: 1,
       type: "dibooks-project",
       bookTitle: dashboardSaveForm.title.trim() || "Nieuw DiBooks verhaal",
-      startNodeId,
+      startNodeId: getSafeStartNodeId(nodes, startNodeId),
       nodes,
       edges,
       savedAt: new Date().toISOString(),
@@ -2163,10 +2274,12 @@ export default function Home() {
     const projectData = draft?.projectData;
     if (!projectData || projectData.type !== "dibooks-project") return false;
 
-    setNodes(projectData.nodes ?? []);
+    const projectNodes = projectData.nodes ?? [];
+    const safeStartNodeId = getSafeStartNodeId(projectNodes, projectData.startNodeId ?? projectNodes?.[0]?.id ?? "node_1");
+    setNodes(projectNodes);
     setEdges(projectData.edges ?? []);
-    setStartNodeId(projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? "node_1");
-    setSelectedNodeId(draft.selectedNodeId ?? projectData.startNodeId ?? projectData.nodes?.[0]?.id ?? null);
+    setStartNodeId(safeStartNodeId);
+    setSelectedNodeId(draft.selectedNodeId ?? safeStartNodeId ?? projectNodes?.[0]?.id ?? null);
     setDashboardSaveForm((current) => ({
       ...current,
       ...(draft.dashboardSaveForm ?? {}),
@@ -2422,9 +2535,11 @@ ${formatSaveError(error)}`);
           return;
         }
 
-        setNodes(projectData.nodes ?? []);
+        const projectNodes = projectData.nodes ?? [];
+        const safeStartNodeId = getSafeStartNodeId(projectNodes, projectData.startNodeId ?? "");
+        setNodes(projectNodes);
         setEdges(projectData.edges ?? []);
-        setStartNodeId(projectData.startNodeId ?? "");
+        setStartNodeId(safeStartNodeId);
         setDashboardBookId(null);
         setDashboardSaveForm((current) => ({
           ...current,
@@ -2453,8 +2568,8 @@ ${formatSaveError(error)}`);
 
     const startNode = nodes.find((node) => node.id === startNodeId);
 
-    if (!startNode) {
-      alert("Start-node niet gevonden.");
+    if (!startNode || isScratchpadNode(startNode)) {
+      alert("Start-node niet gevonden of is een kladblok-node. Kies een verhaalnode als start.");
       return;
     }
 
@@ -2476,8 +2591,8 @@ ${formatSaveError(error)}`);
   function goToPreviewNode(nodeId: string) {
     const targetNode = nodes.find((node) => node.id === nodeId);
 
-    if (!targetNode) {
-      alert("Deze doel-node bestaat niet meer.");
+    if (!targetNode || isScratchpadNode(targetNode)) {
+      alert("Deze doel-node bestaat niet meer of is een kladblok-node.");
       return;
     }
 
@@ -2492,8 +2607,9 @@ ${formatSaveError(error)}`);
 
   function createNode(type: DiNodeType) {
     const maxNodes = getMaxNodesForUser(user);
-    if (maxNodes !== null && nodes.length >= maxNodes) {
-      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} nodes gebruiken. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
+    const isScratchpad = type === "scratchpad";
+    if (!isScratchpad && maxNodes !== null && storyNodeCount >= maxNodes) {
+      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes gebruiken. Kladblok-nodes tellen niet mee. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
@@ -2527,8 +2643,8 @@ ${formatSaveError(error)}`);
       data: {
         label: nodeLabels[type],
         type,
-        text: type === "text" || type === "special" ? "" : undefined,
-        textHtml: type === "text" || type === "special" ? "" : undefined,
+        text: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
+        textHtml: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
         specialSubtype: type === "special" ? "Logboek" : undefined,
         videoUrl: type === "cutscene" ? "" : undefined,
         videoStoragePath: type === "cutscene" ? "" : undefined,
@@ -2722,6 +2838,14 @@ ${formatSaveError(error)}`);
     if (!targetNodeId) return;
     if (selectedNodeId === targetNodeId) return;
 
+    const sourceNode = nodes.find((node) => node.id === selectedNodeId);
+    const targetNode = nodes.find((node) => node.id === targetNodeId);
+
+    if (isScratchpadNode(sourceNode) || isScratchpadNode(targetNode)) {
+      alert("Kladblok-nodes zijn alleen voor notities en kunnen niet met paths worden verbonden.");
+      return;
+    }
+
     const existingOutgoingEdges = edges.filter(
       (edge) => edge.source === selectedNodeId,
     );
@@ -2779,7 +2903,7 @@ ${formatSaveError(error)}`);
     const deletedNodeId = selectedNode.id;
     const remainingNodes = nodes.filter((node) => node.id !== deletedNodeId);
     const nextStartNodeId =
-      startNodeId === deletedNodeId ? remainingNodes[0]?.id ?? "" : startNodeId;
+      startNodeId === deletedNodeId ? getSafeStartNodeId(remainingNodes, remainingNodes[0]?.id ?? "") : startNodeId;
 
     setNodes((currentNodes) =>
       currentNodes
@@ -2976,10 +3100,15 @@ ${formatSaveError(error)}`);
   }
 
   function getReaderStoryData() {
+    const storyNodes = getStoryNodes(nodes);
+    const storyNodeIds = new Set(storyNodes.map((node) => node.id));
+    const storyEdges = edges.filter((edge) => storyNodeIds.has(edge.source) && storyNodeIds.has(edge.target));
+    const safeStartNodeId = getSafeStartNodeId(storyNodes, startNodeId);
+
     return {
       bookTitle: dashboardSaveForm.title.trim() || "Nieuw DiBooks verhaal",
-      startNodeId,
-      nodes: nodes.map((node) => ({
+      startNodeId: safeStartNodeId,
+      nodes: storyNodes.map((node) => ({
         id: node.id,
         type: node.data.type,
         title: node.data.label,
@@ -3000,7 +3129,7 @@ ${formatSaveError(error)}`);
           specialSubtype: node.data.specialSubtype ?? "",
         },
       })),
-      edges: edges.map((edge) => ({
+      edges: storyEdges.map((edge) => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
@@ -3089,6 +3218,13 @@ ${formatSaveError(error)}`);
               label="Mini game"
               className="bg-purple-600 text-white hover:bg-purple-500"
               icon={<JoystickIcon />}
+            />
+
+            <SidebarButton
+              onClick={() => createNode("scratchpad")}
+              label="Kladblok / lore"
+              className="bg-white text-slate-950 hover:bg-slate-200"
+              icon={<ScratchpadIcon />}
             />
 
             <SidebarButton
@@ -3239,11 +3375,16 @@ ${formatSaveError(error)}`);
                 {getPlanLabel(user)}
               </span>
               <span className={`rounded-full px-3 py-1 ${nodeLimitReached ? "bg-red-500/15 text-red-300" : editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
-                {nodes.length}{maxNodesForCurrentUser !== null ? `/${maxNodesForCurrentUser}` : ""} nodes
+                {storyNodeCount}{maxNodesForCurrentUser !== null ? `/${maxNodesForCurrentUser}` : ""} verhaalnodes
               </span>
               <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
-                {edges.length} paths
+                {getStoryEdges(edges, nodes).length} paths
               </span>
+              {scratchpadNodeCount > 0 && (
+                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-200" : "bg-black/10 text-neutral-700"}`}>
+                  {scratchpadNodeCount} kladblok
+                </span>
+              )}
               {sharedEditBookId && (
                 <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-yellow-500/15 text-yellow-200" : "bg-yellow-500/20 text-yellow-800"}`}>
                   Gedeeld door {sharedEditOwnerName || "eigenaar"}
@@ -3315,6 +3456,7 @@ ${formatSaveError(error)}`);
                   className="rounded-lg border-2 border-black p-3 font-black"
                   style={{
                     background: nodeColors[selectedNode.data.type],
+                    color: selectedNode.data.type === "scratchpad" ? "#0f172a" : undefined,
                   }}
                 >
                   {nodeLabels[selectedNode.data.type]}
@@ -3354,18 +3496,27 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
-              <button
-                onClick={() => setStartNodeId(selectedNode.id)}
-                className={`rounded-xl px-4 py-3 font-black ${
-                  selectedNode.id === startNodeId
-                    ? "bg-yellow-500 text-black"
-                    : "bg-neutral-800 text-white hover:bg-neutral-700"
-                }`}
-              >
-                {selectedNode.id === startNodeId
-                  ? "Dit is de start-node ★"
-                  : "Maak start-node"}
-              </button>
+              {selectedNode.data.type === "scratchpad" ? (
+                <div className="rounded-xl border border-white/15 bg-white/10 p-3 text-sm text-neutral-300">
+                  <div className="font-black text-white">Kladblok-node</div>
+                  <p className="mt-1 text-neutral-400">
+                    Deze node is alleen voor notities/lore. Hij kan geen start-node zijn en krijgt geen paths.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setStartNodeId(selectedNode.id)}
+                  className={`rounded-xl px-4 py-3 font-black ${
+                    selectedNode.id === startNodeId
+                      ? "bg-yellow-500 text-black"
+                      : "bg-neutral-800 text-white hover:bg-neutral-700"
+                  }`}
+                >
+                  {selectedNode.id === startNodeId
+                    ? "Dit is de start-node ★"
+                    : "Maak start-node"}
+                </button>
+              )}
 
               <div className="rounded-xl border border-red-900/70 bg-red-950/30 p-3">
                 <div className="mb-2 text-sm font-black text-red-200">
@@ -3384,7 +3535,8 @@ ${formatSaveError(error)}`);
               </div>
 
               {selectedNode.data.type !== "choice" &&
-                selectedNode.data.type !== "minigame" && (
+                selectedNode.data.type !== "minigame" &&
+                selectedNode.data.type !== "scratchpad" && (
               <div className="rounded-xl bg-neutral-900 p-3">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="font-black">Paths</h3>
@@ -3455,10 +3607,11 @@ ${formatSaveError(error)}`);
               )}
 
               {(selectedNode.data.type === "text" ||
-                selectedNode.data.type === "special") && (
+                selectedNode.data.type === "special" ||
+                selectedNode.data.type === "scratchpad") && (
                 <div>
                   <label className="mb-2 block text-sm font-bold">
-                    Tekst / inhoud
+                    {selectedNode.data.type === "scratchpad" ? "Notities / lore" : "Tekst / inhoud"}
                   </label>
 
                   <button
@@ -3579,6 +3732,16 @@ ${formatSaveError(error)}`);
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {selectedNode.data.type === "scratchpad" && (
+                <div className="rounded-xl border border-white/15 bg-white/10 p-3 text-sm text-neutral-300">
+                  <div className="font-black text-white">Niet zichtbaar voor lezers</div>
+                  <p className="mt-1 text-neutral-400">
+                    Kladblok-nodes worden opgeslagen in je project, maar niet meegenomen in de reader-export,
+                    publicatie-eisen, paden, voortgang of node-limiet.
+                  </p>
                 </div>
               )}
 
@@ -3844,6 +4007,7 @@ ${formatSaveError(error)}`);
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-600"><VideoIcon /></span><span><strong className="text-white">Cutscene</strong><br />Kort videofragment van maximaal 12 seconden.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-[11px] font-black">ABC</span><span><strong className="text-white">Keuze menu</strong><br />Lezer kiest uit maximaal drie routes.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600"><JoystickIcon /></span><span><strong className="text-white">Mini game</strong><br />Interactief moment met success/fail route.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-950"><ScratchpadIcon /></span><span><strong className="text-white">Kladblok</strong><br />Notities, lore en ideeën. Geen paths en niet zichtbaar voor lezers.</span></div>
                   </div>
                 </section>
 
@@ -3856,6 +4020,15 @@ ${formatSaveError(error)}`);
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-200 text-slate-950"><MoonIcon darkMode={false} /></span><span><strong className="text-white">Grid thema</strong><br />Wissel tussen lichte en donkere editor-grid.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-950 text-red-100"><ResetEditorIcon /></span><span><strong className="text-white">Reset editor</strong><br />Wist de huidige sessie en start weer met een lege begin-node.</span></div>
                   </div>
+                </section>
+
+                <section className="rounded-2xl border border-indigo-900/70 bg-indigo-950/20 p-5 md:col-span-2">
+                  <h3 className="mb-3 text-lg font-black">Nieuwe pagina in tekst</h3>
+                  <p className="text-sm leading-6 text-neutral-300">
+                    In een tekst-node kun je in de teksteditor op <strong className="text-white">Nieuwe pagina</strong> klikken.
+                    De editor plaatst dan <code className="rounded bg-black/40 px-2 py-1 text-indigo-200">[[NIEUWE_PAGINA]]</code> op die plek.
+                    In de reader wordt deze code verborgen en begint de tekst daarna op een nieuwe boekpagina. Handig voor hoofdstukken, titels of grote tekstblokken.
+                  </p>
                 </section>
 
                 <section className="rounded-2xl border border-emerald-900/70 bg-emerald-950/20 p-5 md:col-span-2">
@@ -3871,10 +4044,12 @@ ${formatSaveError(error)}`);
                   <ol className="grid gap-2 pl-5 text-sm text-neutral-300 md:grid-cols-2">
                     <li className="list-decimal">Maak nodes aan met de iconen links.</li>
                     <li className="list-decimal">Klik op een node om rechts de instellingen te openen.</li>
-                    <li className="list-decimal">Gebruik <strong className="text-white">Paths</strong> om nodes met elkaar te verbinden.</li>
+                    <li className="list-decimal">Gebruik <strong className="text-white">Paths</strong> om verhaalnodes met elkaar te verbinden.</li>
                     <li className="list-decimal">Gebruik <strong className="text-white">Keuze menu</strong> voor echte lezerskeuzes.</li>
                     <li className="list-decimal">Gebruik <strong className="text-white">Mini game</strong> voor success/fail-routes.</li>
                     <li className="list-decimal">Klik <strong className="text-white">Play</strong> om je verhaal te testen.</li>
+                    <li className="list-decimal">Gebruik <strong className="text-white">Nieuwe pagina</strong> in tekstnodes om hoofdstukken of titels netjes op een nieuwe pagina te starten.</li>
+                    <li className="list-decimal">Gebruik <strong className="text-white">Kladblok</strong> voor lore/notities; deze telt niet mee voor publiceren.</li>
                     <li className="list-decimal">Gebruik <strong className="text-white">Save menu</strong> voor Dashboard opslag, backup of export.</li>
                     <li className="list-decimal">Gebruik <strong className="text-white">Reset editor</strong> alleen als je bewust opnieuw wilt beginnen.</li>
                   </ol>
@@ -3887,11 +4062,16 @@ ${formatSaveError(error)}`);
 
       {editingTextNode &&
         (editingTextNode.data.type === "text" ||
-          editingTextNode.data.type === "special") && (
+          editingTextNode.data.type === "special" ||
+          editingTextNode.data.type === "scratchpad") && (
           <RichTextEditorModal
             title={editingTextNode.data.label}
             initialHtml={
               editingTextNode.data.textHtml || editingTextNode.data.text || ""
+            }
+            allowManualPageBreak={
+              editingTextNode.data.type === "text" ||
+              editingTextNode.data.type === "special"
             }
             onSave={(html, plainText) =>
               updateNodeRichText(editingTextNode.id, html, plainText)

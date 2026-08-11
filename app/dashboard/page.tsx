@@ -177,6 +177,26 @@ function getProjectEdges(projectData: any) {
   return Array.isArray(projectData?.edges) ? projectData.edges : [];
 }
 
+function isScratchpadPublishNode(node: any) {
+  return getNodeType(node) === "scratchpad";
+}
+
+function getPublishableNodes(projectData: any) {
+  return getProjectNodes(projectData).filter((node: any) => !isScratchpadPublishNode(node));
+}
+
+function getScratchpadNodeCount(projectData: any) {
+  return getProjectNodes(projectData).filter(isScratchpadPublishNode).length;
+}
+
+function getPublishableEdges(projectData: any, publishableNodes?: any[]) {
+  const nodes = publishableNodes ?? getPublishableNodes(projectData);
+  const publishableNodeIds = new Set(nodes.map((node: any) => node?.id).filter(Boolean));
+  return getProjectEdges(projectData).filter(
+    (edge: any) => publishableNodeIds.has(edge?.source) && publishableNodeIds.has(edge?.target),
+  );
+}
+
 function getNodeType(node: any) {
   return node?.data?.type ?? node?.type ?? "";
 }
@@ -237,12 +257,14 @@ function isCompletePublishNode(node: any) {
 }
 
 function getPublishNodeStats(projectData: any) {
-  const nodes = getProjectNodes(projectData);
+  const nodes = getPublishableNodes(projectData);
   const completeNodes = nodes.filter(isCompletePublishNode);
+  const scratchpadNodes = getScratchpadNodeCount(projectData);
 
   return {
     totalNodes: nodes.length,
     completeNodes: completeNodes.length,
+    scratchpadNodes,
     isFullBook: nodes.length >= FULL_BOOK_NODE_BADGE_THRESHOLD,
   };
 }
@@ -266,15 +288,15 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
     };
   }
 
-  const nodes = getProjectNodes(projectData);
-  const edges = getProjectEdges(projectData);
+  const nodes = getPublishableNodes(projectData);
+  const edges = getPublishableEdges(projectData, nodes);
   const publishStats = getPublishNodeStats(projectData);
   const nodeIds = new Set(nodes.map((node: any) => node?.id).filter(Boolean));
   const startNodeId = projectData.startNodeId;
   const startNode = nodes.find((node: any) => node?.id === startNodeId);
 
   if (nodes.length === 0) {
-    errors.push("Het boek heeft nog geen nodes. Maak minimaal één tekstnode in de Studio.");
+    errors.push("Het boek heeft nog geen verhaalnodes. Kladblok-nodes tellen niet mee voor publicatie.");
   }
 
   if (publishStats.completeNodes < AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH) {
@@ -552,7 +574,8 @@ function BookDashboardCard({
 
         {book.projectData && (
           <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-neutral-300">
-            Project: {getPublishNodeStats(book.projectData).totalNodes} nodes • {getPublishNodeStats(book.projectData).completeNodes} compleet
+            Project: {getPublishNodeStats(book.projectData).totalNodes} verhaalnodes • {getPublishNodeStats(book.projectData).completeNodes} compleet
+            {getPublishNodeStats(book.projectData).scratchpadNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).scratchpadNodes} kladblok` : ""}
             {getPublishNodeStats(book.projectData).isFullBook ? " • Volledig interactief" : ""}
           </div>
         )}
@@ -678,7 +701,8 @@ function SharedBookCard({
   book: SharedBook;
   onFeedback: (book: SharedBook) => void;
 }) {
-  const nodeCount = Array.isArray(book.projectData?.nodes) ? book.projectData.nodes.length : 0;
+  const nodeCount = getPublishNodeStats(book.projectData).totalNodes;
+  const scratchpadCount = getPublishNodeStats(book.projectData).scratchpadNodes;
   return (
     <article className="rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-5 shadow-2xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -692,7 +716,7 @@ function SharedBookCard({
         </span>
       </div>
       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-cyan-50/80">
-        {nodeCount} nodes • origineel blijft van {book.ownerName || "de eigenaar"}
+        {nodeCount} verhaalnodes{scratchpadCount > 0 ? ` • ${scratchpadCount} kladblok` : ""} • origineel blijft van {book.ownerName || "de eigenaar"}
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
         <Link href={`/books/${book.id}/read`} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">

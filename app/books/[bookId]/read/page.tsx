@@ -12,7 +12,7 @@ import { getReadingProgress, upsertReadingProgress } from "@/lib/supabase/reader
 import { resolveDiBooksMediaUrl } from "@/lib/supabase/mediaStorage";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
-type ReaderNodeType = "text" | "special" | "cutscene" | "choice" | "minigame";
+type ReaderNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "scratchpad";
 
 type ReaderChoice = {
   label: string;
@@ -77,10 +77,29 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
+
+const MANUAL_PAGE_BREAK_MARKER = "[[NIEUWE_PAGINA]]";
+const MANUAL_PAGE_BREAK_BLOCK_REGEX = /<p[^>]*>\s*(?:<(?:code|strong|em|span)[^>]*>\s*)*\[\[NIEUWE_PAGINA\]\](?:\s*<\/(?:code|strong|em|span)>)*\s*<\/p>/gi;
+
+function normalizeManualPageBreakMarkers(value: string) {
+  return value.replace(MANUAL_PAGE_BREAK_BLOCK_REGEX, MANUAL_PAGE_BREAK_MARKER);
+}
+
+function removeManualPageBreakMarkers(value: string) {
+  return normalizeManualPageBreakMarkers(value)
+    .split(MANUAL_PAGE_BREAK_MARKER)
+    .join("")
+    .replace(/<p>\s*<\/p>/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function stripHtml(html: string) {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .split(MANUAL_PAGE_BREAK_MARKER)
+    .join(" ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ")
@@ -128,16 +147,25 @@ function normalizeNode(rawNode: any): ReaderNode {
 }
 
 function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBook {
-  const nodes = Array.isArray(rawProject?.nodes) ? rawProject.nodes.map(normalizeNode) : [];
-  const edges = Array.isArray(rawProject?.edges)
-    ? rawProject.edges.map((edge: any) => ({
-        id: edge.id ?? `${edge.source}-${edge.target}`,
-        source: edge.source,
-        target: edge.target,
-        label: typeof edge.label === "string" ? edge.label : undefined,
-        data: edge.data,
-      }))
+  const nodes = Array.isArray(rawProject?.nodes)
+    ? rawProject.nodes.map(normalizeNode).filter((node: ReaderNode) => node.type !== "scratchpad")
     : [];
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = Array.isArray(rawProject?.edges)
+    ? rawProject.edges
+        .filter((edge: any) => nodeIds.has(edge?.source) && nodeIds.has(edge?.target))
+        .map((edge: any) => ({
+          id: edge.id ?? `${edge.source}-${edge.target}`,
+          source: edge.source,
+          target: edge.target,
+          label: typeof edge.label === "string" ? edge.label : undefined,
+          data: edge.data,
+        }))
+    : [];
+  const preferredStartNodeId = rawProject?.startNodeId;
+  const safeStartNodeId = preferredStartNodeId && nodeIds.has(preferredStartNodeId)
+    ? preferredStartNodeId
+    : nodes[0]?.id ?? "";
 
   return {
     id: fallback.id ?? rawProject?.bookId ?? "unknown-book",
@@ -146,7 +174,7 @@ function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBo
     subtitle: fallback.subtitle ?? rawProject?.subtitle ?? "",
     description: fallback.description ?? rawProject?.description ?? "",
     accessType: (fallback as any).accessType ?? rawProject?.accessType ?? "free",
-    startNodeId: rawProject?.startNodeId ?? nodes[0]?.id ?? "",
+    startNodeId: safeStartNodeId,
     nodes,
     edges,
   };
@@ -232,6 +260,21 @@ function calculateBookProgressPercent(book: ReaderBook, currentNodeId: string, p
 
 
 function paginateTextHtml(html: string, maxCharacters = 1450) {
+  const normalizedHtml = normalizeManualPageBreakMarkers(html || "");
+  const manualBreakSegments = normalizedHtml.split(MANUAL_PAGE_BREAK_MARKER);
+  if (manualBreakSegments.length > 1) {
+    const manualPages: string[] = [];
+
+    manualBreakSegments.forEach((segment) => {
+      const cleanedSegment = removeManualPageBreakMarkers(segment);
+      if (!stripHtml(cleanedSegment)) return;
+      manualPages.push(...paginateTextHtml(cleanedSegment, maxCharacters));
+    });
+
+    return manualPages.length > 0 ? manualPages : ["<p>Deze pagina is nog leeg.</p>"];
+  }
+
+  html = removeManualPageBreakMarkers(html || "");
   const plainText = stripHtml(html);
   if (!plainText) return ["<p>Deze pagina is nog leeg.</p>"];
 
