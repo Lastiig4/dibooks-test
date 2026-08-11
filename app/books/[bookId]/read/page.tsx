@@ -9,6 +9,7 @@ import { books } from "@/lib/books";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useDemoAuth } from "@/lib/auth";
 import { getReadingProgress, upsertReadingProgress } from "@/lib/supabase/readerFeatures";
+import { resolveDiBooksMediaUrl } from "@/lib/supabase/mediaStorage";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 type ReaderNodeType = "text" | "special" | "cutscene" | "choice" | "minigame";
@@ -26,6 +27,7 @@ type ReaderNode = {
   textHtml: string;
   specialSubtype?: string;
   videoUrl?: string;
+  videoStoragePath?: string;
   videoFileName?: string;
   videoDuration?: number;
   choices: ReaderChoice[];
@@ -110,6 +112,7 @@ function normalizeNode(rawNode: any): ReaderNode {
     textHtml,
     specialSubtype: data.specialSubtype ?? content.specialSubtype ?? rawNode?.specialSubtype,
     videoUrl: data.videoUrl ?? content.videoUrl ?? rawNode?.videoUrl ?? "",
+    videoStoragePath: data.videoStoragePath ?? content.videoStoragePath ?? rawNode?.videoStoragePath ?? "",
     videoFileName: data.videoFileName ?? content.videoFileName ?? rawNode?.videoFileName ?? "",
     videoDuration: data.videoDuration ?? content.videoDuration ?? rawNode?.videoDuration ?? 0,
     choices: data.choices ?? content.choices ?? rawNode?.choices ?? [],
@@ -149,6 +152,25 @@ function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBo
   };
 }
 
+
+async function resolveReaderBookMedia(book: ReaderBook) {
+  const nodes = await Promise.all(
+    book.nodes.map(async (node) => {
+      if (node.type !== "cutscene" || !node.videoStoragePath) return node;
+      const signedUrl = await resolveDiBooksMediaUrl(node.videoStoragePath, node.videoUrl ?? "");
+      return {
+        ...node,
+        videoUrl: signedUrl || node.videoUrl,
+      };
+    }),
+  );
+
+  return {
+    ...book,
+    nodes,
+  };
+}
+
 async function loadStaticBook(bookId: string) {
   const staticBook = books.find((book) => book.id === bookId);
   if (!staticBook?.storyFile) return null;
@@ -159,13 +181,13 @@ async function loadStaticBook(bookId: string) {
   }
 
   const rawProject = await response.json();
-  return normalizeBook(rawProject, {
+  return resolveReaderBookMedia(normalizeBook(rawProject, {
     id: staticBook.id,
     title: staticBook.title,
     author: staticBook.author,
     subtitle: staticBook.subtitle,
     description: staticBook.description,
-  });
+  }));
 }
 
 async function loadSupabaseBook(bookId: string) {
@@ -184,14 +206,14 @@ async function loadSupabaseBook(bookId: string) {
     throw new Error("Dit boek is gepubliceerd, maar er is nog geen reader/project-data opgeslagen.");
   }
 
-  return normalizeBook(row.project_data, {
+  return resolveReaderBookMedia(normalizeBook(row.project_data, {
     id: row.id,
     title: row.title,
     author: row.author,
     subtitle: row.subtitle,
     description: row.description,
     accessType: row.access_type === "premium" ? "premium" : "free",
-  } as any);
+  } as any));
 }
 
 function clampProgressPercent(value: number) {
@@ -647,6 +669,8 @@ export default function ReadBookPage() {
   const [pageMode, setPageMode] = useState<ReaderPageMode>("auto");
   const [theme, setTheme] = useState<ReaderTheme>("dark");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [cutsceneFading, setCutsceneFading] = useState(false);
+  const cutsceneShellRef = useRef<HTMLDivElement | null>(null);
   const { user, loading: authLoading } = useDemoAuth();
 
   useEffect(() => {
@@ -783,6 +807,44 @@ export default function ReadBookPage() {
   }, [currentNodeId, loadState]);
 
 
+
+  function goToFirstOutgoingNode() {
+    if (!reader?.outgoingPaths.length) return;
+    goToNode(reader.outgoingPaths[0].target);
+  }
+
+  function handleCutsceneLoadedMetadata(event: React.SyntheticEvent<HTMLVideoElement>) {
+    setCutsceneFading(false);
+
+    const shell = cutsceneShellRef.current;
+    if (shell && !document.fullscreenElement && shell.requestFullscreen) {
+      shell.requestFullscreen().catch(() => {
+        // Browsers mogen echte fullscreen blokkeren zonder directe user gesture.
+        // De reader blijft dan alsnog in full-viewport zonder HUD.
+      });
+    }
+
+    event.currentTarget.play().catch(() => {
+      // Autoplay met audio kan door sommige browsers worden geblokkeerd.
+    });
+  }
+
+  function handleCutsceneTimeUpdate(event: React.SyntheticEvent<HTMLVideoElement>) {
+    const video = event.currentTarget;
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    setCutsceneFading(video.duration - video.currentTime <= 1.65);
+  }
+
+  function handleCutsceneEnded() {
+    setCutsceneFading(false);
+
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => undefined);
+    }
+
+    goToFirstOutgoingNode();
+  }
+
   function goToNode(nodeId: string) {
     if (loadState.status !== "ready") return;
     const exists = loadState.book.nodes.some((node) => node.id === nodeId);
@@ -829,6 +891,7 @@ export default function ReadBookPage() {
 
   const { book, node } = reader;
   const isTextNode = node.type === "text" || node.type === "special";
+  const isCutsceneNode = node.type === "cutscene";
   const canGoPreviousPage = isTextNode && pageIndex > 0;
   const canGoNextPage = isTextNode && pageIndex < Math.max(1, readerPageCount) - readerVisiblePageCount;
   const readerShellClass =
@@ -846,6 +909,7 @@ export default function ReadBookPage() {
 
   return (
     <main className={`flex h-screen flex-col overflow-hidden ${readerShellClass}`}>
+      {!isCutsceneNode && (
       <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
@@ -919,6 +983,7 @@ export default function ReadBookPage() {
           </div>
         )}
       </header>
+      )}
 
       <section className="min-h-0 flex-1 overflow-hidden">
         {isTextNode && (
@@ -935,13 +1000,23 @@ export default function ReadBookPage() {
         )}
 
         {node.type === "cutscene" && (
-          <div className="flex h-full items-center justify-center bg-black p-4 sm:p-6">
+          <div ref={cutsceneShellRef} className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black">
             {node.videoUrl ? (
-              <div className="w-full max-w-6xl">
-                <p className="text-xs font-black uppercase tracking-[0.28em] text-green-300">Cutscene</p>
-                <h1 className="mb-4 mt-2 text-3xl font-black">{node.title}</h1>
-                <video src={node.videoUrl} controls playsInline autoPlay className="max-h-[72vh] w-full rounded-3xl bg-black object-contain shadow-2xl" />
-              </div>
+              <>
+                <video
+                  key={`${node.id}-${node.videoUrl}`}
+                  src={node.videoUrl}
+                  autoPlay
+                  playsInline
+                  preload="auto"
+                  controls={false}
+                  onLoadedMetadata={handleCutsceneLoadedMetadata}
+                  onTimeUpdate={handleCutsceneTimeUpdate}
+                  onEnded={handleCutsceneEnded}
+                  className={`h-full w-full bg-black object-contain transition-opacity duration-[1600ms] ${cutsceneFading ? "opacity-0" : "opacity-100"}`}
+                />
+                <div className={`pointer-events-none absolute inset-0 bg-black transition-opacity duration-[1600ms] ${cutsceneFading ? "opacity-100" : "opacity-0"}`} />
+              </>
             ) : (
               <div className="rounded-3xl border border-red-500/25 bg-red-500/10 p-6 text-red-100">Deze cutscene heeft nog geen video.</div>
             )}
@@ -1000,6 +1075,7 @@ export default function ReadBookPage() {
         )}
       </section>
 
+      {!isCutsceneNode && (
       <footer className={`shrink-0 border-t px-4 py-3 sm:px-6 ${readerChromeClass}`}>
         {isTextNode ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1062,6 +1138,7 @@ export default function ReadBookPage() {
           <div className="text-center text-xs font-black uppercase tracking-widest text-neutral-600">Interactieve scène</div>
         )}
       </footer>
+      )}
     </main>
   );
 }

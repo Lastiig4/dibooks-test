@@ -35,6 +35,10 @@ import {
   fetchSharedBookForEditor,
   submitBookRevision,
 } from "@/lib/supabase/socialFeatures";
+import {
+  resolveDiBooksMediaUrl,
+  uploadCutsceneVideoToStorage,
+} from "@/lib/supabase/mediaStorage";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -103,6 +107,7 @@ type DiNodeData = {
   textHtml?: string;
   specialSubtype?: string;
   videoUrl?: string;
+  videoStoragePath?: string;
   videoFileName?: string;
   videoDuration?: number;
   choices?: {
@@ -393,6 +398,34 @@ const initialNodes: Node<DiNodeData>[] = [
     },
   },
 ];
+
+
+async function resolveProjectCutsceneUrls(projectData: any) {
+  if (!projectData?.nodes || !Array.isArray(projectData.nodes)) return projectData;
+
+  const resolvedNodes = await Promise.all(
+    projectData.nodes.map(async (node: Node<DiNodeData>) => {
+      const storagePath = node?.data?.videoStoragePath;
+      if (!storagePath) return node;
+
+      const signedUrl = await resolveDiBooksMediaUrl(storagePath, node.data.videoUrl ?? "");
+      if (!signedUrl) return node;
+
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          videoUrl: signedUrl,
+        },
+      };
+    }),
+  );
+
+  return {
+    ...projectData,
+    nodes: resolvedNodes,
+  };
+}
 
 function isNodeComplete(node: Node<DiNodeData> | undefined) {
   if (!node) return false;
@@ -1765,6 +1798,7 @@ export default function Home() {
   const autosaveReadyRef = useRef(false);
   const lastAutosavePayloadRef = useRef<string>("");
   const [autosaveStatus, setAutosaveStatus] = useState("Sessiesave wordt geladen...");
+  const [cutsceneUploadStatus, setCutsceneUploadStatus] = useState("");
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
@@ -1840,7 +1874,7 @@ export default function Home() {
           accessType: dashboardBook.accessType ?? "free",
         });
 
-        const projectData = dashboardBook.projectData;
+        const projectData = await resolveProjectCutsceneUrls(dashboardBook.projectData);
         if (projectData?.type === "dibooks-project") {
           setNodes(projectData.nodes ?? []);
           setEdges(projectData.edges ?? []);
@@ -2497,6 +2531,7 @@ ${formatSaveError(error)}`);
         textHtml: type === "text" || type === "special" ? "" : undefined,
         specialSubtype: type === "special" ? "Logboek" : undefined,
         videoUrl: type === "cutscene" ? "" : undefined,
+        videoStoragePath: type === "cutscene" ? "" : undefined,
         videoFileName: type === "cutscene" ? "" : undefined,
         videoDuration: type === "cutscene" ? 0 : undefined,
         choices:
@@ -2578,7 +2613,7 @@ ${formatSaveError(error)}`);
     );
   }
   function updateSelectedCutsceneData(
-    updates: Pick<Partial<DiNodeData>, "videoUrl" | "videoFileName" | "videoDuration">,
+    updates: Pick<Partial<DiNodeData>, "videoUrl" | "videoStoragePath" | "videoFileName" | "videoDuration">,
   ) {
     if (!selectedNodeId) return;
 
@@ -2603,14 +2638,19 @@ ${formatSaveError(error)}`);
 
     if (!file) return;
 
+    if (!selectedNodeId) {
+      alert("Selecteer eerst de cutscene-node waarin je de video wilt plaatsen.");
+      return;
+    }
+
     if (!file.type.startsWith("video/")) {
       alert("Kies een videobestand, bijvoorbeeld .mp4, .webm of .mov.");
       return;
     }
 
-    const maxFileSizeMb = 35;
+    const maxFileSizeMb = 100;
     if (file.size > maxFileSizeMb * 1024 * 1024) {
-      alert(`Deze video is groter dan ${maxFileSizeMb}MB. Voor nu is kort en gecomprimeerd beter.`);
+      alert(`Deze video is groter dan ${maxFileSizeMb}MB. Comprimeer hem eerst of gebruik een kortere cutscene.`);
       return;
     }
 
@@ -2618,7 +2658,7 @@ ${formatSaveError(error)}`);
     const video = document.createElement("video");
     video.preload = "metadata";
 
-    video.onloadedmetadata = () => {
+    video.onloadedmetadata = async () => {
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       URL.revokeObjectURL(objectUrl);
 
@@ -2629,21 +2669,34 @@ ${formatSaveError(error)}`);
         return;
       }
 
-      const reader = new FileReader();
+      if (!user?.id) {
+        alert("Log eerst in om cutscene-video's veilig op te slaan in DiBooks Storage.");
+        return;
+      }
 
-      reader.onload = () => {
+      try {
+        setCutsceneUploadStatus("Video uploaden naar DiBooks Storage...");
+
+        const upload = await uploadCutsceneVideoToStorage({
+          userId: user.id,
+          bookId: dashboardBookId || sharedEditBookId || "drafts",
+          nodeId: selectedNodeId,
+          file,
+        });
+
         updateSelectedCutsceneData({
-          videoUrl: String(reader.result ?? ""),
+          videoUrl: upload.signedUrl,
+          videoStoragePath: upload.storagePath,
           videoFileName: file.name,
           videoDuration: duration,
         });
-      };
 
-      reader.onerror = () => {
-        alert("Deze video kon niet worden ingeladen.");
-      };
-
-      reader.readAsDataURL(file);
+        setCutsceneUploadStatus("Video opgeslagen in DiBooks Storage.");
+      } catch (error: any) {
+        console.error(error);
+        setCutsceneUploadStatus("");
+        alert(error?.message ? `Video uploaden mislukt: ${error.message}` : "Video uploaden mislukt.");
+      }
     };
 
     video.onerror = () => {
@@ -2657,6 +2710,7 @@ ${formatSaveError(error)}`);
   function clearSelectedCutsceneVideo() {
     updateSelectedCutsceneData({
       videoUrl: "",
+      videoStoragePath: "",
       videoFileName: "",
       videoDuration: 0,
     });
@@ -2934,6 +2988,7 @@ ${formatSaveError(error)}`);
           text: node.data.text ?? "",
           textHtml: node.data.textHtml ?? node.data.text ?? "",
           videoUrl: node.data.videoUrl ?? "",
+          videoStoragePath: node.data.videoStoragePath ?? "",
           videoFileName: node.data.videoFileName ?? "",
           videoDuration: node.data.videoDuration ?? 0,
           choices: node.data.choices ?? [],
@@ -3452,8 +3507,13 @@ ${formatSaveError(error)}`);
                         className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-sm text-white file:mr-3 file:rounded-lg file:border-0 file:bg-green-600 file:px-3 file:py-2 file:font-black file:text-white hover:file:bg-green-500"
                       />
                       <p className="mt-2 text-xs text-neutral-500">
-                        Tip: gebruik een gecomprimeerde .mp4 of .webm van maximaal 12 seconden.
+                        Tip: gebruik een gecomprimeerde .mp4 of .webm van maximaal 12 seconden. Uploads worden opgeslagen in DiBooks Storage.
                       </p>
+                      {cutsceneUploadStatus && (
+                        <p className="mt-2 rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-black text-cyan-200">
+                          {cutsceneUploadStatus}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -3465,6 +3525,7 @@ ${formatSaveError(error)}`);
                         onChange={(event) =>
                           updateSelectedCutsceneData({
                             videoUrl: event.target.value,
+                            videoStoragePath: "",
                             videoFileName: event.target.value ? "Video URL" : "",
                             videoDuration: 0,
                           })
@@ -3489,6 +3550,11 @@ ${formatSaveError(error)}`);
                                 ? `${selectedNode.data.videoDuration.toFixed(1)} sec / max 12 sec`
                                 : "Lengte onbekend"}
                             </p>
+                            {selectedNode.data.videoStoragePath && (
+                              <p className="mt-1 max-w-lg truncate text-xs text-cyan-300/80">
+                                Storage: {selectedNode.data.videoStoragePath}
+                              </p>
+                            )}
                           </div>
 
                           <button
