@@ -8,7 +8,7 @@ import { useParams } from "next/navigation";
 import { books } from "@/lib/books";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useDemoAuth } from "@/lib/auth";
-import { getReadingProgress, upsertReadingProgress } from "@/lib/supabase/readerFeatures";
+import { getReadingProgress, resetReadingProgress, upsertReadingProgress } from "@/lib/supabase/readerFeatures";
 import { resolveDiBooksMediaUrl } from "@/lib/supabase/mediaStorage";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
@@ -839,6 +839,7 @@ export default function ReadBookPage() {
   const [theme, setTheme] = useState<ReaderTheme>("dark");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cutsceneFading, setCutsceneFading] = useState(false);
+  const [resetProgressBusy, setResetProgressBusy] = useState(false);
   const cutsceneShellRef = useRef<HTMLDivElement | null>(null);
   const { user, loading: authLoading } = useDemoAuth();
 
@@ -1026,6 +1027,31 @@ export default function ReadBookPage() {
     setPageIndex(0);
   }
 
+  async function handleRestartReading() {
+    if (loadState.status !== "ready" || !user) return;
+
+    const confirmed = window.confirm(
+      "Weet je dit zeker? Je leesvoortgang voor dit boek wordt gewist en je begint opnieuw bij het begin.",
+    );
+
+    if (!confirmed) return;
+
+    setResetProgressBusy(true);
+
+    try {
+      await resetReadingProgress(user, loadState.book.id);
+      setCurrentNodeId(loadState.book.startNodeId);
+      setPageIndex(0);
+      setReaderPageCount(1);
+      setReaderVisiblePageCount(1);
+      setSettingsOpen(false);
+    } catch (resetError: any) {
+      alert(`Leesvoortgang resetten mislukt: ${resetError?.message ?? "onbekende fout"}`);
+    } finally {
+      setResetProgressBusy(false);
+    }
+  }
+
   if (loadState.status === "loading") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#05070d] p-5 text-white">
@@ -1078,6 +1104,7 @@ export default function ReadBookPage() {
 
   return (
     <main className={`flex h-screen flex-col overflow-hidden ${readerShellClass}`}>
+      <NotificationBell />
       {!isCutsceneNode && (
       <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
@@ -1097,6 +1124,14 @@ export default function ReadBookPage() {
             <Link href={`/books/${book.id}`} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10">
               Boekinfo
             </Link>
+            <button
+              onClick={handleRestartReading}
+              disabled={resetProgressBusy}
+              className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-xs font-black text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Leesvoortgang wissen en opnieuw beginnen"
+            >
+              {resetProgressBusy ? "Resetten..." : "↻ Opnieuw"}
+            </button>
             <Link href="/account" className="hidden rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10 sm:inline-flex">
               Account
             </Link>
@@ -1259,6 +1294,13 @@ export default function ReadBookPage() {
             <div className="text-center text-sm font-bold text-neutral-400">
               <div>{readerVisiblePageCount === 2 && pageIndex + 1 < readerPageCount ? `Pagina ${pageIndex + 1}–${Math.min(pageIndex + 2, readerPageCount)} van ${readerPageCount}` : `Pagina ${pageIndex + 1} van ${readerPageCount}`}</div>
               <div className="text-xs text-neutral-600">{calculateBookProgressPercent(book, currentNodeId, pageIndex, readerPageCount)}% gelezen • {book.author}</div>
+              <button
+                onClick={handleRestartReading}
+                disabled={resetProgressBusy}
+                className="mt-2 rounded-full border border-red-400/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+              >
+                {resetProgressBusy ? "Resetten..." : "Opnieuw lezen"}
+              </button>
             </div>
 
             {canGoNextPage && (

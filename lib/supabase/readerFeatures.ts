@@ -192,3 +192,17 @@ export async function fetchReadingProgressBooks(user: DemoAuthUser | null) {
 
   return (data ?? []).map(mapFavoriteRow);
 }
+
+
+export async function resetReadingProgress(user: DemoAuthUser, bookId: string) {
+  if (!user || !bookId) return;
+  const supabase = createSupabaseBrowserClient();
+
+  const { error } = await supabase
+    .from("reading_progress")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("book_id", bookId);
+
+  if (error) throw error;
+}

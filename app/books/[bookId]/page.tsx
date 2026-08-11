@@ -13,6 +13,7 @@ import {
   getAccessLabel,
   getReadingProgress,
   getReadBlockReason,
+  resetReadingProgress,
   isBookFavorite,
   setBookFavorite,
   type BookAccessType,
@@ -188,6 +189,7 @@ export default function BookDetailPage() {
   const [favorite, setFavorite] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [readingProgress, setReadingProgress] = useState<ReadingProgress | null>(null);
+  const [resetProgressBusy, setResetProgressBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -263,6 +265,30 @@ export default function BookDetailPage() {
   const readHref = useMemo(() => (book ? `/books/${book.id}/read` : "#"), [book]);
   const canReadThisBook = !!book && isPublishedBook(book) && canUserReadBookAccess(user, book.accessType);
   const readBlockReason = book ? getReadBlockReason(user, book.accessType) : null;
+  const progressPercent = Math.max(0, Math.min(100, readingProgress?.progressPercent ?? 0));
+  const hasReadingProgress = !!readingProgress && (progressPercent > 0 || (readingProgress.pageIndex ?? 0) > 0);
+
+  async function handleRestartReading() {
+    if (!user || !book) return;
+
+    const confirmed = window.confirm(
+      "Weet je dit zeker? Je leesvoortgang voor dit boek wordt gewist en je begint opnieuw bij het begin.",
+    );
+
+    if (!confirmed) return;
+
+    setResetProgressBusy(true);
+
+    try {
+      await resetReadingProgress(user, book.id);
+      setReadingProgress(null);
+      window.location.href = readHref;
+    } catch (resetError: any) {
+      alert(`Leesvoortgang resetten mislukt: ${resetError?.message ?? "onbekende fout"}`);
+    } finally {
+      setResetProgressBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -373,7 +399,7 @@ export default function BookDetailPage() {
             <div className="mt-8 flex flex-wrap gap-3">
               {canReadThisBook ? (
                 <Link href={readHref} className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200">
-                  {readingProgress ? `Verder lezen (${readingProgress.progressPercent || 0}%)` : "Lees nu"}
+                  {hasReadingProgress ? `Verder lezen (${progressPercent}%)` : "Lees nu"}
                 </Link>
               ) : book.status === "Binnenkort" && !book.published ? (
                 <span className="rounded-2xl bg-neutral-700 px-7 py-4 text-lg font-black text-neutral-300">
@@ -386,6 +412,15 @@ export default function BookDetailPage() {
               ) : (
                 <button onClick={() => alert("Reader Plus is straks het goedkopere lezersabonnement voor premium boeken. Voor nu kun je dit testen door je account-plan in Supabase op reader_plus te zetten.")} className="rounded-2xl bg-yellow-500 px-7 py-4 text-lg font-black text-black hover:bg-yellow-400">
                   {readBlockReason || "Reader Plus nodig"}
+                </button>
+              )}
+              {canReadThisBook && hasReadingProgress && (
+                <button
+                  onClick={handleRestartReading}
+                  disabled={resetProgressBusy}
+                  className="rounded-2xl border border-red-400/30 bg-red-500/10 px-7 py-4 text-lg font-black text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {resetProgressBusy ? "Resetten..." : "↻ Opnieuw lezen"}
                 </button>
               )}
               <Link href="/" className="rounded-2xl border border-white/15 bg-black/30 px-7 py-4 text-lg font-black text-white hover:bg-white/10">
@@ -450,7 +485,7 @@ export default function BookDetailPage() {
 
           {readingProgress && (
             <div className="mt-4 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm font-semibold leading-7 text-emerald-100">
-              Je bent ongeveer <strong>{readingProgress.progressPercent || 0}%</strong> van dit boek onderweg. Klik op <strong>Verder lezen</strong> om door te gaan waar je gebleven was.
+              Je bent ongeveer <strong>{progressPercent}%</strong> van dit boek onderweg. Klik op <strong>Verder lezen</strong> om door te gaan waar je gebleven was, of kies <strong>Opnieuw lezen</strong> om vanaf het begin te starten.
             </div>
           )}
         </article>
