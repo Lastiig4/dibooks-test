@@ -344,19 +344,28 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
 
     if (nodeType === "choice") {
       const choices = getNodeChoices(node).slice(0, 3);
-      const filledChoices = choices.filter((choice: any) => String(choice?.label ?? "").trim().length > 0);
+      const routedChoices = choices.filter((choice: any) => String(choice?.targetNodeId ?? "").trim().length > 0);
+      const defaultChoiceLabels = new Set(["keuze a", "keuze b", "keuze c"]);
+      const customChoicesWithoutTarget = choices.filter((choice: any) => {
+        const label = String(choice?.label ?? "").trim();
+        const targetNodeId = String(choice?.targetNodeId ?? "").trim();
+        return label.length > 0 && !defaultChoiceLabels.has(label.toLowerCase()) && targetNodeId.length === 0;
+      });
 
-      if (filledChoices.length === 0) {
-        errors.push(`Keuze-node '${title}' heeft nog geen ingevulde keuzes.`);
+      if (routedChoices.length < 2) {
+        errors.push(`Keuze-node '${title}' heeft minimaal 2 keuzes met een doel-node nodig.`);
       }
 
-      filledChoices.forEach((choice: any, index: number) => {
+      customChoicesWithoutTarget.forEach((choice: any) => {
+        const label = String(choice?.label ?? "Keuze").trim();
+        errors.push(`Keuze-node '${title}' heeft keuze '${label}' zonder doel-node.`);
+      });
+
+      routedChoices.forEach((choice: any, index: number) => {
         const label = String(choice?.label ?? `Keuze ${index + 1}`).trim();
         const targetNodeId = String(choice?.targetNodeId ?? "").trim();
 
-        if (!targetNodeId) {
-          errors.push(`Keuze-node '${title}' heeft keuze '${label}' zonder doel-node.`);
-        } else if (!nodeIds.has(targetNodeId)) {
+        if (!nodeIds.has(targetNodeId)) {
           errors.push(`Keuze-node '${title}' verwijst met keuze '${label}' naar een node die niet bestaat.`);
         }
       });

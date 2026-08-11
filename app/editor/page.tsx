@@ -1987,7 +1987,7 @@ export default function Home() {
           setNodes(projectNodes);
           setEdges(projectData.edges ?? []);
           setStartNodeId(safeStartNodeId);
-          setSelectedNodeId(safeStartNodeId || projectNodes?.[0]?.id ?? null);
+          setSelectedNodeId((safeStartNodeId || projectNodes?.[0]?.id) ?? null);
         }
 
         restoreEditorAutosaveDraftIfNeeded();
