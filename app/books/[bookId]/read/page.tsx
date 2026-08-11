@@ -147,10 +147,10 @@ function normalizeNode(rawNode: any): ReaderNode {
 }
 
 function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBook {
-  const nodes = Array.isArray(rawProject?.nodes)
+  const nodes: ReaderNode[] = Array.isArray(rawProject?.nodes)
     ? rawProject.nodes.map(normalizeNode).filter((node: ReaderNode) => node.type !== "scratchpad")
     : [];
-  const nodeIds = new Set(nodes.map((node) => node.id));
+  const nodeIds = new Set(nodes.map((node: ReaderNode) => node.id));
   const edges = Array.isArray(rawProject?.edges)
     ? rawProject.edges
         .filter((edge: any) => nodeIds.has(edge?.source) && nodeIds.has(edge?.target))
