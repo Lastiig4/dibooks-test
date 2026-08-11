@@ -944,6 +944,11 @@ export default function ReadBookPage() {
     let cursor: ReaderNode | undefined = node;
     let nextNodeAfterChain: ReaderNode | null = null;
 
+    // Normale tekst-nodes mogen automatisch doorlopen in één leesflow.
+    // Speciale pagina's moeten juist als een eigen pagina/scène blijven staan
+    // en mogen niet samen met gewone tekst op dezelfde reader-pagina komen.
+    const chainMode = node.type;
+
     while (cursor && (cursor.type === "text" || cursor.type === "special") && !visited.has(cursor.id)) {
       visited.add(cursor.id);
       textNodes.push(cursor);
@@ -955,10 +960,13 @@ export default function ReadBookPage() {
       if (outgoing.length !== 1) break;
       const maybeNext = book.nodes.find((item) => item.id === outgoing[0].target);
       if (!maybeNext) break;
-      if (maybeNext.type !== "text" && maybeNext.type !== "special") {
+
+      const mayAutoChainNextNode = chainMode === "text" && maybeNext.type === "text";
+      if (!mayAutoChainNextNode) {
         nextNodeAfterChain = maybeNext;
         break;
       }
+
       cursor = maybeNext;
     }
 
