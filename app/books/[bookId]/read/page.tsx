@@ -12,23 +12,60 @@ import { getReadingProgress, resetReadingProgress, upsertReadingProgress } from 
 import { resolveDiBooksMediaUrl } from "@/lib/supabase/mediaStorage";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
-type ReaderNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "function" | "scratchpad";
+type ReaderNodeType =
+  | "text"
+  | "special"
+  | "cutscene"
+  | "choice"
+  | "minigame"
+  | "function"
+  | "condition"
+  | "scratchpad";
+
+type StoryVariableType = "boolean" | "number" | "text";
+type StoryVariableValue = boolean | number | string;
+type ReaderStoryState = Record<string, StoryVariableValue>;
+
+type ReaderStoryVariable = {
+  id: string;
+  name: string;
+  type: StoryVariableType;
+  defaultValue: StoryVariableValue;
+  description?: string;
+};
 
 type ReaderChoice = {
   label: string;
   targetNodeId?: string;
 };
 
-type ReaderFunctionActionType = "set_flag" | "clear_flag" | "increment" | "decrement" | "set_number";
+type ReaderFunctionActionType =
+  | "set_flag"
+  | "clear_flag"
+  | "increment"
+  | "decrement"
+  | "set_number"
+  | "set_text";
 
 type ReaderFunctionAction = {
   id?: string;
   type: ReaderFunctionActionType;
   key: string;
+  variableId?: string;
   amount?: number;
+  textValue?: string;
 };
 
-type ReaderFlags = Record<string, boolean | number | string>;
+type ConditionOperator =
+  | "is_true"
+  | "is_false"
+  | "equals"
+  | "not_equals"
+  | "greater_than"
+  | "greater_or_equal"
+  | "less_than"
+  | "less_or_equal"
+  | "contains";
 
 type ReaderNode = {
   id: string;
@@ -49,6 +86,12 @@ type ReaderNode = {
   miniGameSuccessTargetNodeId?: string;
   miniGameFailTargetNodeId?: string;
   functionActions?: ReaderFunctionAction[];
+  conditionVariableId?: string;
+  conditionKey?: string;
+  conditionOperator?: ConditionOperator;
+  conditionValue?: StoryVariableValue;
+  conditionTrueTargetNodeId?: string;
+  conditionFalseTargetNodeId?: string;
 };
 
 type ReaderEdge = {
@@ -67,6 +110,7 @@ type ReaderBook = {
   description?: string;
   accessType?: "free" | "premium";
   startNodeId: string;
+  variables: ReaderStoryVariable[];
   nodes: ReaderNode[];
   edges: ReaderEdge[];
 };
@@ -156,6 +200,18 @@ function normalizeNode(rawNode: any): ReaderNode {
     miniGameFailTargetNodeId:
       data.miniGameFailTargetNodeId ?? content.miniGameFailTargetNodeId ?? rawNode?.miniGameFailTargetNodeId ?? "",
     functionActions: data.functionActions ?? content.functionActions ?? rawNode?.functionActions ?? [],
+    conditionVariableId:
+      data.conditionVariableId ?? content.conditionVariableId ?? rawNode?.conditionVariableId ?? "",
+    conditionKey:
+      data.conditionKey ?? content.conditionKey ?? rawNode?.conditionKey ?? "",
+    conditionOperator:
+      data.conditionOperator ?? content.conditionOperator ?? rawNode?.conditionOperator ?? undefined,
+    conditionValue:
+      data.conditionValue ?? content.conditionValue ?? rawNode?.conditionValue ?? undefined,
+    conditionTrueTargetNodeId:
+      data.conditionTrueTargetNodeId ?? content.conditionTrueTargetNodeId ?? rawNode?.conditionTrueTargetNodeId ?? "",
+    conditionFalseTargetNodeId:
+      data.conditionFalseTargetNodeId ?? content.conditionFalseTargetNodeId ?? rawNode?.conditionFalseTargetNodeId ?? "",
   };
 }
 
@@ -180,6 +236,28 @@ function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBo
     ? preferredStartNodeId
     : nodes[0]?.id ?? "";
 
+  const variables: ReaderStoryVariable[] = Array.isArray(rawProject?.variables)
+    ? rawProject.variables
+        .filter((variable: any) => variable?.id && variable?.name)
+        .map((variable: any) => ({
+          id: String(variable.id),
+          name: String(variable.name),
+          type:
+            variable.type === "number"
+              ? "number"
+              : variable.type === "text"
+                ? "text"
+                : "boolean",
+          defaultValue:
+            variable.type === "number"
+              ? Number(variable.defaultValue ?? 0)
+              : variable.type === "text"
+                ? String(variable.defaultValue ?? "")
+                : variable.defaultValue === true,
+          description: typeof variable.description === "string" ? variable.description : "",
+        }))
+    : [];
+
   return {
     id: fallback.id ?? rawProject?.bookId ?? "unknown-book",
     title: fallback.title ?? rawProject?.bookTitle ?? rawProject?.title ?? "DiBooks verhaal",
@@ -188,6 +266,7 @@ function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBo
     description: fallback.description ?? rawProject?.description ?? "",
     accessType: (fallback as any).accessType ?? rawProject?.accessType ?? "free",
     startNodeId: safeStartNodeId,
+    variables,
     nodes,
     edges,
   };
@@ -263,53 +342,296 @@ function clampProgressPercent(value: number) {
 }
 
 
-function getReaderFlagsStorageKey(bookId: string) {
+function getLegacyReaderFlagsStorageKey(bookId: string) {
   return `dibooks-reader-flags:${bookId}`;
 }
 
-function loadReaderFlags(bookId: string): ReaderFlags {
+function loadLegacyReaderFlags(bookId: string): ReaderStoryState {
   if (typeof window === "undefined") return {};
 
   try {
-    const raw = window.localStorage.getItem(getReaderFlagsStorageKey(bookId));
+    const raw = window.localStorage.getItem(getLegacyReaderFlagsStorageKey(bookId));
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as ReaderStoryState)
+      : {};
   } catch {
     return {};
   }
 }
 
-function saveReaderFlags(bookId: string, flags: ReaderFlags) {
+function clearLegacyReaderFlags(bookId: string) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(getReaderFlagsStorageKey(bookId), JSON.stringify(flags));
+  window.localStorage.removeItem(getLegacyReaderFlagsStorageKey(bookId));
 }
 
-function clearReaderFlags(bookId: string) {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(getReaderFlagsStorageKey(bookId));
+function coerceStoryValue(type: StoryVariableType, value: unknown): StoryVariableValue {
+  if (type === "boolean") {
+    return value === true || value === 1 || value === "1" || value === "true";
+  }
+
+  if (type === "number") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return String(value ?? "");
 }
 
-function applyReaderFunctionActions(currentFlags: ReaderFlags, actions: ReaderFunctionAction[] = []) {
-  const nextFlags: ReaderFlags = { ...currentFlags };
+function createDefaultReaderStoryState(book: ReaderBook): ReaderStoryState {
+  return Object.fromEntries(
+    book.variables.map((variable) => [
+      variable.id,
+      coerceStoryValue(variable.type, variable.defaultValue),
+    ]),
+  ) as ReaderStoryState;
+}
 
-  actions.forEach((action) => {
-    const key = String(action?.key ?? "").trim();
-    if (!key) return;
+function mergeReaderStoryState(
+  book: ReaderBook,
+  savedState?: Record<string, unknown> | null,
+  legacyState?: Record<string, unknown> | null,
+) {
+  const nextState = createDefaultReaderStoryState(book);
+  const safeSavedState =
+    savedState && typeof savedState === "object" && !Array.isArray(savedState)
+      ? savedState
+      : {};
+  const safeLegacyState =
+    legacyState && typeof legacyState === "object" && !Array.isArray(legacyState)
+      ? legacyState
+      : {};
 
-    const amount = Number(action.amount ?? 1) || 0;
-    const currentValue = nextFlags[key];
-    const currentNumber = typeof currentValue === "number" ? currentValue : Number(currentValue) || 0;
+  book.variables.forEach((variable) => {
+    if (Object.prototype.hasOwnProperty.call(safeSavedState, variable.id)) {
+      nextState[variable.id] = coerceStoryValue(
+        variable.type,
+        safeSavedState[variable.id],
+      );
+      return;
+    }
 
-    if (action.type === "set_flag") nextFlags[key] = true;
-    if (action.type === "clear_flag") nextFlags[key] = false;
-    if (action.type === "increment") nextFlags[key] = currentNumber + amount;
-    if (action.type === "decrement") nextFlags[key] = currentNumber - amount;
-    if (action.type === "set_number") nextFlags[key] = amount;
+    if (Object.prototype.hasOwnProperty.call(safeSavedState, variable.name)) {
+      nextState[variable.id] = coerceStoryValue(
+        variable.type,
+        safeSavedState[variable.name],
+      );
+      return;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(safeLegacyState, variable.id)) {
+      nextState[variable.id] = coerceStoryValue(
+        variable.type,
+        safeLegacyState[variable.id],
+      );
+      return;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(safeLegacyState, variable.name)) {
+      nextState[variable.id] = coerceStoryValue(
+        variable.type,
+        safeLegacyState[variable.name],
+      );
+    }
   });
 
-  return nextFlags;
+  // Oude boeken zonder centrale variabelen blijven werken met key-based flags.
+  if (book.variables.length === 0) {
+    Object.entries({ ...safeLegacyState, ...safeSavedState }).forEach(
+      ([key, value]) => {
+        if (
+          typeof value === "boolean" ||
+          typeof value === "number" ||
+          typeof value === "string"
+        ) {
+          nextState[key] = value;
+        }
+      },
+    );
+  }
+
+  return nextState;
 }
+
+function findStoryVariable(
+  book: ReaderBook,
+  variableId?: string,
+  variableKey?: string,
+) {
+  return (
+    book.variables.find((variable) => variable.id === variableId) ??
+    book.variables.find((variable) => variable.name === variableKey)
+  );
+}
+
+function getReaderStoryValue(
+  book: ReaderBook,
+  storyState: ReaderStoryState,
+  variableId?: string,
+  variableKey?: string,
+) {
+  const variable = findStoryVariable(book, variableId, variableKey);
+
+  if (variable) {
+    if (Object.prototype.hasOwnProperty.call(storyState, variable.id)) {
+      return storyState[variable.id];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(storyState, variable.name)) {
+      return storyState[variable.name];
+    }
+
+    return coerceStoryValue(variable.type, variable.defaultValue);
+  }
+
+  if (variableKey && Object.prototype.hasOwnProperty.call(storyState, variableKey)) {
+    return storyState[variableKey];
+  }
+
+  return undefined;
+}
+
+function applyReaderFunctionActions(
+  book: ReaderBook,
+  currentState: ReaderStoryState,
+  actions: ReaderFunctionAction[] = [],
+) {
+  const nextState: ReaderStoryState = { ...currentState };
+
+  actions.forEach((action) => {
+    const variable = findStoryVariable(book, action.variableId, action.key);
+    const fallbackKey = String(action?.key ?? "").trim();
+    const stateKey = variable?.id || fallbackKey;
+
+    if (!stateKey) return;
+
+    const currentValue = variable
+      ? getReaderStoryValue(book, nextState, variable.id, variable.name)
+      : nextState[stateKey];
+
+    const currentNumber =
+      typeof currentValue === "number"
+        ? currentValue
+        : Number(currentValue) || 0;
+    const amount = Number(action.amount ?? 1);
+
+    if (action.type === "set_flag") nextState[stateKey] = true;
+    if (action.type === "clear_flag") nextState[stateKey] = false;
+    if (action.type === "increment") {
+      nextState[stateKey] = currentNumber + (Number.isFinite(amount) ? amount : 1);
+    }
+    if (action.type === "decrement") {
+      nextState[stateKey] = currentNumber - (Number.isFinite(amount) ? amount : 1);
+    }
+    if (action.type === "set_number") {
+      nextState[stateKey] = Number.isFinite(amount) ? amount : 0;
+    }
+    if (action.type === "set_text") {
+      nextState[stateKey] = action.textValue ?? "";
+    }
+  });
+
+  return nextState;
+}
+
+function evaluateReaderCondition(
+  book: ReaderBook,
+  node: ReaderNode,
+  storyState: ReaderStoryState,
+) {
+  const variable = findStoryVariable(
+    book,
+    node.conditionVariableId,
+    node.conditionKey,
+  );
+  const actualValue = getReaderStoryValue(
+    book,
+    storyState,
+    node.conditionVariableId,
+    node.conditionKey,
+  );
+  const operator = node.conditionOperator ?? (
+    variable?.type === "boolean" ? "is_true" : "equals"
+  );
+  const expectedValue =
+    node.conditionValue ??
+    (variable?.type === "number"
+      ? 0
+      : variable?.type === "text"
+        ? ""
+        : true);
+
+  if (operator === "is_true") return actualValue === true;
+  if (operator === "is_false") return actualValue === false;
+
+  const valueType =
+    variable?.type ??
+    (typeof expectedValue === "number"
+      ? "number"
+      : typeof expectedValue === "boolean"
+        ? "boolean"
+        : "text");
+
+  if (valueType === "number") {
+    const actual = Number(actualValue);
+    const expected = Number(expectedValue);
+
+    if (operator === "equals") return actual === expected;
+    if (operator === "not_equals") return actual !== expected;
+    if (operator === "greater_than") return actual > expected;
+    if (operator === "greater_or_equal") return actual >= expected;
+    if (operator === "less_than") return actual < expected;
+    if (operator === "less_or_equal") return actual <= expected;
+    return false;
+  }
+
+  if (valueType === "boolean") {
+    if (operator === "equals") return actualValue === expectedValue;
+    if (operator === "not_equals") return actualValue !== expectedValue;
+    return false;
+  }
+
+  const actual = String(actualValue ?? "");
+  const expected = String(expectedValue ?? "");
+
+  if (operator === "equals") return actual === expected;
+  if (operator === "not_equals") return actual !== expected;
+  if (operator === "contains") return actual.includes(expected);
+
+  return false;
+}
+
+function getConditionTargetNodeId(
+  book: ReaderBook,
+  node: ReaderNode,
+  result: boolean,
+) {
+  const explicitTarget = result
+    ? node.conditionTrueTargetNodeId
+    : node.conditionFalseTargetNodeId;
+
+  if (explicitTarget) return explicitTarget;
+
+  const wantedResult = result ? "true" : "false";
+  const conditionEdge = book.edges.find(
+    (edge) =>
+      edge.source === node.id &&
+      String(edge.data?.conditionResult ?? "").toLowerCase() === wantedResult,
+  );
+
+  if (conditionEdge?.target) return conditionEdge.target;
+
+  const fallbackLabel = result ? "true" : "else";
+  return (
+    book.edges.find(
+      (edge) =>
+        edge.source === node.id &&
+        String(edge.label ?? "").trim().toLowerCase() === fallbackLabel,
+    )?.target ?? ""
+  );
+}
+
 
 function calculateBookProgressPercent(book: ReaderBook, currentNodeId: string, pageIndex: number, pageCount: number) {
   const totalNodes = Math.max(1, book.nodes.length);
@@ -1045,8 +1367,11 @@ export default function ReadBookPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cutsceneFading, setCutsceneFading] = useState(false);
   const [resetProgressBusy, setResetProgressBusy] = useState(false);
-  const [readerFlags, setReaderFlags] = useState<ReaderFlags>({});
+  const [storyState, setStoryState] = useState<ReaderStoryState>({});
+  const storyStateRef = useRef<ReaderStoryState>({});
+  const storyStateReadyRef = useRef(false);
   const lastExecutedFunctionNodeRef = useRef<string | null>(null);
+  const lastEvaluatedConditionNodeRef = useRef<string | null>(null);
   const cutsceneShellRef = useRef<HTMLDivElement | null>(null);
   const { user, loading: authLoading } = useDemoAuth();
 
@@ -1055,6 +1380,9 @@ export default function ReadBookPage() {
 
     async function loadBook() {
       setLoadState({ status: "loading" });
+      storyStateReadyRef.current = false;
+      storyStateRef.current = {};
+      setStoryState({});
 
       try {
         if (authLoading) return;
@@ -1083,6 +1411,19 @@ export default function ReadBookPage() {
         const progressNodeExists = progress?.currentNodeId
           ? book.nodes.some((node) => node.id === progress.currentNodeId)
           : false;
+
+        const legacyFlags = loadLegacyReaderFlags(book.id);
+        const restoredStoryState = mergeReaderStoryState(
+          book,
+          progress?.storyState ?? null,
+          legacyFlags,
+        );
+
+        storyStateRef.current = restoredStoryState;
+        storyStateReadyRef.current = true;
+        setStoryState(restoredStoryState);
+        lastExecutedFunctionNodeRef.current = null;
+        lastEvaluatedConditionNodeRef.current = null;
 
         setLoadState({ status: "ready", book });
         setCurrentNodeId(progressNodeExists ? progress!.currentNodeId : book.startNodeId);
@@ -1128,24 +1469,41 @@ export default function ReadBookPage() {
 
 
   useEffect(() => {
-    if (loadState.status !== "ready") return;
-    setReaderFlags(loadReaderFlags(loadState.book.id));
-    lastExecutedFunctionNodeRef.current = null;
-  }, [loadState]);
-
-
-  useEffect(() => {
-    if (loadState.status !== "ready" || !user || !currentNodeId) return;
+    if (
+      loadState.status !== "ready" ||
+      !user ||
+      !currentNodeId ||
+      !storyStateReadyRef.current
+    ) {
+      return;
+    }
 
     const timeout = window.setTimeout(() => {
-      const progressPercent = calculateBookProgressPercent(loadState.book, currentNodeId, pageIndex, readerPageCount);
-      upsertReadingProgress(user, loadState.book.id, currentNodeId, pageIndex, progressPercent).catch((progressError) => {
-        console.warn("Leesvoortgang opslaan mislukt.", progressError);
-      });
+      const progressPercent = calculateBookProgressPercent(
+        loadState.book,
+        currentNodeId,
+        pageIndex,
+        readerPageCount,
+      );
+
+      upsertReadingProgress(
+        user,
+        loadState.book.id,
+        currentNodeId,
+        pageIndex,
+        progressPercent,
+        storyStateRef.current,
+      )
+        .then(() => {
+          clearLegacyReaderFlags(loadState.book.id);
+        })
+        .catch((progressError) => {
+          console.warn("Leesvoortgang/verhaalstatus opslaan mislukt.", progressError);
+        });
     }, 450);
 
     return () => window.clearTimeout(timeout);
-  }, [currentNodeId, loadState, pageIndex, readerPageCount, user]);
+  }, [currentNodeId, loadState, pageIndex, readerPageCount, storyState, user]);
 
   const reader = useMemo(() => {
     if (loadState.status !== "ready") return null;
@@ -1203,26 +1561,147 @@ export default function ReadBookPage() {
 
 
   useEffect(() => {
-    if (!reader || reader.node.type !== "function" || loadState.status !== "ready") return;
-    if (lastExecutedFunctionNodeRef.current === reader.node.id) return;
+    if (
+      !reader ||
+      reader.node.type !== "function" ||
+      loadState.status !== "ready" ||
+      !user ||
+      !storyStateReadyRef.current
+    ) {
+      return;
+    }
 
+    if (lastExecutedFunctionNodeRef.current === reader.node.id) return;
     lastExecutedFunctionNodeRef.current = reader.node.id;
 
-    const nextFlags = applyReaderFunctionActions(readerFlags, reader.node.functionActions ?? []);
-    setReaderFlags(nextFlags);
-    saveReaderFlags(reader.book.id, nextFlags);
+    let cancelled = false;
 
-    const nextTargetId = reader.outgoingPaths[0]?.target;
-    if (!nextTargetId) return;
+    async function executeFunctionNode() {
+      const nextStoryState = applyReaderFunctionActions(
+        reader.book,
+        storyStateRef.current,
+        reader.node.functionActions ?? [],
+      );
 
-    const timeout = window.setTimeout(() => {
+      storyStateRef.current = nextStoryState;
+      setStoryState(nextStoryState);
+
+      const nextTargetId = reader.outgoingPaths[0]?.target;
+      if (!nextTargetId) {
+        lastExecutedFunctionNodeRef.current = null;
+        return;
+      }
+
+      try {
+        const progressPercent = calculateBookProgressPercent(
+          reader.book,
+          nextTargetId,
+          0,
+          1,
+        );
+
+        // Eerst status + volgende node opslaan. Daardoor kan een refresh op een
+        // functie-node een +1/increment niet per ongeluk dubbel uitvoeren.
+        await upsertReadingProgress(
+          user,
+          reader.book.id,
+          nextTargetId,
+          0,
+          progressPercent,
+          nextStoryState,
+        );
+        clearLegacyReaderFlags(reader.book.id);
+      } catch (progressError) {
+        console.warn(
+          "Functie uitgevoerd, maar directe story-state save mislukte.",
+          progressError,
+        );
+      }
+
+      if (cancelled) return;
+
+      lastExecutedFunctionNodeRef.current = null;
+      lastEvaluatedConditionNodeRef.current = null;
+      setCurrentNodeId(nextTargetId);
+      setPageIndex(0);
+    }
+
+    void executeFunctionNode();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reader, loadState, user]);
+
+  useEffect(() => {
+    if (
+      !reader ||
+      reader.node.type !== "condition" ||
+      loadState.status !== "ready" ||
+      !user ||
+      !storyStateReadyRef.current
+    ) {
+      return;
+    }
+
+    if (lastEvaluatedConditionNodeRef.current === reader.node.id) return;
+    lastEvaluatedConditionNodeRef.current = reader.node.id;
+
+    const result = evaluateReaderCondition(
+      reader.book,
+      reader.node,
+      storyStateRef.current,
+    );
+    const nextTargetId = getConditionTargetNodeId(
+      reader.book,
+      reader.node,
+      result,
+    );
+
+    if (!nextTargetId) {
+      console.warn(
+        `Voorwaarde-node "${reader.node.title}" mist een ${result ? "TRUE" : "ELSE"}-route.`,
+      );
+      return;
+    }
+
+    let cancelled = false;
+
+    async function continueFromCondition() {
+      try {
+        const progressPercent = calculateBookProgressPercent(
+          reader.book,
+          nextTargetId,
+          0,
+          1,
+        );
+
+        await upsertReadingProgress(
+          user,
+          reader.book.id,
+          nextTargetId,
+          0,
+          progressPercent,
+          storyStateRef.current,
+        );
+      } catch (progressError) {
+        console.warn("Voorwaarde-route opslaan mislukt.", progressError);
+      }
+
+      if (cancelled) return;
+
+      lastEvaluatedConditionNodeRef.current = null;
       lastExecutedFunctionNodeRef.current = null;
       setCurrentNodeId(nextTargetId);
       setPageIndex(0);
-    }, 80);
+    }
 
-    return () => window.clearTimeout(timeout);
-  }, [reader, readerFlags, loadState]);
+    void continueFromCondition();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reader, loadState, user]);
 
 
   function goToFirstOutgoingNode() {
@@ -1271,6 +1750,7 @@ export default function ReadBookPage() {
     }
 
     lastExecutedFunctionNodeRef.current = null;
+    lastEvaluatedConditionNodeRef.current = null;
     setCurrentNodeId(nodeId);
     setPageIndex(0);
   }
@@ -1288,9 +1768,14 @@ export default function ReadBookPage() {
 
     try {
       await resetReadingProgress(user, loadState.book.id);
-      clearReaderFlags(loadState.book.id);
-      setReaderFlags({});
+      clearLegacyReaderFlags(loadState.book.id);
+
+      const resetStoryState = createDefaultReaderStoryState(loadState.book);
+      storyStateRef.current = resetStoryState;
+      storyStateReadyRef.current = true;
+      setStoryState(resetStoryState);
       lastExecutedFunctionNodeRef.current = null;
+      lastEvaluatedConditionNodeRef.current = null;
       setCurrentNodeId(loadState.book.startNodeId);
       setPageIndex(0);
       setReaderPageCount(1);
@@ -1481,6 +1966,18 @@ export default function ReadBookPage() {
           </div>
         )}
 
+        {node.type === "condition" && (
+          <div className="flex h-full items-center justify-center p-6">
+            <div className="max-w-xl rounded-3xl border border-teal-500/20 bg-teal-500/10 p-8 text-center text-teal-100 shadow-2xl">
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-teal-300">DiBooks voorwaarde</p>
+              <h1 className="mt-3 text-3xl font-black">Route bepalen...</h1>
+              <p className="mt-3 text-sm font-semibold leading-6 text-teal-100/70">
+                De reader controleert je eerdere keuzes en stuurt automatisch naar TRUE of ELSE.
+              </p>
+            </div>
+          </div>
+        )}
+
         {node.type === "choice" && (
           <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 p-6">
             <div className="rounded-[2rem] border border-orange-500/20 bg-orange-950/20 p-7 shadow-2xl sm:p-9">
@@ -1587,7 +2084,10 @@ export default function ReadBookPage() {
               <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">Einde bereikt</div>
             )}
           </div>
-        ) : node.type !== "choice" && node.type !== "minigame" ? (
+        ) : node.type !== "choice" &&
+          node.type !== "minigame" &&
+          node.type !== "function" &&
+          node.type !== "condition" ? (
           <div className="flex flex-wrap justify-end gap-3">
             {reader.outgoingPaths.length === 0 && <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">Einde bereikt</div>}
             {reader.outgoingPaths.map((edge) => {

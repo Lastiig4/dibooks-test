@@ -1,30 +1,96 @@
-DiBooks Patch - Publieke serie-strip
-=====================================
+DiBooks Patch - Reader Story State
+======================================
 
-RESULTAAT
-Op iedere publieke boekpagina van een boek dat aan een serie gekoppeld is,
-verschijnt direct onder de hero een compacte serie-strip.
+WAT DEZE PATCH DOET
 
-Voorbeeld:
-White Ashes
-[Boek 1 cover] [Boek 2 cover] [Boek 3 cover]
+1. Centrale variabelen werken nu in de echte publieke Reader.
+   - Boolean
+   - Getal
+   - Tekst
 
-- Covers zijn aanklikbaar en openen de bijbehorende boekpagina.
-- Het huidige boek is gemarkeerd met 'Dit boek'.
-- Volgorde gebruikt series_order.
-- Binnenkort-boeken krijgen een Binnenkort-badge.
-- Privé concepten worden NOOIT getoond.
-- Heeft een boek geen serie? Dan verschijnt er geen serieblok.
+2. Functie-nodes veranderen de actuele verhaalstatus.
+   Voorbeelden:
+   has_medallion = true
+   xander_trust + 1
+   faction = "Dust"
+
+3. Voorwaarde / IF-nodes werken nu in de echte Reader.
+   Ondersteund:
+   - Boolean: waar / niet waar
+   - Getal: =, !=, >, >=, <, <=
+   - Tekst: gelijk, niet gelijk, bevat
+   - Automatische TRUE / ELSE-route
+
+4. Story State wordt samen met leesvoortgang in Supabase opgeslagen.
+   Per lezer + per boek:
+   - current_node_id
+   - page_index
+   - progress_percent
+   - story_state
+
+5. 'Verder lezen' herstelt dus ook eerdere keuzes/status.
+
+6. 'Opnieuw lezen' verwijdert de reading_progress-row.
+   Daardoor worden pagina, node én story_state tegelijk gereset.
+
+7. Bescherming tegen dubbele Function-uitvoering.
+   Bij een Function-node wordt eerst:
+   - de nieuwe variabelewaarde berekend;
+   - de VOLGENDE node + nieuwe story_state in Supabase opgeslagen;
+   - daarna pas doorgeschakeld.
+   Daardoor kan een refresh niet zomaar een '+1' dubbel uitvoeren.
+
+8. Migratie van de oude lokale flags.
+   Als een lezer al oude flags in localStorage heeft en nog geen Supabase
+   story_state, probeert de Reader deze één keer aan de centrale variabelen
+   te koppelen. Na een succesvolle Supabase-save wordt de oude lokale flags-
+   opslag verwijderd.
 
 INSTALLEREN
+
 1. Supabase -> SQL Editor -> New query.
-2. Plak de inhoud van SERIESTRIP_SUPABASE.sql en klik Run.
-3. Sleep daarna de map 'app' over dibooks_author_studio.
-4. Kies Bestanden vervangen.
-5. Herstart indien nodig:
+2. Plak de volledige inhoud van:
+   READER_STORY_STATE_SUPABASE.sql
+3. Klik Run.
+
+4. Sleep daarna de mappen:
+   - app
+   - lib
+   over dibooks_author_studio.
+
+5. Kies 'Bestanden vervangen'.
+
+6. Herstart:
    npm run dev
 
-LET OP
-De serie moet uiteraard al bestaan en het boek moet via Dashboard aan die serie
-gekoppeld zijn. Minimaal het huidige boek moet publiek zichtbaar zijn voordat de
-publieke serie-RPC resultaat geeft.
+SNELLE TEST
+
+Maak in de Auteur Studio:
+
+Variabele:
+  has_medallion
+  Boolean
+  Startwaarde: False
+
+Flow:
+  Tekst
+    ->
+  Functie: has_medallion AAN
+    ->
+  IF: has_medallion is waar
+       TRUE -> Tekst "Je hebt het medaillon."
+       ELSE -> Tekst "Je hebt het medaillon niet."
+
+Test daarna:
+A. Open het boek in de publieke Reader.
+B. Doorloop de Functie-node.
+C. IF moet automatisch TRUE kiezen.
+D. Sluit het boek.
+E. Open 'Verder lezen': de waarde moet nog steeds True zijn.
+F. Kies 'Opnieuw lezen': story_state wordt gewist en start weer op False.
+
+BELANGRIJK
+Een gepubliceerd boek moet natuurlijk projectdata bevatten waarin de nieuwste
+variables / functionActions / condition-data zijn opgeslagen. Als je testboek
+al vóór die functies live stond, haal het kort uit de Library, sla het actuele
+concept in de Studio op en publiceer opnieuw.
