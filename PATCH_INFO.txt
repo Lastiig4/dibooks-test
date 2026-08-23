@@ -1,22 +1,20 @@
-DiBooks Patch - Editor UI Categories V1.1
-=======================================
+DiBooks Editor UI Categories V1.2 - TypeScript Fix
+================================================
 
-Kleine UI-aanpassing bovenop V1.
+Fix voor Vercel:
+SidebarButton kreeg children/title terwijl de bestaande component
+icon/label props verwacht.
 
-Wijzigingen:
-- Keuzemenu is verplaatst van 'Tekst & schrijven' naar 'Media & interactie'.
-- Hele boek previewen is verwijderd uit het Project-flyoutmenu.
-- De groene Play-knop staat weer los als vaste knop op de linker toolbar.
-- Project bevat nu alleen:
-  - Opslaan / exporteren
-  - Project laden
+Aangepast:
+- Losse groene Play-knop gebruikt nu:
+  label="Hele boek previewen"
+  icon={<PlayIcon />}
 
+Geen andere UI/logica gewijzigd.
 Geen SQL nodig.
-Geen andere Editor-functionaliteit aangepast.
 
 Installeren:
 1. ZIP uitpakken.
-2. Sleep de map 'app' over dibooks_author_studio.
-3. Kies Bestanden vervangen.
-4. npm run build
-5. Commit/push.
+2. Sleep alleen de map 'app' over dibooks_author_studio.
+3. Bestanden vervangen.
+4. Commit/push en Vercel opnieuw laten bouwen.

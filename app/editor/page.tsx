@@ -4638,11 +4638,10 @@ ${formatSaveError(error)}`);
                 setSidebarGroupOpen(null);
                 openPreview();
               }}
-              title="Hele boek previewen"
+              label="Hele boek previewen"
+              icon={<PlayIcon />}
               className="bg-emerald-600 text-white hover:bg-emerald-500"
-            >
-              <PlayIcon />
-            </SidebarButton>
+            />
           </div>
 
           <div className="mt-6 grid justify-items-center gap-3 border-t border-neutral-800 pt-5">
