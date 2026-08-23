@@ -17,7 +17,13 @@ if (!target) {
 }
 
 let text = fs.readFileSync(target, "utf8");
-const backup = target + ".bak_flags_variables_v2";
+const hadCrlf = text.includes("\r\n");
+
+// Windows gebruikt vaak CRLF. De patch werkt intern met LF zodat
+// meerregelige zoekblokken betrouwbaar matchen.
+text = text.replace(/\r\n/g, "\n");
+
+const backup = target + ".bak_flags_variables_v3";
 
 if (!fs.existsSync(backup)) {
   fs.copyFileSync(target, backup);
@@ -96,7 +102,8 @@ for (const item of replacements) {
   console.log("✅", item.label);
 }
 
-fs.writeFileSync(target, text, "utf8");
+const outputText = hadCrlf ? text.replace(/\n/g, "\r\n") : text;
+fs.writeFileSync(target, outputText, "utf8");
 
 console.log("");
 console.log("🎉 Flags & Variabelen basis is toegevoegd.");
