@@ -1,19 +1,20 @@
 {
-  "name": "DiBooks AI Node Moderation",
+  "name": "DiBooks DeepSeek Node Moderation",
   "date": "2026-08-23",
+  "provider": "DeepSeek",
+  "model": "deepseek-v4-flash",
+  "replaces": "OpenAI automatic moderation scanner",
   "requires": [
     "Moderation Core v1"
   ],
   "sql_required": true,
   "env_required": [
-    "OPENAI_API_KEY"
+    "DEEPSEEK_API_KEY"
   ],
   "files": [
     "app/api/moderation/scan-submission/route.ts",
-    "app/admin/moderation/page.tsx",
-    "lib/supabase/moderation.ts",
-    "supabase/migrations/20260823_203500_ai_node_moderation.sql",
-    "AI_NODE_MODERATION_SUPABASE.sql",
+    "DEEPSEEK_NODE_MODERATION_SUPABASE.sql",
+    "supabase/migrations/20260823_210500_switch_ai_moderation_to_deepseek.sql",
     "PATCH_INFO.txt"
   ]
 }

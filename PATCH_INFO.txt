@@ -1,102 +1,74 @@
-DiBooks Patch - AI Node Moderation
-===================================
+DiBooks Patch - DeepSeek Node Moderation
+========================================
 
-DIT BOUWT VERDER OP MODERATION CORE v1.
+Deze patch VERVANGT alleen de automatische OpenAI-scanner door DeepSeek.
+Moderation Core zelf blijft hetzelfde.
 
-FLOW
+Provider:
+- DeepSeek API
+- model: deepseek-v4-flash
+- thinking: disabled
+- JSON Output
 
-Auteur:
-  Indienen voor beoordeling
-      ↓
-  immutable review snapshot
-      ↓
-  automatische OpenAI moderation scan
-      ↓
-  verdachte nodes krijgen moderation_flags
-      ↓
-Admin:
-  Meldingen -> Boekmoderatie
-      ↓
-  Open in reviewmodus
-      ↓
-  ⚠ verschijnt boven gemarkeerde nodes
-      ↓
-  Admin beslist ZELF goedkeuren / afwijzen
+Waarom Flash:
+- snel
+- goedkoop
+- ruim voldoende voor eerste inhoudelijke triage
+- admin blijft altijd degene die beslist
 
-BELANGRIJK
-De AI wijst NOOIT zelfstandig een boek af.
-Flags zijn alleen signalen voor menselijke controle.
+WAT BLIJFT HETZELFDE
+- Auteur dient boek in.
+- Review-snapshot wordt bevroren.
+- Admin krijgt melding.
+- Boekmoderatie-pagina blijft bestaan.
+- Revieweditor blijft read-only.
+- Verdachte nodes krijgen ⚠.
+- Admin accepteert of wijst af met feedback.
+- AI kan NOOIT zelfstandig afwijzen.
 
-WAT WORDT GESCAND
-- Tekstnodes
-- Speciale tekstpagina's
-- Keuzeteksten
-- Titels / lezerscontent van overige relevante nodes
+INSTALLEREN
 
-Utility-nodes zoals Function, IF/Condition en Kladblok worden overgeslagen.
+1. Supabase -> SQL Editor -> New query.
+2. Voer DEEPSEEK_NODE_MODERATION_SUPABASE.sql uit.
 
-Categorieën kunnen o.a. zijn:
-- geweld / grafisch geweld
-- seksuele inhoud
-- seksuele inhoud met minderjarigen
-- haat / bedreigende haat
-- intimidatie
-- zelfbeschadiging
-- illegale of gevaarlijke instructies
+   Dit verwijdert geen handmatige adminflags.
+   Bij een nieuwe scan worden alleen oude automatische OpenAI/DeepSeek-flags
+   van dezelfde inzending vervangen.
 
-INSTALLATIE
-
-1. Supabase -> SQL Editor.
-2. Voer AI_NODE_MODERATION_SUPABASE.sql uit.
-
-3. Pak deze ZIP uit.
-4. Sleep 'app', 'lib' en 'supabase' over dibooks_author_studio.
+3. Pak de ZIP uit.
+4. Sleep de map 'app' en 'supabase' over dibooks_author_studio.
 5. Kies Bestanden vervangen.
 
-6. Voeg SERVER-SIDE deze environment variable toe:
+6. Zet lokaal in .env.local:
 
-   OPENAI_API_KEY=...
+   DEEPSEEK_API_KEY=jouw_deepseek_key
 
-   BELANGRIJK:
-   - NOOIT NEXT_PUBLIC_OPENAI_API_KEY gebruiken.
-   - De sleutel hoort nooit in frontendcode.
-   - Plak je API key niet in chat.
+7. Zet in Vercel:
+   Project -> Settings -> Environment Variables
 
-Lokaal:
-  zet OPENAI_API_KEY in .env.local
+   Key:
+   DEEPSEEK_API_KEY
 
-Vercel:
-  Project -> Settings -> Environment Variables
-  Name: OPENAI_API_KEY
-  Value: jouw project API key
-  Daarna opnieuw deployen.
+   Value:
+   alleen jouw DeepSeek API key
 
-7. Test:
-   npm run build
+   Sensitive: aan
+   Environments: Production and Preview
 
-8. Commit/push.
+8. Redeploy.
 
-TESTFLOW
+Je bestaande OPENAI_API_KEY mag uit Vercel worden verwijderd als DiBooks hem
+nergens anders gebruikt. Hij wordt door deze scanner niet meer aangeroepen.
 
-A. Maak een klein testboek met bijvoorbeeld:
-   - één normale onschuldige tekstnode
-   - één duidelijk gewelddadige testpassage
+TEST
+- Open een pending boek als admin.
+- Klik 'AI opnieuw scannen'.
+- Na de scan moet je een melding krijgen met aantal flags.
+- Open de reviewmodus.
+- Gemarkeerde nodes krijgen de bestaande ⚠.
 
-B. Dien het boek in voor beoordeling.
-
-C. Wacht enkele seconden en open als admin:
-   Instellingen -> Boekmoderatie.
-
-D. Gebruik eventueel:
-   '✨ AI opnieuw scannen'
-
-E. Open daarna de reviewmodus.
-   Gemarkeerde nodes moeten een ⚠ tonen.
-
-FAIL-SAFE
-Als OPENAI_API_KEY ontbreekt of OpenAI tijdelijk niet bereikbaar is:
-- het boek blijft gewoon 'In afwachting';
-- de menselijke reviewflow blijft werken;
-- de admin kan later opnieuw scannen.
-
-De scanner gebruikt OpenAI omni-moderation-latest.
+De scanner beoordeelt context:
+een normaal fantasygevecht hoort niet automatisch als probleem gemarkeerd te
+worden. Expliciete/grafische, haatdragende, seksuele, uitbuitende, gevaarlijk
+instructieve of leeftijdsgevoelige passages worden eerder voor menselijke
+controle gemarkeerd.
