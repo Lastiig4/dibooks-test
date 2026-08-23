@@ -1,13 +1,10 @@
 {
-  "name": "DiBooks Series Patch",
-  "version": 1,
+  "name": "DiBooks Variable Effects",
   "date": "2026-08-23",
   "files": [
-    "app/dashboard/page.tsx",
     "app/editor/page.tsx",
-    "components/BookSeriesManagerModal.tsx",
-    "lib/supabase/dashboardBooks.ts",
-    "supabase/migrations/20260823_160000_add_book_series.sql",
-    "SERIES_SETUP.txt"
-  ]
+    "app/books/[bookId]/read/page.tsx",
+    "PATCH_INFO.txt"
+  ],
+  "sql_required": false
 }

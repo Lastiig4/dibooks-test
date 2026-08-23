@@ -189,6 +189,7 @@ type DiNodeData = {
   choices?: {
     label: string;
     targetNodeId?: string;
+    effects?: FunctionAction[];
   }[];
   miniGameType?: string;
   miniGameDuration?: number;
@@ -196,6 +197,8 @@ type DiNodeData = {
   miniGameAllowRetry?: boolean;
   miniGameSuccessTargetNodeId?: string;
   miniGameFailTargetNodeId?: string;
+  miniGameSuccessEffects?: FunctionAction[];
+  miniGameFailEffects?: FunctionAction[];
   functionActions?: FunctionAction[];
   conditionVariableId?: string;
   conditionKey?: string;
@@ -270,6 +273,160 @@ function getSafeStartNodeId(currentNodes: Node<DiNodeData>[], preferredStartId?:
   return storyNodes[0]?.id ?? "";
 }
 
+
+function createVariableEffectAction(prefix = "effect"): FunctionAction {
+  return {
+    id: `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    type: "set_flag",
+    key: "",
+    variableId: "",
+    amount: 1,
+    textValue: "",
+  };
+}
+
+function VariableEffectsEditor({
+  title,
+  description,
+  actions,
+  variables,
+  onChange,
+  accent = "orange",
+}: {
+  title: string;
+  description?: string;
+  actions: FunctionAction[];
+  variables: StoryVariable[];
+  onChange: (actions: FunctionAction[]) => void;
+  accent?: "orange" | "cyan" | "red" | "purple";
+}) {
+  const accentClasses = {
+    orange: "border-orange-500/25 bg-orange-950/20 text-orange-200 focus:border-orange-400",
+    cyan: "border-cyan-500/25 bg-cyan-950/20 text-cyan-200 focus:border-cyan-400",
+    red: "border-red-500/25 bg-red-950/20 text-red-200 focus:border-red-400",
+    purple: "border-purple-500/25 bg-purple-950/20 text-purple-200 focus:border-purple-400",
+  }[accent];
+
+  function updateAction(actionId: string, updates: Partial<FunctionAction>) {
+    onChange(actions.map((action) => (action.id === actionId ? { ...action, ...updates } : action)));
+  }
+
+  return (
+    <div className={`rounded-xl border p-3 ${accentClasses}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-black">{title}</div>
+          {description && <p className="mt-1 text-xs font-bold leading-5 text-neutral-400">{description}</p>}
+        </div>
+        <span className="shrink-0 rounded-full bg-black/25 px-2 py-1 text-[10px] font-black uppercase tracking-wider">
+          {actions.length}/4
+        </span>
+      </div>
+
+      {actions.length > 0 && (
+        <div className="mt-3 grid gap-3">
+          {actions.map((action, actionIndex) => {
+            const requiredType = getRequiredVariableTypeForAction(action.type);
+            const compatibleVariables = variables.filter((variable) => variable.type === requiredType);
+            const selectedVariableId =
+              variables.find((variable) => variable.id === action.variableId)?.id ??
+              variables.find((variable) => variable.name === action.key && variable.type === requiredType)?.id ??
+              "";
+
+            return (
+              <div key={action.id} className="rounded-xl border border-white/10 bg-black/25 p-3 text-white">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                    Effect {actionIndex + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onChange(actions.filter((item) => item.id !== action.id))}
+                    className="rounded-lg bg-red-600 px-2 py-1 text-[10px] font-black text-white hover:bg-red-500"
+                  >
+                    Verwijder
+                  </button>
+                </div>
+
+                <select
+                  value={action.type}
+                  onChange={(event) =>
+                    updateAction(action.id, {
+                      type: event.target.value as FunctionActionType,
+                      variableId: "",
+                      key: "",
+                      amount: 1,
+                      textValue: "",
+                    })
+                  }
+                  className="mb-2 w-full rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-xs font-bold text-white outline-none"
+                >
+                  <option value="set_flag">Flag aanzetten</option>
+                  <option value="clear_flag">Flag uitzetten</option>
+                  <option value="increment">Getal verhogen</option>
+                  <option value="decrement">Getal verlagen</option>
+                  <option value="set_number">Getal instellen</option>
+                  <option value="set_text">Tekst instellen</option>
+                </select>
+
+                <select
+                  value={selectedVariableId}
+                  onChange={(event) => {
+                    const variable = variables.find((item) => item.id === event.target.value);
+                    updateAction(action.id, {
+                      variableId: variable?.id ?? "",
+                      key: variable?.name ?? "",
+                    });
+                  }}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-xs font-bold text-white outline-none"
+                >
+                  <option value="">Kies variabele...</option>
+                  {compatibleVariables.map((variable) => (
+                    <option key={variable.id} value={variable.id}>{variable.name}</option>
+                  ))}
+                </select>
+
+                {compatibleVariables.length === 0 && (
+                  <p className="mt-2 text-[11px] font-bold leading-4 text-neutral-400">
+                    Maak eerst een {requiredType === "boolean" ? "boolean" : requiredType === "number" ? "getal" : "tekst"}-variabele via Flags & Variabelen.
+                  </p>
+                )}
+
+                {(action.type === "increment" || action.type === "decrement" || action.type === "set_number") && (
+                  <input
+                    type="number"
+                    value={action.amount ?? (action.type === "set_number" ? 0 : 1)}
+                    onChange={(event) => updateAction(action.id, { amount: Number(event.target.value) || 0 })}
+                    className="mt-2 w-full rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-xs font-bold text-white outline-none"
+                    placeholder={action.type === "set_number" ? "Waarde" : "Aantal"}
+                  />
+                )}
+
+                {action.type === "set_text" && (
+                  <input
+                    value={action.textValue ?? ""}
+                    onChange={(event) => updateAction(action.id, { textValue: event.target.value })}
+                    className="mt-2 w-full rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-xs font-bold text-white outline-none"
+                    placeholder="Nieuwe tekstwaarde..."
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onChange([...actions, createVariableEffectAction()])}
+        disabled={actions.length >= 4}
+        className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-black text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        + Variable effect
+      </button>
+    </div>
+  );
+}
 
 function SidebarButton({
   icon,
@@ -2844,11 +3001,11 @@ ${formatSaveError(error)}`);
     return false;
   }
 
-  function executePreviewFunctionActions(node: Node<DiNodeData>) {
+  function executePreviewActions(actions: FunctionAction[] = []) {
     setPreviewVariableValues((current) => {
       const next = { ...current };
 
-      for (const action of node.data.functionActions ?? []) {
+      for (const action of actions) {
         const variable =
           storyVariables.find((item) => item.id === action.variableId) ??
           storyVariables.find((item) => item.name === action.key);
@@ -2867,6 +3024,10 @@ ${formatSaveError(error)}`);
 
       return next;
     });
+  }
+
+  function executePreviewFunctionActions(node: Node<DiNodeData>) {
+    executePreviewActions(node.data.functionActions ?? []);
   }
 
   function openPreview() {
@@ -2975,6 +3136,8 @@ ${formatSaveError(error)}`);
         miniGameAllowRetry: type === "minigame" ? true : undefined,
         miniGameSuccessTargetNodeId: type === "minigame" ? "" : undefined,
         miniGameFailTargetNodeId: type === "minigame" ? "" : undefined,
+        miniGameSuccessEffects: type === "minigame" ? [] : undefined,
+        miniGameFailEffects: type === "minigame" ? [] : undefined,
         functionActions:
           type === "function"
             ? [{ id: `function_action_${Date.now()}`, type: "set_flag", key: "", variableId: "", amount: 1 }]
@@ -3300,7 +3463,7 @@ ${formatSaveError(error)}`);
 
   function updateSelectedChoice(
     choiceIndex: number,
-    updates: { label?: string; targetNodeId?: string },
+    updates: { label?: string; targetNodeId?: string; effects?: FunctionAction[] },
   ) {
     if (!selectedNodeId) return;
 
@@ -3598,46 +3761,51 @@ ${formatSaveError(error)}`);
       ),
     );
 
+    function updateActionReferences(actions: FunctionAction[] | undefined) {
+      return (actions ?? []).map((action) => {
+        if (action.variableId !== variableId) return action;
+
+        if (getRequiredVariableTypeForAction(action.type) !== nextType) {
+          return { ...action, variableId: "", key: "" };
+        }
+
+        return { ...action, key: nextName };
+      });
+    }
+
     setNodes((currentNodes) =>
       currentNodes.map((node) => {
-        if (node.data.type === "condition") {
-          if (node.data.conditionVariableId !== variableId) return node;
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              conditionKey: nextName,
-              conditionOperator: previousVariable.type === nextType ? node.data.conditionOperator : getDefaultConditionOperatorForType(nextType),
-              conditionValue: previousVariable.type === nextType ? node.data.conditionValue : getDefaultConditionValueForType(nextType),
-            },
-          };
+        const nextData: DiNodeData = { ...node.data };
+
+        if (node.data.type === "condition" && node.data.conditionVariableId === variableId) {
+          nextData.conditionKey = nextName;
+          nextData.conditionOperator =
+            previousVariable.type === nextType
+              ? node.data.conditionOperator
+              : getDefaultConditionOperatorForType(nextType);
+          nextData.conditionValue =
+            previousVariable.type === nextType
+              ? node.data.conditionValue
+              : getDefaultConditionValueForType(nextType);
         }
-        if (node.data.type !== "function") return node;
 
-        const nextActions = (node.data.functionActions ?? []).map((action) => {
-          if (action.variableId !== variableId) return action;
+        if (node.data.type === "function") {
+          nextData.functionActions = updateActionReferences(node.data.functionActions);
+        }
 
-          if (getRequiredVariableTypeForAction(action.type) !== nextType) {
-            return {
-              ...action,
-              variableId: "",
-              key: "",
-            };
-          }
+        if (node.data.type === "choice") {
+          nextData.choices = (node.data.choices ?? []).map((choice) => ({
+            ...choice,
+            effects: updateActionReferences(choice.effects),
+          }));
+        }
 
-          return {
-            ...action,
-            key: nextName,
-          };
-        });
+        if (node.data.type === "minigame") {
+          nextData.miniGameSuccessEffects = updateActionReferences(node.data.miniGameSuccessEffects);
+          nextData.miniGameFailEffects = updateActionReferences(node.data.miniGameFailEffects);
+        }
 
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            functionActions: nextActions,
-          },
-        };
+        return { ...node, data: nextData };
       }),
     );
   }
@@ -3646,16 +3814,26 @@ ${formatSaveError(error)}`);
     const variable = storyVariables.find((item) => item.id === variableId);
     if (!variable) return;
 
+    const actionReferencesVariable = (action: FunctionAction) =>
+      action.variableId === variableId || (!action.variableId && action.key === variable.name);
+
     const referenceCount = nodes.reduce((total, node) => {
-      const functionReferences = (node.data.functionActions ?? []).filter(
-        (action) => action.variableId === variableId || (!action.variableId && action.key === variable.name),
-      ).length;
+      const functionReferences = (node.data.functionActions ?? []).filter(actionReferencesVariable).length;
+      const choiceReferences = (node.data.choices ?? []).reduce(
+        (count, choice) => count + (choice.effects ?? []).filter(actionReferencesVariable).length,
+        0,
+      );
+      const miniGameReferences =
+        (node.data.miniGameSuccessEffects ?? []).filter(actionReferencesVariable).length +
+        (node.data.miniGameFailEffects ?? []).filter(actionReferencesVariable).length;
       const conditionReference =
         node.data.type === "condition" &&
-        (node.data.conditionVariableId === variableId || (!node.data.conditionVariableId && node.data.conditionKey === variable.name))
+        (node.data.conditionVariableId === variableId ||
+          (!node.data.conditionVariableId && node.data.conditionKey === variable.name))
           ? 1
           : 0;
-      return total + functionReferences + conditionReference;
+
+      return total + functionReferences + choiceReferences + miniGameReferences + conditionReference;
     }, 0);
 
     const confirmed = window.confirm(
@@ -3666,34 +3844,46 @@ ${formatSaveError(error)}`);
 
     if (!confirmed) return;
 
-    setStoryVariables((current) =>
-      current.filter((item) => item.id !== variableId),
-    );
+    setStoryVariables((current) => current.filter((item) => item.id !== variableId));
+
+    function clearActionReferences(actions: FunctionAction[] | undefined) {
+      return (actions ?? []).map((action) =>
+        actionReferencesVariable(action)
+          ? { ...action, variableId: "", key: "" }
+          : action,
+      );
+    }
 
     setNodes((currentNodes) =>
       currentNodes.map((node) => {
-        if (node.data.type === "condition") {
-          if (node.data.conditionVariableId !== variableId && !(!node.data.conditionVariableId && node.data.conditionKey === variable.name)) return node;
-          return { ...node, data: { ...node.data, conditionVariableId: "", conditionKey: "" } };
-        }
-        if (node.data.type !== "function") return node;
+        const nextData: DiNodeData = { ...node.data };
 
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            functionActions: (node.data.functionActions ?? []).map((action) =>
-              action.variableId === variableId ||
-              (!action.variableId && action.key === variable.name)
-                ? {
-                    ...action,
-                    variableId: "",
-                    key: "",
-                  }
-                : action,
-            ),
-          },
-        };
+        if (
+          node.data.type === "condition" &&
+          (node.data.conditionVariableId === variableId ||
+            (!node.data.conditionVariableId && node.data.conditionKey === variable.name))
+        ) {
+          nextData.conditionVariableId = "";
+          nextData.conditionKey = "";
+        }
+
+        if (node.data.type === "function") {
+          nextData.functionActions = clearActionReferences(node.data.functionActions);
+        }
+
+        if (node.data.type === "choice") {
+          nextData.choices = (node.data.choices ?? []).map((choice) => ({
+            ...choice,
+            effects: clearActionReferences(choice.effects),
+          }));
+        }
+
+        if (node.data.type === "minigame") {
+          nextData.miniGameSuccessEffects = clearActionReferences(node.data.miniGameSuccessEffects);
+          nextData.miniGameFailEffects = clearActionReferences(node.data.miniGameFailEffects);
+        }
+
+        return { ...node, data: nextData };
       }),
     );
   }
@@ -3726,6 +3916,8 @@ ${formatSaveError(error)}`);
           miniGameDifficulty: node.data.miniGameDifficulty ?? "",
           miniGameSuccessTargetNodeId: node.data.miniGameSuccessTargetNodeId ?? "",
           miniGameFailTargetNodeId: node.data.miniGameFailTargetNodeId ?? "",
+          miniGameSuccessEffects: node.data.miniGameSuccessEffects ?? [],
+          miniGameFailEffects: node.data.miniGameFailEffects ?? [],
           functionActions: node.data.functionActions ?? [],
           conditionVariableId: node.data.conditionVariableId ?? "",
           conditionKey: node.data.conditionKey ?? "",
@@ -4404,6 +4596,17 @@ ${formatSaveError(error)}`);
                               Verwijder keuze-path
                             </button>
                           )}
+
+                          <div className="mt-3">
+                            <VariableEffectsEditor
+                              title="Effect van deze keuze"
+                              description="Wordt direct uitgevoerd voordat de gekozen route opent."
+                              actions={choice.effects ?? []}
+                              variables={storyVariables}
+                              onChange={(effects) => updateSelectedChoice(choiceIndex, { effects })}
+                              accent="orange"
+                            />
+                          </div>
                         </div>
                       );
                     })}
@@ -4789,6 +4992,24 @@ ${formatSaveError(error)}`);
                         ))}
                       </select>
                     </div>
+
+                    <VariableEffectsEditor
+                      title="Success effects"
+                      description="Uitvoeren zodra de speler slaagt, vóór de Success-route opent."
+                      actions={selectedNode.data.miniGameSuccessEffects ?? []}
+                      variables={storyVariables}
+                      onChange={(miniGameSuccessEffects) => updateSelectedMiniGameData({ miniGameSuccessEffects })}
+                      accent="cyan"
+                    />
+
+                    <VariableEffectsEditor
+                      title="Fail effects"
+                      description="Uitvoeren zodra de speler faalt, vóór de Fail-route opent."
+                      actions={selectedNode.data.miniGameFailEffects ?? []}
+                      variables={storyVariables}
+                      onChange={(miniGameFailEffects) => updateSelectedMiniGameData({ miniGameFailEffects })}
+                      accent="red"
+                    />
 
                     <div className="rounded-xl border border-purple-800 bg-purple-950/30 p-3 text-sm text-purple-100/80">
                       In reader mode krijgt deze minigame fullscreen gameplay.
@@ -5252,6 +5473,7 @@ ${formatSaveError(error)}`);
                             key={choiceIndex}
                             onClick={() => {
                               if (!choice.targetNodeId) return;
+                              executePreviewActions(choice.effects ?? []);
                               goToPreviewNode(choice.targetNodeId);
                             }}
                             disabled={!choice.targetNodeId}
@@ -5377,6 +5599,7 @@ ${formatSaveError(error)}`);
                         return;
                       }
 
+                      executePreviewActions(previewNode.data.miniGameSuccessEffects ?? []);
                       goToPreviewNode(targetId);
                     }}
                     onFail={() => {
@@ -5394,6 +5617,7 @@ ${formatSaveError(error)}`);
                         return;
                       }
 
+                      executePreviewActions(previewNode.data.miniGameFailEffects ?? []);
                       goToPreviewNode(targetId);
                     }}
                   />

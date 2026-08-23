@@ -1,14 +1,52 @@
-DiBooks Reader Story State - V3 TypeScript fix
+DiBooks Patch - Variable Effects
+================================
 
-Fixes:
-- Condition/IF async routine gebruikt nu activeReader + activeUser.
-- Opnieuw lezen gebruikt nu activeBook + activeUser.
-- Geen runtime-logica gewijzigd.
-- Geen extra Supabase SQL nodig.
+NIEUW IN AUTEUR STUDIO
+- Elke keuze A/B/C kan nu 0 t/m 4 Variable Effects uitvoeren.
+- Minigames hebben aparte Success Effects en Fail Effects.
+- Ondersteunde effects:
+  * Flag aanzetten
+  * Flag uitzetten
+  * Getal verhogen
+  * Getal verlagen
+  * Getal instellen
+  * Tekst instellen
+- Effects gebruiken dezelfde centrale Flags & Variabelen als Function en IF.
+- Als een variabele wordt hernoemd, van type verandert of wordt verwijderd,
+  worden koppelingen in keuze/minigame-effects ook meegenomen.
+- De Studio-preview voert deze effects ook uit.
 
-Installeren:
-1. ZIP uitpakken.
-2. Map 'app' over dibooks_author_studio slepen.
-3. Bestanden vervangen.
-4. Commit/push naar GitHub.
-5. Vercel opnieuw builden.
+NIEUW IN DE PUBLIEKE READER
+- Een keuze-effect wordt opgeslagen VOORDAT de doel-node wordt geopend.
+- Minigame Success/Fail-effects worden opgeslagen VOORDAT de route wordt geopend.
+- De story_state in Supabase blijft dus leidend.
+- Dubbelklik-beveiliging voorkomt dat bijvoorbeeld +1 twee keer wordt toegepast.
+- Daarna kan een IF-node direct op het effect reageren.
+
+VOORBEELD
+Keuze: "Vertrouw Xander"
+  Effect: xander_trust +1
+  Route: volgende scène
+
+Later:
+IF xander_trust >= 3
+  TRUE -> Xander helpt de crew
+  ELSE -> Xander blijft terughoudend
+
+INSTALLEREN
+1. Pak de ZIP uit.
+2. Sleep de map app over dibooks_author_studio.
+3. Kies Bestanden vervangen.
+4. Herstart lokaal of commit/push naar GitHub/Vercel.
+
+GEEN NIEUWE SQL NODIG.
+Deze patch gebruikt de story_state JSON-kolom die al door Reader Story State is toegevoegd.
+
+TEST
+1. Maak een getalvariabele test_score met startwaarde 0.
+2. Maak een keuze-node.
+3. Voeg bij Keuze A een effect toe: Getal verhogen -> test_score -> 1.
+4. Laat Keuze A naar een IF-node gaan.
+5. IF: test_score >= 1.
+6. TRUE naar een tekstnode "Effect werkt"; ELSE naar "Effect werkt niet".
+7. Test eerst in Studio Preview en daarna in de publieke Reader.

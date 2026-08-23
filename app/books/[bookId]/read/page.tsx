@@ -37,6 +37,7 @@ type ReaderStoryVariable = {
 type ReaderChoice = {
   label: string;
   targetNodeId?: string;
+  effects?: ReaderFunctionAction[];
 };
 
 type ReaderFunctionActionType =
@@ -85,6 +86,8 @@ type ReaderNode = {
   miniGameAllowRetry?: boolean;
   miniGameSuccessTargetNodeId?: string;
   miniGameFailTargetNodeId?: string;
+  miniGameSuccessEffects?: ReaderFunctionAction[];
+  miniGameFailEffects?: ReaderFunctionAction[];
   functionActions?: ReaderFunctionAction[];
   conditionVariableId?: string;
   conditionKey?: string;
@@ -199,6 +202,10 @@ function normalizeNode(rawNode: any): ReaderNode {
       data.miniGameSuccessTargetNodeId ?? content.miniGameSuccessTargetNodeId ?? rawNode?.miniGameSuccessTargetNodeId ?? "",
     miniGameFailTargetNodeId:
       data.miniGameFailTargetNodeId ?? content.miniGameFailTargetNodeId ?? rawNode?.miniGameFailTargetNodeId ?? "",
+    miniGameSuccessEffects:
+      data.miniGameSuccessEffects ?? content.miniGameSuccessEffects ?? rawNode?.miniGameSuccessEffects ?? [],
+    miniGameFailEffects:
+      data.miniGameFailEffects ?? content.miniGameFailEffects ?? rawNode?.miniGameFailEffects ?? [],
     functionActions: data.functionActions ?? content.functionActions ?? rawNode?.functionActions ?? [],
     conditionVariableId:
       data.conditionVariableId ?? content.conditionVariableId ?? rawNode?.conditionVariableId ?? "",
@@ -1367,6 +1374,8 @@ export default function ReadBookPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cutsceneFading, setCutsceneFading] = useState(false);
   const [resetProgressBusy, setResetProgressBusy] = useState(false);
+  const [interactionBusy, setInteractionBusy] = useState(false);
+  const interactionBusyRef = useRef(false);
   const [storyState, setStoryState] = useState<ReaderStoryState>({});
   const storyStateRef = useRef<ReaderStoryState>({});
   const storyStateReadyRef = useRef(false);
@@ -1747,6 +1756,57 @@ export default function ReadBookPage() {
     goToFirstOutgoingNode();
   }
 
+  async function applyEffectsAndGoToNode(
+    targetNodeId: string,
+    effects: ReaderFunctionAction[] = [],
+  ) {
+    if (loadState.status !== "ready" || !user || interactionBusyRef.current) return;
+
+    const activeBook = loadState.book;
+    const activeUser = user;
+    const exists = activeBook.nodes.some((node) => node.id === targetNodeId);
+
+    if (!exists) {
+      alert("Deze doel-node bestaat niet meer.");
+      return;
+    }
+
+    interactionBusyRef.current = true;
+    setInteractionBusy(true);
+
+    const nextStoryState = applyReaderFunctionActions(
+      activeBook,
+      storyStateRef.current,
+      effects,
+    );
+
+    try {
+      const progressPercent = calculateBookProgressPercent(activeBook, targetNodeId, 0, 1);
+
+      // Effect + nieuwe node worden samen opgeslagen voordat we navigeren.
+      // Zo kan dubbelklikken of refresh geen +1-effect twee keer uitvoeren.
+      await upsertReadingProgress(
+        activeUser,
+        activeBook.id,
+        targetNodeId,
+        0,
+        progressPercent,
+        nextStoryState,
+      );
+
+      storyStateRef.current = nextStoryState;
+      setStoryState(nextStoryState);
+      clearLegacyReaderFlags(activeBook.id);
+      goToNode(targetNodeId);
+    } catch (effectError: any) {
+      console.warn("Variable effects opslaan mislukt.", effectError);
+      alert(`Verhaalstatus opslaan mislukt: ${effectError?.message ?? "onbekende fout"}`);
+    } finally {
+      interactionBusyRef.current = false;
+      setInteractionBusy(false);
+    }
+  }
+
   function goToNode(nodeId: string) {
     if (loadState.status !== "ready") return;
     const exists = loadState.book.nodes.some((node) => node.id === nodeId);
@@ -1999,8 +2059,11 @@ export default function ReadBookPage() {
                   .map((choice, index) => (
                     <button
                       key={`${choice.label}-${index}`}
-                      onClick={() => choice.targetNodeId && goToNode(choice.targetNodeId)}
-                      disabled={!choice.targetNodeId}
+                      onClick={() => {
+                        if (!choice.targetNodeId) return;
+                        void applyEffectsAndGoToNode(choice.targetNodeId, choice.effects ?? []);
+                      }}
+                      disabled={!choice.targetNodeId || interactionBusy}
                       className="rounded-2xl border border-orange-400/25 bg-orange-500/15 px-5 py-4 text-left text-lg font-black text-orange-50 hover:bg-orange-500/25 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <span className="mr-3 text-orange-300">{["A", "B", "C"][index]}.</span>
@@ -2023,7 +2086,7 @@ export default function ReadBookPage() {
                 alert("Deze minigame heeft nog geen success route.");
                 return;
               }
-              goToNode(targetId);
+              void applyEffectsAndGoToNode(targetId, node.miniGameSuccessEffects ?? []);
             }}
             onFail={() => {
               const targetId =
@@ -2033,7 +2096,7 @@ export default function ReadBookPage() {
                 alert("Deze minigame heeft nog geen fail route.");
                 return;
               }
-              goToNode(targetId);
+              void applyEffectsAndGoToNode(targetId, node.miniGameFailEffects ?? []);
             }}
           />
         )}
