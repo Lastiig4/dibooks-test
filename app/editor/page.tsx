@@ -4493,18 +4493,6 @@ ${formatSaveError(error)}`);
                 }}
               />
               <SidebarMenuItem
-                title="Keuzemenu"
-                description="Laat de lezer uit meerdere routes kiezen."
-                accentClass="bg-orange-500 text-white"
-                icon={
-                  <span className="text-[10px] font-black tracking-tight">ABC</span>
-                }
-                onClick={() => {
-                  setSidebarGroupOpen(null);
-                  createNode("choice");
-                }}
-              />
-              <SidebarMenuItem
                 title="Kladblok / lore"
                 description="Interne notities; verschijnt nooit in het verhaal."
                 accentClass="bg-white text-slate-950"
@@ -4543,6 +4531,18 @@ ${formatSaveError(error)}`);
                 onClick={() => {
                   setSidebarGroupOpen(null);
                   createNode("minigame");
+                }}
+              />
+              <SidebarMenuItem
+                title="Keuzemenu"
+                description="Laat de lezer uit meerdere routes kiezen."
+                accentClass="bg-orange-500 text-white"
+                icon={
+                  <span className="text-[10px] font-black tracking-tight">ABC</span>
+                }
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("choice");
                 }}
               />
             </SidebarGroupButton>
@@ -4631,17 +4631,18 @@ ${formatSaveError(error)}`);
                 />
               </label>
 
-              <SidebarMenuItem
-                title="Hele boek previewen"
-                description="Test het verhaal zoals een lezer het ervaart."
-                accentClass="bg-emerald-600 text-white"
-                icon={<PlayIcon />}
-                onClick={() => {
-                  setSidebarGroupOpen(null);
-                  openPreview();
-                }}
-              />
             </SidebarGroupButton>
+
+            <SidebarButton
+              onClick={() => {
+                setSidebarGroupOpen(null);
+                openPreview();
+              }}
+              title="Hele boek previewen"
+              className="bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              <PlayIcon />
+            </SidebarButton>
           </div>
 
           <div className="mt-6 grid justify-items-center gap-3 border-t border-neutral-800 pt-5">

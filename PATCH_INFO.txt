@@ -1,84 +1,22 @@
-DiBooks Patch - Editor UI Categories V1
-=====================================
+DiBooks Patch - Editor UI Categories V1.1
+=======================================
 
-Doel:
-De Auteur Studio overzichtelijk houden nu DiBooks steeds meer node-types,
-logica en tools krijgt.
+Kleine UI-aanpassing bovenop V1.
 
-LINKERZIJDE
+Wijzigingen:
+- Keuzemenu is verplaatst van 'Tekst & schrijven' naar 'Media & interactie'.
+- Hele boek previewen is verwijderd uit het Project-flyoutmenu.
+- De groene Play-knop staat weer los als vaste knop op de linker toolbar.
+- Project bevat nu alleen:
+  - Opslaan / exporteren
+  - Project laden
 
-Oude losse knoppen zijn samengevoegd tot 4 categorieën:
+Geen SQL nodig.
+Geen andere Editor-functionaliteit aangepast.
 
-1. Tekst & schrijven
-   - Normale tekst
-   - Speciale tekst
-   - Keuzemenu
-   - Kladblok / lore
-
-2. Media & interactie
-   - Cutscene
-   - Minigame
-
-3. Logica & tools
-   - Flags & variabelen
-   - Functie
-   - Voorwaarde / IF
-
-4. Project
-   - Opslaan / exporteren
-   - Project laden
-   - Hele boek previewen
-
-Klik op een categorie en er opent een compact flyoutmenu rechts van de
-sidebar. Na het kiezen sluit het menu automatisch.
-
-Handleiding, grid-thema en Reset blijven onderaan als losse vaste acties.
-
-BOVENBALK
-
-De lange rij badges is verwijderd.
-
-Niet meer permanent zichtbaar:
-- Author Pro
-- Dashboard UUID/code
-- losse verhaalnode teller
-- losse path teller
-- losse variabele teller
-- losse functie teller
-- losse IF teller
-- losse kladblok teller
-- losse sessiesave badge
-
-Nieuwe compacte dropdowns:
-
-Opslag ▾
-- werkmodus (Dashboard / lokaal / voorstel / review)
-- sessiesave-status
-- wel/niet gekoppeld aan Dashboard
-- eventueel eigenaar van gedeeld boek
-- snel naar Opslaan / exporteren
-
-Structuur ▾
-- verhaalnodes
-- paths
-- variabelen
-- functies
-- voorwaarden / IF
-- kladblokken
-- snelle knop naar Flags & variabelen
-
-Dashboard-ID blijft intern gewoon bestaan, maar wordt niet meer als technische
-UUID in de UI getoond.
-
-Reviewmodus / moderation blijft volledig behouden.
-
-INSTALLEREN
+Installeren:
 1. ZIP uitpakken.
-2. Sleep alleen de map 'app' over dibooks_author_studio.
+2. Sleep de map 'app' over dibooks_author_studio.
 3. Kies Bestanden vervangen.
-4. Geen SQL nodig.
-5. npm run build
-6. Commit/push.
-
-Deze patch verandert alleen de Editor-UI; node-data, opslag, Reader,
-DeepSeek-moderatie en Supabase-schema worden niet gewijzigd.
+4. npm run build
+5. Commit/push.

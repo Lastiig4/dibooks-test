@@ -1,16 +1,14 @@
 {
-  "name": "DiBooks Editor UI Categories V1",
+  "name": "DiBooks Editor UI Categories V1.1",
   "date": "2026-08-23",
   "sql_required": false,
+  "changes": [
+    "Move choice menu to Media & interactie",
+    "Restore standalone Play button",
+    "Project menu only save/load"
+  ],
   "files": [
     "app/editor/page.tsx",
     "PATCH_INFO.txt"
-  ],
-  "features": [
-    "Grouped left sidebar menus",
-    "Compact Opslag top dropdown",
-    "Compact Structuur top dropdown",
-    "Hide plan badge and dashboard UUID",
-    "Move node/path/logic stats out of permanent header"
   ]
 }
