@@ -1,30 +1,11 @@
 {
-  "name": "DiBooks Moderation Incremental V5",
+  "name": "DiBooks Admin Review Role Race Fix",
   "date": "2026-08-23",
-  "replaces": "Moderation Review Modal V4 for changed files",
-  "requires": [
-    "Moderation Core",
-    "DeepSeek Node Moderation",
-    "Review Modal V4"
-  ],
-  "sql_required": true,
-  "features": [
-    "Incremental node moderation via SHA-256 content hashes",
-    "Reuse unchanged nodes and prior auto flags",
-    "Scan only changed/new nodes",
-    "Explicit AI scan status",
-    "Approval blocked until current submission scan completed",
-    "Current-submission-only flag counting",
-    "Stale old review flag bug fix",
-    "Await initial automatic scan"
-  ],
+  "sql_required": false,
   "files": [
     "app/editor/page.tsx",
     "app/admin/moderation/page.tsx",
-    "app/api/moderation/scan-submission/route.ts",
     "lib/supabase/moderation.ts",
-    "MODERATION_INCREMENTAL_V5_SUPABASE.sql",
-    "supabase/migrations/20260823_224500_moderation_incremental_v5.sql",
     "PATCH_INFO.txt"
   ]
 }

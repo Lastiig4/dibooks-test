@@ -47,6 +47,7 @@ import {
   clearModerationFlag,
   reopenModerationFlag,
   reviewModerationSubmission,
+  verifyCurrentUserIsAdmin,
   type ModerationFlag,
   type ModerationSubmissionDetail,
 } from "@/lib/supabase/moderation";
@@ -2373,13 +2374,18 @@ export default function Home() {
           return;
         }
 
-        if (role !== "admin") {
-          alert("Alleen DiBooks admins kunnen een boek in reviewmodus openen.");
-          window.location.href = "/";
-          return;
-        }
-
         try {
+          setAutosaveStatus("Adminrechten controleren...");
+
+          const hasAdminAccess = await verifyCurrentUserIsAdmin(user);
+          if (cancelled) return;
+
+          if (!hasAdminAccess) {
+            alert("Alleen DiBooks admins kunnen een boek in reviewmodus openen.");
+            window.location.href = "/";
+            return;
+          }
+
           const submission = await fetchAdminModerationSubmission(user, reviewId);
           if (cancelled || !submission) {
             if (!submission) alert("Deze moderatie-inzending bestaat niet meer.");
@@ -4156,7 +4162,7 @@ ${formatSaveError(error)}`);
   }
 
   async function handleClearReviewFlag(flag: ModerationFlag) {
-    if (!user || user.role !== "admin" || !flag.flagId || reviewActionBusy) return;
+    if (!user || !flag.flagId || reviewActionBusy) return;
     if (isReviewFlagCleared(flag)) return;
 
     setReviewActionBusy(true);
@@ -4189,7 +4195,7 @@ ${formatSaveError(error)}`);
   }
 
   async function handleReopenReviewFlag(flag: ModerationFlag) {
-    if (!user || user.role !== "admin" || !flag.flagId || reviewActionBusy) return;
+    if (!user || !flag.flagId || reviewActionBusy) return;
     if (!isReviewFlagCleared(flag)) return;
 
     setReviewActionBusy(true);
@@ -4222,7 +4228,7 @@ ${formatSaveError(error)}`);
   }
 
   async function handleReviewDecision(decision: "approved" | "rejected") {
-    if (!user || user.role !== "admin" || !reviewSubmission) return;
+    if (!user || !reviewSubmission) return;
     if (reviewSubmission.status !== "pending") {
       alert("Deze inzending is al verwerkt.");
       return;

@@ -62,8 +62,41 @@ function formatSupabaseError(error: any) {
     .join("\n");
 }
 
-function assertAdmin(user: DemoAuthUser | null | undefined) {
-  if (!user || user.role !== "admin") {
+export async function verifyCurrentUserIsAdmin(
+  user: DemoAuthUser | null | undefined,
+) {
+  if (!user) return false;
+
+  const supabase = createSupabaseBrowserClient();
+
+  // Authoritative check: browser/user cache kan vlak na login nog tijdelijk
+  // "author" bevatten terwijl profiles.role in Supabase al "admin" is.
+  const { data, error } = await supabase.rpc("is_current_dibooks_admin");
+
+  if (!error) return data === true;
+
+  // Fallback voor oudere Supabase schemas / tijdelijke PostgREST cache.
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    console.warn("Kon adminrol niet autoritatief controleren.", {
+      rpcError: error,
+      profileError,
+    });
+    return user.role === "admin";
+  }
+
+  return profile?.role === "admin";
+}
+
+async function ensureAdminAccess(
+  user: DemoAuthUser | null | undefined,
+) {
+  if (!(await verifyCurrentUserIsAdmin(user))) {
     throw new Error("Alleen DiBooks admins hebben toegang tot boekmoderatie.");
   }
 }
@@ -135,7 +168,7 @@ export async function submitBookForModeration(user: DemoAuthUser, bookId: string
 }
 
 export async function fetchAdminModerationQueue(user: DemoAuthUser) {
-  assertAdmin(user);
+  await ensureAdminAccess(user);
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.rpc("get_admin_moderation_queue");
   if (error) throw new Error(formatSupabaseError(error));
@@ -171,7 +204,7 @@ export async function fetchAdminModerationQueue(user: DemoAuthUser) {
 }
 
 export async function fetchAdminModerationSubmission(user: DemoAuthUser, submissionId: string) {
-  assertAdmin(user);
+  await ensureAdminAccess(user);
   if (!submissionId) return null;
 
   const supabase = createSupabaseBrowserClient();
@@ -235,7 +268,7 @@ export async function clearModerationFlag(
   flagId: string,
   note = "",
 ) {
-  assertAdmin(user);
+  await ensureAdminAccess(user);
   if (!flagId) throw new Error("Moderatiemelding ontbreekt.");
 
   const supabase = createSupabaseBrowserClient();
@@ -252,7 +285,7 @@ export async function reopenModerationFlag(
   user: DemoAuthUser,
   flagId: string,
 ) {
-  assertAdmin(user);
+  await ensureAdminAccess(user);
   if (!flagId) throw new Error("Moderatiemelding ontbreekt.");
 
   const supabase = createSupabaseBrowserClient();
@@ -270,7 +303,7 @@ export async function reviewModerationSubmission(
   decision: ModerationDecision,
   feedback = "",
 ) {
-  assertAdmin(user);
+  await ensureAdminAccess(user);
   const normalizedFeedback = feedback.trim();
   if (decision === "rejected" && !normalizedFeedback) {
     throw new Error("Feedback is verplicht wanneer je een boek afwijst.");

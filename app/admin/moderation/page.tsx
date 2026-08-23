@@ -7,6 +7,7 @@ import { useDemoAuth } from "@/lib/auth";
 import {
   fetchAdminModerationQueue,
   triggerAutomaticModerationScan,
+  verifyCurrentUserIsAdmin,
   type ModerationQueueItem,
 } from "@/lib/supabase/moderation";
 
@@ -29,6 +30,7 @@ export default function AdminModerationPage() {
   const [items, setItems] = useState<ModerationQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [adminAccess, setAdminAccess] = useState<boolean | null>(null);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [scanningSubmissionId, setScanningSubmissionId] = useState<string | null>(null);
 
@@ -39,25 +41,53 @@ export default function AdminModerationPage() {
 
   useEffect(() => {
     let cancelled = false;
+
     async function loadQueue() {
       if (authLoading) return;
-      if (!user || user.role !== "admin") { setLoading(false); return; }
+
+      if (!user) {
+        if (!cancelled) {
+          setAdminAccess(false);
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
+      setAdminAccess(null);
+
       try {
         setError("");
+
+        const allowed = await verifyCurrentUserIsAdmin(user);
+        if (cancelled) return;
+
+        setAdminAccess(allowed);
+
+        if (!allowed) {
+          setItems([]);
+          return;
+        }
+
         const queue = await fetchAdminModerationQueue(user);
         if (!cancelled) setItems(queue);
       } catch (queueError: any) {
-        if (!cancelled) setError(queueError?.message ?? "Moderatiequeue kon niet worden geladen.");
+        if (!cancelled) {
+          setError(queueError?.message ?? "Moderatiequeue kon niet worden geladen.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
+
     void loadQueue();
-    return () => { cancelled = true; };
-  }, [authLoading, user]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id]);
 
   async function rescanSubmission(submissionId: string) {
-    if (!user || user.role !== "admin" || scanningSubmissionId) return;
+    if (!user || adminAccess !== true || scanningSubmissionId) return;
 
     setScanningSubmissionId(submissionId);
 
@@ -79,11 +109,11 @@ export default function AdminModerationPage() {
   const pendingItems = useMemo(() => items.filter((item) => item.status === "pending"), [items]);
   const completedItems = useMemo(() => items.filter((item) => item.status !== "pending"), [items]);
 
-  if (authLoading) {
+  if (authLoading || adminAccess === null || loading) {
     return <main className="flex min-h-screen items-center justify-center bg-[#05070d] text-white">Adminrechten controleren...</main>;
   }
 
-  if (!user || user.role !== "admin") {
+  if (!user || adminAccess !== true) {
     return (
       <main className="min-h-screen bg-[#05070d] text-white">
         <AppNav title="Boekmoderatie" subtitle="Admin" />

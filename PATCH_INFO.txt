@@ -1,24 +1,38 @@
-DiBooks Moderation Incremental V5.1 - TypeScript Fix
-===================================================
+DiBooks Patch - Admin Review Role Race Fix
+========================================
 
-Fix voor Vercel build:
-app/api/moderation/scan-submission/route.ts
-Parameter 'node' implicitly has an 'any' type.
+Probleem:
+Na de snelle auth-updates kan Supabase Auth de gebruiker direct tonen,
+terwijl profiles.role nog een fractie later wordt geladen.
 
-Wat is aangepast:
-- Supabase JSON node-arrays zijn expliciet any[] getypeerd.
-- currentNodes is expliciet ScannableNode[].
-- map callbacks hebben expliciete ScannableNode/any types.
-- previousRawNodes en previousFlags zijn expliciet getypeerd.
-- Geen wijziging aan de incremental moderatielogica.
-- Geen wijziging aan DeepSeek.
-- Geen nieuwe Supabase SQL nodig.
+Een admin kon daardoor heel kort als 'author' in de browserstate staan.
+De revieweditor controleerde precies in dat moment:
+  if (role !== "admin") -> wegsturen
+
+Resultaat:
+"Alleen DiBooks admins kunnen een boek in reviewmodus openen."
+terwijl het account in Supabase WEL admin is.
+
+Fix:
+- Moderatie gebruikt voor toegangscontrole voortaan de echte Supabase adminrol.
+- RPC is_current_dibooks_admin is leidend.
+- profiles.role is fallback.
+- Browser user.role is GEEN security gate meer voor moderatie.
+- Revieweditor wacht op de authoritative check voordat hij toegang weigert.
+- Boekmoderatiepagina gebruikt dezelfde check.
+- Clear/reopen/approve/reject helpers controleren adminrechten server-backed.
+- Supabase RPC's blijven daarnaast zelf adminrechten afdwingen.
+
+Geen SQL nodig.
+Geen wijziging aan DeepSeek nodig.
+Geen wijziging aan auth.ts nodig.
 
 Installeren:
 1. ZIP uitpakken.
-2. Sleep alleen de map 'app' over dibooks_author_studio.
-3. Kies Bestanden vervangen.
-4. Commit/push.
-5. Vercel opnieuw builden.
+2. Sleep 'app' en 'lib' over dibooks_author_studio.
+3. Bestanden vervangen.
+4. npm run build
+5. Commit/push / Vercel deploy.
 
-De V5 SQL die je al hebt uitgevoerd hoef je NIET opnieuw uit te voeren.
+Deze patch kan bovenop Moderation Incremental V5/V5.1.
+De V5.1 scanner route wordt niet vervangen.
