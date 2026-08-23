@@ -132,7 +132,7 @@ function ArtworkPanel({ book }: { book: DetailBook }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img src={image} alt={`Cover van ${book.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover" />
       )}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.22),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.48))]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.16))]" />
       {!image && (
         <>
           <div className="absolute -right-20 top-10 -z-10 h-56 w-56 rounded-full border border-white/10" />
@@ -140,14 +140,10 @@ function ArtworkPanel({ book }: { book: DetailBook }) {
         </>
       )}
 
-      <div className="flex min-h-[480px] flex-col justify-between p-5 sm:min-h-[560px] sm:p-6">
+      <div className="min-h-[480px] p-5 sm:min-h-[560px] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <Badge>{book.primaryGenre}</Badge>
           <Badge light>{getStatusLabel(book)}</Badge>
-        </div>
-        <div className="rounded-3xl border border-white/10 bg-black/25 p-5 backdrop-blur-[2px]">
-          <p className="text-[11px] font-black uppercase tracking-[0.36em] text-white/60">Interactive story</p>
-          <h2 className="mt-3 text-4xl font-black leading-none text-white sm:text-5xl">{book.title}</h2>
         </div>
       </div>
     </div>

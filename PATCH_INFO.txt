@@ -1,38 +1,19 @@
-DiBooks Patch - Condition / IF node
-====================================
+DiBooks Patch - Schone cover op boekpagina
+=========================================
 
-Deze patch is gebouwd bovenop de werkende Flags & Variabelen + Functie-node versie.
+Wat verandert:
+- Titel-overlay onderaan de cover verwijderd.
+- 'Interactive story' op de cover verwijderd.
+- Grote boektitel links blijft staan.
+- Genre/status badges bovenaan de cover blijven staan.
+- Donkere cover-overlay is subtieler gemaakt zodat artwork beter zichtbaar blijft.
+- Overige boekpagina-functionaliteit is ongemoeid gelaten.
 
-INSTALLEREN
-1. Pak deze ZIP uit.
-2. Sleep de map 'app' naar de hoofdmap van dibooks_author_studio.
-3. Kies 'Bestanden vervangen' wanneer Windows dit vraagt.
-4. Start/herstart daarna DiBooks met:
-   npm run dev
+Installeren:
+1. Pak de ZIP uit.
+2. Sleep de map 'app' over de hoofdmap van dibooks_author_studio.
+3. Kies 'Bestanden vervangen' als Windows daarom vraagt.
+4. Start/herstart met: npm run dev
 
-NIEUW
-- Nieuwe Voorwaarde / IF-node in de linker toolbar.
-- Kiest een variabele uit de centrale Flags & Variabelen-lijst.
-- Boolean: Is waar / Is niet waar.
-- Getal: =, !=, >, >=, <, <=.
-- Tekst: gelijk, niet gelijk, bevat.
-- Twee vaste routes: TRUE en ELSE/FALSE.
-- TRUE/ELSE maken automatisch gelabelde paths op de grid.
-- Condition-nodes tellen net als Functie-nodes niet mee als gewone verhaalnode.
-- Condition-data wordt opgeslagen in project, Dashboard/autosave en reader-export.
-- Variabele hernoemen/type wijzigen werkt door naar gekoppelde IF-nodes.
-- Verwijderen van een gebruikte variabele waarschuwt ook voor IF-koppelingen.
-- Preview heeft nu runtime variabelen:
-  * Functie-node verandert de actuele waarde.
-  * IF-node leest daarna die actuele waarde en kiest TRUE of ELSE.
-- Hardcoded persoonlijke auteur- of boektitels zijn niet toegevoegd.
-
-SNELLE TEST
-1. Maak boolean: has_medallion, startwaarde False.
-2. Maak Functie-node: Flag aanzetten -> has_medallion.
-3. Maak Voorwaarde / IF-node: has_medallion -> Is waar / aan.
-4. Kies een TRUE-doel en een ELSE-doel.
-5. Laat het verhaal via de Functie-node naar de IF-node lopen.
-6. Play: na de Functie-node moet de IF-node TRUE tonen.
-7. Sla de Functie-node over en ga met startwaarde False naar de IF-node:
-   de IF-node moet ELSE/FALSE tonen.
+Verwacht pad:
+app/books/[bookId]/page.tsx
