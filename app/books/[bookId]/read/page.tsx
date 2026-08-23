@@ -1571,22 +1571,25 @@ export default function ReadBookPage() {
       return;
     }
 
-    if (lastExecutedFunctionNodeRef.current === reader.node.id) return;
-    lastExecutedFunctionNodeRef.current = reader.node.id;
+    const activeReader = reader;
+    const activeUser = user;
+
+    if (lastExecutedFunctionNodeRef.current === activeReader.node.id) return;
+    lastExecutedFunctionNodeRef.current = activeReader.node.id;
 
     let cancelled = false;
 
     async function executeFunctionNode() {
       const nextStoryState = applyReaderFunctionActions(
-        reader.book,
+        activeReader.book,
         storyStateRef.current,
-        reader.node.functionActions ?? [],
+        activeReader.node.functionActions ?? [],
       );
 
       storyStateRef.current = nextStoryState;
       setStoryState(nextStoryState);
 
-      const nextTargetId = reader.outgoingPaths[0]?.target;
+      const nextTargetId = activeReader.outgoingPaths[0]?.target;
       if (!nextTargetId) {
         lastExecutedFunctionNodeRef.current = null;
         return;
@@ -1594,7 +1597,7 @@ export default function ReadBookPage() {
 
       try {
         const progressPercent = calculateBookProgressPercent(
-          reader.book,
+          activeReader.book,
           nextTargetId,
           0,
           1,
@@ -1603,14 +1606,14 @@ export default function ReadBookPage() {
         // Eerst status + volgende node opslaan. Daardoor kan een refresh op een
         // functie-node een +1/increment niet per ongeluk dubbel uitvoeren.
         await upsertReadingProgress(
-          user,
-          reader.book.id,
+          activeUser,
+          activeReader.book.id,
           nextTargetId,
           0,
           progressPercent,
           nextStoryState,
         );
-        clearLegacyReaderFlags(reader.book.id);
+        clearLegacyReaderFlags(activeReader.book.id);
       } catch (progressError) {
         console.warn(
           "Functie uitgevoerd, maar directe story-state save mislukte.",

@@ -1,96 +1,17 @@
-DiBooks Patch - Reader Story State
-======================================
+DiBooks Reader Story State - V2 TypeScript fix
 
-WAT DEZE PATCH DOET
+Dit is een mini-fix voor de Vercel buildfout:
+'reader' is possibly 'null'
 
-1. Centrale variabelen werken nu in de echte publieke Reader.
-   - Boolean
-   - Getal
-   - Tekst
+De runtime-logica is niet gewijzigd.
+We leggen de reeds gecontroleerde non-null reader en user eerst vast als
+activeReader / activeUser voordat de async Function-node routine start.
 
-2. Functie-nodes veranderen de actuele verhaalstatus.
-   Voorbeelden:
-   has_medallion = true
-   xander_trust + 1
-   faction = "Dust"
+Installeren:
+1. Pak de ZIP uit.
+2. Sleep de map 'app' over dibooks_author_studio.
+3. Kies Bestanden vervangen.
+4. Commit/push opnieuw naar GitHub/Vercel.
 
-3. Voorwaarde / IF-nodes werken nu in de echte Reader.
-   Ondersteund:
-   - Boolean: waar / niet waar
-   - Getal: =, !=, >, >=, <, <=
-   - Tekst: gelijk, niet gelijk, bevat
-   - Automatische TRUE / ELSE-route
-
-4. Story State wordt samen met leesvoortgang in Supabase opgeslagen.
-   Per lezer + per boek:
-   - current_node_id
-   - page_index
-   - progress_percent
-   - story_state
-
-5. 'Verder lezen' herstelt dus ook eerdere keuzes/status.
-
-6. 'Opnieuw lezen' verwijdert de reading_progress-row.
-   Daardoor worden pagina, node én story_state tegelijk gereset.
-
-7. Bescherming tegen dubbele Function-uitvoering.
-   Bij een Function-node wordt eerst:
-   - de nieuwe variabelewaarde berekend;
-   - de VOLGENDE node + nieuwe story_state in Supabase opgeslagen;
-   - daarna pas doorgeschakeld.
-   Daardoor kan een refresh niet zomaar een '+1' dubbel uitvoeren.
-
-8. Migratie van de oude lokale flags.
-   Als een lezer al oude flags in localStorage heeft en nog geen Supabase
-   story_state, probeert de Reader deze één keer aan de centrale variabelen
-   te koppelen. Na een succesvolle Supabase-save wordt de oude lokale flags-
-   opslag verwijderd.
-
-INSTALLEREN
-
-1. Supabase -> SQL Editor -> New query.
-2. Plak de volledige inhoud van:
-   READER_STORY_STATE_SUPABASE.sql
-3. Klik Run.
-
-4. Sleep daarna de mappen:
-   - app
-   - lib
-   over dibooks_author_studio.
-
-5. Kies 'Bestanden vervangen'.
-
-6. Herstart:
-   npm run dev
-
-SNELLE TEST
-
-Maak in de Auteur Studio:
-
-Variabele:
-  has_medallion
-  Boolean
-  Startwaarde: False
-
-Flow:
-  Tekst
-    ->
-  Functie: has_medallion AAN
-    ->
-  IF: has_medallion is waar
-       TRUE -> Tekst "Je hebt het medaillon."
-       ELSE -> Tekst "Je hebt het medaillon niet."
-
-Test daarna:
-A. Open het boek in de publieke Reader.
-B. Doorloop de Functie-node.
-C. IF moet automatisch TRUE kiezen.
-D. Sluit het boek.
-E. Open 'Verder lezen': de waarde moet nog steeds True zijn.
-F. Kies 'Opnieuw lezen': story_state wordt gewist en start weer op False.
-
-BELANGRIJK
-Een gepubliceerd boek moet natuurlijk projectdata bevatten waarin de nieuwste
-variables / functionActions / condition-data zijn opgeslagen. Als je testboek
-al vóór die functies live stond, haal het kort uit de Library, sla het actuele
-concept in de Studio op en publiceer opnieuw.
+Geen extra Supabase SQL nodig als READER_STORY_STATE_SUPABASE.sql van de
+vorige patch al is uitgevoerd.
