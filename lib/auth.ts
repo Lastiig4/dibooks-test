@@ -362,7 +362,10 @@ function bootAuthOnce() {
     }
 
     // Eén gedeelde Supabase-client + één auth listener voor de hele app.
-    void supabase.auth.getSession().then(({ data, error }) => {
+    void (async () => {
+      const sessionResult = await supabase.auth.getSession();
+      const { data, error } = sessionResult;
+
       if (error) {
         console.warn(
           "Supabase getSession gaf geen actieve sessie.",
@@ -372,7 +375,7 @@ function bootAuthOnce() {
 
       const mappedUser = mapSupabaseUser(data.session?.user ?? null);
       void refreshProfileFromSupabase(mappedUser);
-    });
+    })();
 
     supabase.auth.onAuthStateChange((_event, session) => {
       if (logoutInProgress && session) return;
@@ -685,25 +688,26 @@ export function useDemoAuth() {
 
     // Supabase afmelden gebeurt daarna. De gebruiker hoeft niet op deze
     // server-roundtrip te wachten om de interface te zien veranderen.
-    void supabase.auth
-      .signOut()
-      .then(({ error }) => {
+    void (async () => {
+      try {
+        const signOutResult = await supabase.auth.signOut();
+        const { error } = signOutResult;
+
         if (error) {
           console.warn(
             "Supabase logout kon server-side niet volledig worden afgerond.",
             error.message,
           );
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         console.warn(
           "Supabase logout netwerkfout.",
           error,
         );
-      })
-      .finally(() => {
+      } finally {
         logoutInProgress = false;
-      });
+      }
+    })();
   }
 
   return {
