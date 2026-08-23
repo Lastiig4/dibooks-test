@@ -1647,23 +1647,26 @@ export default function ReadBookPage() {
       return;
     }
 
-    if (lastEvaluatedConditionNodeRef.current === reader.node.id) return;
-    lastEvaluatedConditionNodeRef.current = reader.node.id;
+    const activeReader = reader;
+    const activeUser = user;
+
+    if (lastEvaluatedConditionNodeRef.current === activeReader.node.id) return;
+    lastEvaluatedConditionNodeRef.current = activeReader.node.id;
 
     const result = evaluateReaderCondition(
-      reader.book,
-      reader.node,
+      activeReader.book,
+      activeReader.node,
       storyStateRef.current,
     );
     const nextTargetId = getConditionTargetNodeId(
-      reader.book,
-      reader.node,
+      activeReader.book,
+      activeReader.node,
       result,
     );
 
     if (!nextTargetId) {
       console.warn(
-        `Voorwaarde-node "${reader.node.title}" mist een ${result ? "TRUE" : "ELSE"}-route.`,
+        `Voorwaarde-node "${activeReader.node.title}" mist een ${result ? "TRUE" : "ELSE"}-route.`,
       );
       return;
     }
@@ -1673,15 +1676,15 @@ export default function ReadBookPage() {
     async function continueFromCondition() {
       try {
         const progressPercent = calculateBookProgressPercent(
-          reader.book,
+          activeReader.book,
           nextTargetId,
           0,
           1,
         );
 
         await upsertReadingProgress(
-          user,
-          reader.book.id,
+          activeUser,
+          activeReader.book.id,
           nextTargetId,
           0,
           progressPercent,
@@ -1761,6 +1764,9 @@ export default function ReadBookPage() {
   async function handleRestartReading() {
     if (loadState.status !== "ready" || !user) return;
 
+    const activeBook = loadState.book;
+    const activeUser = user;
+
     const confirmed = window.confirm(
       "Weet je dit zeker? Je leesvoortgang voor dit boek wordt gewist en je begint opnieuw bij het begin.",
     );
@@ -1770,16 +1776,16 @@ export default function ReadBookPage() {
     setResetProgressBusy(true);
 
     try {
-      await resetReadingProgress(user, loadState.book.id);
-      clearLegacyReaderFlags(loadState.book.id);
+      await resetReadingProgress(activeUser, activeBook.id);
+      clearLegacyReaderFlags(activeBook.id);
 
-      const resetStoryState = createDefaultReaderStoryState(loadState.book);
+      const resetStoryState = createDefaultReaderStoryState(activeBook);
       storyStateRef.current = resetStoryState;
       storyStateReadyRef.current = true;
       setStoryState(resetStoryState);
       lastExecutedFunctionNodeRef.current = null;
       lastEvaluatedConditionNodeRef.current = null;
-      setCurrentNodeId(loadState.book.startNodeId);
+      setCurrentNodeId(activeBook.startNodeId);
       setPageIndex(0);
       setReaderPageCount(1);
       setReaderVisiblePageCount(1);

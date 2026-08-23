@@ -1,17 +1,14 @@
-DiBooks Reader Story State - V2 TypeScript fix
+DiBooks Reader Story State - V3 TypeScript fix
 
-Dit is een mini-fix voor de Vercel buildfout:
-'reader' is possibly 'null'
-
-De runtime-logica is niet gewijzigd.
-We leggen de reeds gecontroleerde non-null reader en user eerst vast als
-activeReader / activeUser voordat de async Function-node routine start.
+Fixes:
+- Condition/IF async routine gebruikt nu activeReader + activeUser.
+- Opnieuw lezen gebruikt nu activeBook + activeUser.
+- Geen runtime-logica gewijzigd.
+- Geen extra Supabase SQL nodig.
 
 Installeren:
-1. Pak de ZIP uit.
-2. Sleep de map 'app' over dibooks_author_studio.
-3. Kies Bestanden vervangen.
-4. Commit/push opnieuw naar GitHub/Vercel.
-
-Geen extra Supabase SQL nodig als READER_STORY_STATE_SUPABASE.sql van de
-vorige patch al is uitgevoerd.
+1. ZIP uitpakken.
+2. Map 'app' over dibooks_author_studio slepen.
+3. Bestanden vervangen.
+4. Commit/push naar GitHub.
+5. Vercel opnieuw builden.
