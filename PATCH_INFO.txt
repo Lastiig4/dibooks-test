@@ -1,0 +1,27 @@
+DiBooks Patch – Flags & Variabelen
+
+INSTALLEREN
+1. Pak deze ZIP uit.
+2. Open de uitgepakte map.
+3. Sleep de map 'app' naar de hoofdmap van dibooks_author_studio.
+4. Kies 'Bestanden in doel vervangen' wanneer Windows daarom vraagt.
+5. Start daarna DiBooks zoals normaal met: npm run dev
+
+DEZE PATCH VOEGT TOE
+- Centrale knop 'Flags & variabelen' in de linker toolbar.
+- Boolean-, getal- en tekstvariabelen.
+- Startwaarde en omschrijving per variabele.
+- Variabelen worden opgeslagen in projectbestand, sessiesave, Dashboard en reader-export.
+- Oude projecten zonder variabelen blijven werken.
+- Functie-nodes kiezen variabelen uit de centrale lijst.
+- Ondersteuning voor tekstvariabelen in functie-acties.
+- Verwijderen/hernoemen van variabelen houdt functie-koppelingen veilig bij.
+
+PRIVACY / GENERIEKE INTERFACE
+- Hardcoded naam 'Giovanni' verwijderd.
+- Hardcoded boektitel 'The Sovereign' verwijderd.
+- Auteur wordt alleen automatisch ingevuld met de naam van de ingelogde gebruiker.
+- Generieke placeholders en previewtitels voor andere auteurs.
+
+EXTRA
+- Kleine bestaande TypeScript-fout rond DOM Node.TEXT_NODE / ELEMENT_NODE gecorrigeerd.

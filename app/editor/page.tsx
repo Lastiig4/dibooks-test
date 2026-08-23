@@ -99,14 +99,56 @@ type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "fun
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 
-type FunctionActionType = "set_flag" | "clear_flag" | "increment" | "decrement" | "set_number";
+type StoryVariableType = "boolean" | "number" | "text";
+type StoryVariableValue = boolean | number | string;
+
+type StoryVariable = {
+  id: string;
+  name: string;
+  type: StoryVariableType;
+  defaultValue: StoryVariableValue;
+  description?: string;
+};
+
+type FunctionActionType =
+  | "set_flag"
+  | "clear_flag"
+  | "increment"
+  | "decrement"
+  | "set_number"
+  | "set_text";
 
 type FunctionAction = {
   id: string;
   type: FunctionActionType;
   key: string;
+  variableId?: string;
   amount?: number;
+  textValue?: string;
 };
+
+function getDefaultStoryVariableValue(type: StoryVariableType): StoryVariableValue {
+  if (type === "boolean") return false;
+  if (type === "number") return 0;
+  return "";
+}
+
+function getRequiredVariableTypeForAction(actionType: FunctionActionType): StoryVariableType {
+  if (actionType === "set_flag" || actionType === "clear_flag") return "boolean";
+  if (actionType === "set_text") return "text";
+  return "number";
+}
+
+function normalizeStoryVariableName(value: string) {
+  const normalized = value
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^([0-9])/, "_$1");
+
+  return normalized || "variabele";
+}
 
 type DiNodeData = {
   label: string;
@@ -275,6 +317,20 @@ function FunctionIcon() {
     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-black tracking-tight">
       Fx
     </div>
+  );
+}
+
+function FlagVariablesIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7 fill-none stroke-current stroke-[2.4]"
+      aria-hidden="true"
+    >
+      <path d="M6 21V4" />
+      <path d="M6 5h10l-2 4 2 4H6" />
+      <circle cx="6" cy="4" r="1" />
+    </svg>
   );
 }
 
@@ -910,7 +966,7 @@ function paginateHtml(html: string, maxCharacters: number) {
     const blocks: HTMLElement[] = [];
 
     Array.from(parent.childNodes).forEach((child) => {
-      if (child.nodeType === Node.TEXT_NODE) {
+      if (child.nodeType === window.Node.TEXT_NODE) {
         const text = child.textContent?.trim();
 
         if (text) {
@@ -922,7 +978,7 @@ function paginateHtml(html: string, maxCharacters: number) {
         return;
       }
 
-      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      if (child.nodeType !== window.Node.ELEMENT_NODE) return;
 
       const element = child as HTMLElement;
       const tagName = element.tagName.toLowerCase();
@@ -1490,7 +1546,7 @@ const dashboardColorThemes: Record<
 
 const defaultDashboardSaveForm: DashboardSaveForm = {
   title: "",
-  author: "name",
+  author: "",
   subtitle: "",
   description: "",
   genres: ["Interactief"],
@@ -1670,7 +1726,7 @@ function SaveToDashboardModal({
               <input
                 value={form.title}
                 onChange={(event) => updateField("title", event.target.value)}
-                placeholder="Bijv. The Sovereign"
+                placeholder="Bijv. De laatste reis"
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
               />
             </div>
@@ -1931,6 +1987,8 @@ export default function Home() {
   const lastAutosavePayloadRef = useRef<string>("");
   const [autosaveStatus, setAutosaveStatus] = useState("Sessiesave wordt geladen...");
   const [cutsceneUploadStatus, setCutsceneUploadStatus] = useState("");
+  const [storyVariables, setStoryVariables] = useState<StoryVariable[]>([]);
+  const [variablesOpen, setVariablesOpen] = useState(false);
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
@@ -1940,6 +1998,19 @@ export default function Home() {
   useEffect(() => {
     window.localStorage.setItem("dibooks-editor-dark-grid", String(editorDarkMode));
   }, [editorDarkMode]);
+
+  useEffect(() => {
+    if (!user?.name) return;
+
+    setDashboardSaveForm((current) =>
+      current.author.trim()
+        ? current
+        : {
+            ...current,
+            author: user.name,
+          },
+    );
+  }, [user?.name]);
 
 
   useEffect(() => {
@@ -1993,7 +2064,7 @@ export default function Home() {
 
         setDashboardSaveForm({
           title: dashboardBook.title ?? "",
-          author: dashboardBook.author ?? user.name ?? "Giovanni",
+          author: dashboardBook.author ?? user.name ?? "",
           subtitle: dashboardBook.subtitle ?? "",
           description: "description" in dashboardBook ? (dashboardBook.description ?? "") : "",
           genres: Array.isArray(dashboardBook.genres) && dashboardBook.genres.length > 0 ? dashboardBook.genres : ["Interactief"],
@@ -2014,6 +2085,7 @@ export default function Home() {
           setEdges(projectData.edges ?? []);
           setStartNodeId(safeStartNodeId);
           setSelectedNodeId((safeStartNodeId || projectNodes?.[0]?.id) ?? null);
+          setStoryVariables(Array.isArray(projectData.variables) ? projectData.variables : []);
         }
 
         restoreEditorAutosaveDraftIfNeeded();
@@ -2042,7 +2114,7 @@ export default function Home() {
     }, 900);
 
     return () => window.clearTimeout(timeout);
-  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport]);
+  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport, storyVariables]);
 
   useEffect(() => {
     function saveBeforeLeaving() {
@@ -2062,7 +2134,7 @@ export default function Home() {
       window.removeEventListener("pagehide", saveBeforeLeaving);
       document.removeEventListener("visibilitychange", saveWhenHidden);
     };
-  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport]);
+  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport, storyVariables]);
 
   const previewNode = nodes.find((node) => node.id === previewNodeId);
 
@@ -2262,6 +2334,7 @@ export default function Home() {
       type: "dibooks-project",
       bookTitle: dashboardSaveForm.title.trim() || "Nieuw DiBooks verhaal",
       startNodeId: getSafeStartNodeId(nodes, startNodeId),
+      variables: storyVariables,
       nodes,
       edges,
       savedAt: new Date().toISOString(),
@@ -2306,6 +2379,7 @@ export default function Home() {
     setEdges(projectData.edges ?? []);
     setStartNodeId(safeStartNodeId);
     setSelectedNodeId(draft.selectedNodeId ?? safeStartNodeId ?? projectNodes?.[0]?.id ?? null);
+    setStoryVariables(Array.isArray(projectData.variables) ? projectData.variables : []);
     setDashboardSaveForm((current) => ({
       ...current,
       ...(draft.dashboardSaveForm ?? {}),
@@ -2391,6 +2465,7 @@ export default function Home() {
     setSharedEditOwnerName("");
     setSharedEditPermission("");
     setDashboardSaveForm(defaultDashboardSaveForm);
+    setStoryVariables([]);
     setEditingTextNodeId(null);
     setPreviewOpen(false);
     setPreviewNodeId(null);
@@ -2566,6 +2641,7 @@ ${formatSaveError(error)}`);
         setNodes(projectNodes);
         setEdges(projectData.edges ?? []);
         setStartNodeId(safeStartNodeId);
+        setStoryVariables(Array.isArray(projectData.variables) ? projectData.variables : []);
         setDashboardBookId(null);
         setDashboardSaveForm((current) => ({
           ...current,
@@ -2692,7 +2768,7 @@ ${formatSaveError(error)}`);
         miniGameFailTargetNodeId: type === "minigame" ? "" : undefined,
         functionActions:
           type === "function"
-            ? [{ id: `function_action_${Date.now()}`, type: "set_flag", key: "", amount: 1 }]
+            ? [{ id: `function_action_${Date.now()}`, type: "set_flag", key: "", variableId: "", amount: 1 }]
             : undefined,
       },
     };
@@ -3174,6 +3250,7 @@ ${formatSaveError(error)}`);
                 id: `function_action_${Date.now()}`,
                 type: "set_flag",
                 key: "",
+                variableId: "",
                 amount: 1,
               },
             ],
@@ -3201,6 +3278,145 @@ ${formatSaveError(error)}`);
     );
   }
 
+  function addStoryVariable() {
+    const existingNames = new Set(storyVariables.map((variable) => variable.name));
+    let index = storyVariables.length + 1;
+    let name = `variabele_${index}`;
+
+    while (existingNames.has(name)) {
+      index += 1;
+      name = `variabele_${index}`;
+    }
+
+    const newVariable: StoryVariable = {
+      id: `variable_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      type: "boolean",
+      defaultValue: false,
+      description: "",
+    };
+
+    setStoryVariables((current) => [...current, newVariable]);
+  }
+
+  function updateStoryVariable(variableId: string, updates: Partial<StoryVariable>) {
+    const previousVariable = storyVariables.find((variable) => variable.id === variableId);
+    if (!previousVariable) return;
+
+    const nextName =
+      updates.name !== undefined
+        ? normalizeStoryVariableName(updates.name)
+        : previousVariable.name;
+    const nextType = updates.type ?? previousVariable.type;
+
+    if (
+      storyVariables.some(
+        (variable) => variable.id !== variableId && variable.name === nextName,
+      )
+    ) {
+      alert(`Er bestaat al een variabele met de naam "${nextName}".`);
+      return;
+    }
+
+    const nextUpdates: Partial<StoryVariable> = {
+      ...updates,
+      name: nextName,
+    };
+
+    setStoryVariables((current) =>
+      current.map((variable) =>
+        variable.id === variableId
+          ? {
+              ...variable,
+              ...nextUpdates,
+            }
+          : variable,
+      ),
+    );
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        if (node.data.type !== "function") return node;
+
+        const nextActions = (node.data.functionActions ?? []).map((action) => {
+          if (action.variableId !== variableId) return action;
+
+          if (getRequiredVariableTypeForAction(action.type) !== nextType) {
+            return {
+              ...action,
+              variableId: "",
+              key: "",
+            };
+          }
+
+          return {
+            ...action,
+            key: nextName,
+          };
+        });
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            functionActions: nextActions,
+          },
+        };
+      }),
+    );
+  }
+
+  function deleteStoryVariable(variableId: string) {
+    const variable = storyVariables.find((item) => item.id === variableId);
+    if (!variable) return;
+
+    const referenceCount = nodes.reduce(
+      (total, node) =>
+        total +
+        (node.data.functionActions ?? []).filter(
+          (action) =>
+            action.variableId === variableId ||
+            (!action.variableId && action.key === variable.name),
+        ).length,
+      0,
+    );
+
+    const confirmed = window.confirm(
+      referenceCount > 0
+        ? `Variabele "${variable.name}" wordt in ${referenceCount} functie-actie(s) gebruikt. Verwijderen wist die koppelingen. Doorgaan?`
+        : `Variabele "${variable.name}" verwijderen?`,
+    );
+
+    if (!confirmed) return;
+
+    setStoryVariables((current) =>
+      current.filter((item) => item.id !== variableId),
+    );
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        if (node.data.type !== "function") return node;
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            functionActions: (node.data.functionActions ?? []).map((action) =>
+              action.variableId === variableId ||
+              (!action.variableId && action.key === variable.name)
+                ? {
+                    ...action,
+                    variableId: "",
+                    key: "",
+                  }
+                : action,
+            ),
+          },
+        };
+      }),
+    );
+  }
+
   function getReaderStoryData() {
     const storyNodes = getStoryNodes(nodes);
     const storyNodeIds = new Set(storyNodes.map((node) => node.id));
@@ -3210,6 +3426,7 @@ ${formatSaveError(error)}`);
     return {
       bookTitle: dashboardSaveForm.title.trim() || "Nieuw DiBooks verhaal",
       startNodeId: safeStartNodeId,
+      variables: storyVariables,
       nodes: storyNodes.map((node) => ({
         id: node.id,
         type: node.data.type,
@@ -3323,6 +3540,13 @@ ${formatSaveError(error)}`);
             />
 
             <SidebarButton
+              onClick={() => setVariablesOpen(true)}
+              label="Flags & variabelen"
+              className="bg-indigo-600 text-white hover:bg-indigo-500"
+              icon={<FlagVariablesIcon />}
+            />
+
+            <SidebarButton
               onClick={() => createNode("function")}
               label="Functie / flags"
               className="bg-cyan-500 text-slate-950 hover:bg-cyan-300"
@@ -3429,6 +3653,11 @@ ${formatSaveError(error)}`);
               <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
                 {getStoryEdges(edges, nodes).length} paths
               </span>
+              {storyVariables.length > 0 && (
+                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-indigo-500/15 text-indigo-200" : "bg-indigo-600/10 text-indigo-700"}`}>
+                  {storyVariables.length} variabele{storyVariables.length === 1 ? "" : "n"}
+                </span>
+              )}
               {functionNodeCount > 0 && (
                 <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-600/10 text-cyan-700"}`}>
                   {functionNodeCount} functie
@@ -3910,6 +4139,8 @@ ${formatSaveError(error)}`);
                           onChange={(event) =>
                             updateSelectedFunctionAction(action.id, {
                               type: event.target.value as FunctionActionType,
+                              variableId: "",
+                              key: "",
                             })
                           }
                           className="mb-3 w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-cyan-400"
@@ -3919,15 +4150,53 @@ ${formatSaveError(error)}`);
                           <option value="increment">Getal verhogen</option>
                           <option value="decrement">Getal verlagen</option>
                           <option value="set_number">Getal instellen</option>
+                          <option value="set_text">Tekst instellen</option>
                         </select>
 
-                        <label className="mb-2 block text-sm font-black">Naam van flag / teller</label>
-                        <input
-                          value={action.key}
-                          onChange={(event) => updateSelectedFunctionAction(action.id, { key: event.target.value })}
-                          placeholder="bijv. told_michael, xander_trust, kael_suspicion"
-                          className="mb-3 w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-cyan-400"
-                        />
+                        <label className="mb-2 block text-sm font-black">Variabele</label>
+                        <select
+                          value={
+                            storyVariables.find((variable) => variable.id === action.variableId)?.id ??
+                            storyVariables.find(
+                              (variable) =>
+                                variable.name === action.key &&
+                                variable.type === getRequiredVariableTypeForAction(action.type),
+                            )?.id ??
+                            ""
+                          }
+                          onChange={(event) => {
+                            const variable = storyVariables.find(
+                              (item) => item.id === event.target.value,
+                            );
+
+                            updateSelectedFunctionAction(action.id, {
+                              variableId: variable?.id ?? "",
+                              key: variable?.name ?? "",
+                            });
+                          }}
+                          className="mb-2 w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-cyan-400"
+                        >
+                          <option value="">Kies een variabele...</option>
+                          {storyVariables
+                            .filter(
+                              (variable) =>
+                                variable.type === getRequiredVariableTypeForAction(action.type),
+                            )
+                            .map((variable) => (
+                              <option key={variable.id} value={variable.id}>
+                                {variable.name}
+                              </option>
+                            ))}
+                        </select>
+
+                        {storyVariables.filter(
+                          (variable) =>
+                            variable.type === getRequiredVariableTypeForAction(action.type),
+                        ).length === 0 && (
+                          <p className="mb-3 rounded-lg border border-indigo-500/20 bg-indigo-500/10 p-3 text-xs font-bold leading-5 text-indigo-100/80">
+                            Maak eerst een passende variabele via de paarse vlagknop links.
+                          </p>
+                        )}
 
                         {(action.type === "increment" || action.type === "decrement" || action.type === "set_number") && (
                           <div>
@@ -3942,6 +4211,22 @@ ${formatSaveError(error)}`);
                                   amount: Number(event.target.value) || 0,
                                 })
                               }
+                              className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                        )}
+
+                        {action.type === "set_text" && (
+                          <div>
+                            <label className="mb-2 block text-sm font-black">Tekstwaarde</label>
+                            <input
+                              value={action.textValue ?? ""}
+                              onChange={(event) =>
+                                updateSelectedFunctionAction(action.id, {
+                                  textValue: event.target.value,
+                                })
+                              }
+                              placeholder="Bijv. toegang_verleend"
                               className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-cyan-400"
                             />
                           </div>
@@ -4151,7 +4436,8 @@ ${formatSaveError(error)}`);
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-600"><VideoIcon /></span><span><strong className="text-white">Cutscene</strong><br />Kort videofragment van maximaal 12 seconden.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-[11px] font-black">ABC</span><span><strong className="text-white">Keuze menu</strong><br />Lezer kiest uit maximaal drie routes.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600"><JoystickIcon /></span><span><strong className="text-white">Mini game</strong><br />Interactief moment met success/fail route.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-slate-950"><FunctionIcon /></span><span><strong className="text-white">Functie / flags</strong><br />Onzichtbare node die flags/tellers aanpast en automatisch doorgaat.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white"><FlagVariablesIcon /></span><span><strong className="text-white">Flags & variabelen</strong><br />Centrale lijst met alle flags, tellers en tekstvariabelen van dit boek.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-slate-950"><FunctionIcon /></span><span><strong className="text-white">Functie / flags</strong><br />Onzichtbare node die centrale variabelen aanpast en automatisch doorgaat.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-950"><ScratchpadIcon /></span><span><strong className="text-white">Kladblok</strong><br />Notities, lore en ideeën. Geen paths en niet zichtbaar voor lezers.</span></div>
                   </div>
                 </section>
@@ -4201,6 +4487,206 @@ ${formatSaveError(error)}`);
                 </section>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {variablesOpen && (
+        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 p-4 backdrop-blur-sm sm:p-6">
+          <div className="mx-auto max-w-5xl rounded-3xl border border-indigo-400/20 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.32em] text-indigo-300">
+                  Story state
+                </p>
+                <h2 className="mt-2 text-3xl font-black sm:text-5xl">
+                  Flags & variabelen
+                </h2>
+                <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-neutral-400">
+                  Maak hier één centrale lijst voor dit boek. Functie-nodes kiezen daarna een variabele uit deze lijst,
+                  zodat auteurs niet steeds losse namen hoeven over te typen.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={addStoryVariable}
+                  className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-500"
+                >
+                  + Nieuwe variabele
+                </button>
+                <button
+                  onClick={() => setVariablesOpen(false)}
+                  className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-500"
+                >
+                  Sluiten
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-4 text-sm font-semibold leading-6 text-indigo-100">
+              <strong>Boolean</strong> gebruik je voor ja/nee-flags, <strong>Getal</strong> voor vertrouwen, reputatie of tellers
+              en <strong>Tekst</strong> voor een tekstwaarde. De startwaarde wordt gebruikt wanneer een lezer een nieuw verhaal begint.
+            </div>
+
+            {storyVariables.length === 0 ? (
+              <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-white/[0.03] p-10 text-center">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600/20 text-indigo-200">
+                  <FlagVariablesIcon />
+                </div>
+                <h3 className="mt-4 text-xl font-black">Nog geen variabelen</h3>
+                <p className="mt-2 text-sm font-semibold text-neutral-400">
+                  Maak bijvoorbeeld <code className="rounded bg-black/30 px-2 py-1 text-indigo-200">has_key</code> of{" "}
+                  <code className="rounded bg-black/30 px-2 py-1 text-indigo-200">xander_trust</code>.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-4">
+                {storyVariables.map((variable, variableIndex) => {
+                  const referenceCount = nodes.reduce(
+                    (total, node) =>
+                      total +
+                      (node.data.functionActions ?? []).filter(
+                        (action) =>
+                          action.variableId === variable.id ||
+                          (!action.variableId && action.key === variable.name),
+                      ).length,
+                    0,
+                  );
+
+                  return (
+                    <div
+                      key={variable.id}
+                      className="rounded-3xl border border-white/10 bg-white/[0.035] p-5"
+                    >
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.25em] text-indigo-300">
+                            Variabele {variableIndex + 1}
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-neutral-500">
+                            {referenceCount} functie-actie{referenceCount === 1 ? "" : "s"} gekoppeld
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => deleteStoryVariable(variable.id)}
+                          className="rounded-xl bg-red-700 px-4 py-2 text-sm font-black text-white hover:bg-red-600"
+                        >
+                          Verwijder
+                        </button>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr_1fr]">
+                        <div>
+                          <label className="mb-2 block text-sm font-black text-neutral-300">
+                            Naam
+                          </label>
+                          <input
+                            value={variable.name}
+                            onChange={(event) =>
+                              updateStoryVariable(variable.id, {
+                                name: event.target.value,
+                              })
+                            }
+                            className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-mono font-bold text-white outline-none focus:border-indigo-400"
+                          />
+                          <p className="mt-2 text-xs font-semibold text-neutral-500">
+                            Spaties en vreemde tekens worden automatisch omgezet naar underscores.
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-black text-neutral-300">
+                            Type
+                          </label>
+                          <select
+                            value={variable.type}
+                            onChange={(event) => {
+                              const nextType = event.target.value as StoryVariableType;
+                              updateStoryVariable(variable.id, {
+                                type: nextType,
+                                defaultValue: getDefaultStoryVariableValue(nextType),
+                              });
+                            }}
+                            className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-indigo-400"
+                          >
+                            <option value="boolean">Boolean / ja-nee</option>
+                            <option value="number">Getal</option>
+                            <option value="text">Tekst</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-black text-neutral-300">
+                            Startwaarde
+                          </label>
+
+                          {variable.type === "boolean" && (
+                            <label className="flex min-h-[50px] cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-black/35 px-4 py-3">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(variable.defaultValue)}
+                                onChange={(event) =>
+                                  updateStoryVariable(variable.id, {
+                                    defaultValue: event.target.checked,
+                                  })
+                                }
+                                className="h-5 w-5 accent-indigo-500"
+                              />
+                              <span className="font-black">
+                                {Boolean(variable.defaultValue) ? "True / aan" : "False / uit"}
+                              </span>
+                            </label>
+                          )}
+
+                          {variable.type === "number" && (
+                            <input
+                              type="number"
+                              value={Number(variable.defaultValue) || 0}
+                              onChange={(event) =>
+                                updateStoryVariable(variable.id, {
+                                  defaultValue: Number(event.target.value) || 0,
+                                })
+                              }
+                              className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-indigo-400"
+                            />
+                          )}
+
+                          {variable.type === "text" && (
+                            <input
+                              value={String(variable.defaultValue ?? "")}
+                              onChange={(event) =>
+                                updateStoryVariable(variable.id, {
+                                  defaultValue: event.target.value,
+                                })
+                              }
+                              placeholder="Bijv. onbekend"
+                              className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-indigo-400"
+                            />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="mb-2 block text-sm font-black text-neutral-300">
+                          Omschrijving
+                        </label>
+                        <input
+                          value={variable.description ?? ""}
+                          onChange={(event) =>
+                            updateStoryVariable(variable.id, {
+                              description: event.target.value,
+                            })
+                          }
+                          placeholder="Waar gebruik je deze variabele voor?"
+                          className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-semibold text-white outline-none focus:border-indigo-400"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -4255,7 +4741,7 @@ ${formatSaveError(error)}`);
               <h2 className="text-xl font-black sm:text-2xl">
                 {previewNode.data.type === "text" ||
                 previewNode.data.type === "special"
-                  ? "The Sovereign"
+                  ? dashboardSaveForm.title.trim() || "Naamloos boek"
                   : previewNode.data.label}
               </h2>
             </div>
@@ -4382,7 +4868,11 @@ ${formatSaveError(error)}`);
                     {(previewNode.data.functionActions ?? []).map((action) => (
                       <div key={action.id} className="rounded-xl bg-black/25 p-3 text-sm font-bold text-cyan-50">
                         {action.type} → {action.key || "geen naam"}{" "}
-                        {(action.type === "increment" || action.type === "decrement" || action.type === "set_number") ? `(${action.amount ?? 1})` : ""}
+                        {(action.type === "increment" || action.type === "decrement" || action.type === "set_number")
+                          ? `(${action.amount ?? 1})`
+                          : action.type === "set_text"
+                            ? `("${action.textValue ?? ""}")`
+                            : ""}
                       </div>
                     ))}
                   </div>
