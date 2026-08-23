@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import NotificationBell from "@/components/NotificationBell";
+import AppNav from "@/components/AppNav";
 import { useEffect, useMemo, useState } from "react";
 import {
   getBookDetailPath,
@@ -1840,7 +1840,6 @@ export default function DashboardPage() {
   if (!permissions.canUseDashboard) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#05070d] p-5 text-white">
-      <NotificationBell />
         <div className="max-w-2xl rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-center shadow-2xl">
           <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Auteur Dashboard</p>
           <h1 className="mt-4 text-4xl font-black sm:text-6xl">Login nodig</h1>
@@ -1889,36 +1888,7 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#05070d]/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
-          <div>
-            <DiBooksLogo />
-            <p className="mt-1 text-xs font-black uppercase tracking-[0.32em] text-neutral-500">Auteur Dashboard</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Link href="/" className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white hover:bg-white/10">
-              Library
-            </Link>
-            <Link href="/editor" className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">
-              Studio openen
-            </Link>
-            <Link href="/account" className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white hover:bg-white/10">
-              Account
-            </Link>
-            <Link href="/chat" className="rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-100 hover:bg-blue-500/20">
-              Chat
-            </Link>
-            <button
-              onClick={logout}
-              className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-black text-red-100 hover:bg-red-500/20"
-              title={user?.email ?? "Uitloggen"}
-            >
-              Uitloggen
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppNav title="Auteur Dashboard" subtitle="Beheer concepten en publicaties" />
 
       <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
         <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-stretch">

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import NotificationBell from "@/components/NotificationBell";
+import AppNav from "@/components/AppNav";
 import { useEffect, useMemo, useState } from "react";
 import type { DiBook } from "@/lib/books";
 import {
@@ -147,23 +147,19 @@ function FeaturedPanel({ book }: { book: DashboardBook }) {
   const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
 
   return (
-    <Link href={`/books/${book.id}`} className="hidden lg:block">
-      <div className={`overflow-hidden rounded-3xl border ${accentClass} bg-neutral-950 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
-        <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-5 py-4">
+    <Link href={`/books/${book.id}`} className="hidden w-[255px] justify-self-end lg:block">
+      <div className={`overflow-hidden rounded-3xl border ${accentClass} bg-neutral-950/90 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-4 py-3">
           <BookBadge>{book.primaryGenre}</BookBadge>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <AccessBadge book={book} />
             <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
           </div>
         </div>
-        <CoverArtwork book={book} large />
-        <div className="flex min-h-[150px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-5 backdrop-blur-[2px]">
-          <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300/80">
-            Interactive story
-          </p>
-          <h3 className="mt-2 line-clamp-2 text-5xl font-black leading-none text-white">
-            {book.title}
-          </h3>
+        <CoverArtwork book={book} />
+        <div className="flex min-h-[112px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-4 backdrop-blur-[2px]">
+          <p className="text-[9px] font-black uppercase tracking-[0.34em] text-blue-300/80">Interactive story</p>
+          <h3 className="mt-2 line-clamp-2 text-2xl font-black leading-none text-white">{book.title}</h3>
         </div>
       </div>
     </Link>
@@ -248,90 +244,21 @@ export default function LibraryPage() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#05070d] text-white">
-      <NotificationBell />
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_36%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.12),transparent_35%),linear-gradient(180deg,#05070d_0%,#05070d_45%,#020308_100%)]" />
-
-      <header className="sticky top-0 z-30 border-b border-white/5 bg-[#05070d]/85 px-5 py-4 backdrop-blur-xl sm:px-8 lg:px-10">
-        <div className="flex items-center justify-between gap-4">
-          <DiBooksLogo />
-          <nav className="flex items-center gap-3">
-            {permissions.canUseDashboard && (
-              <Link
-                href="/dashboard"
-                className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block"
-              >
-                Dashboard
-              </Link>
-            )}
-
-            <Link
-              href="/editor"
-              className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block"
-            >
-              Auteur Studio
-            </Link>
-
-            {!isLoggedIn ? (
-              <>
-                <button
-                  onClick={() => setAuthModalMode("login")}
-                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:bg-white/10"
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => setAuthModalMode("register")}
-                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500"
-                >
-                  Registreer
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/favorites"
-                  className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 hover:bg-yellow-500/20"
-                  title="Favorieten"
-                  aria-label="Favorieten"
-                >
-                  ★
-                </Link>
-                <Link
-                  href="/account"
-                  className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block"
-                >
-                  Account
-                </Link>
-                <Link
-                  href="/chat"
-                  className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-100 hover:bg-blue-500/20 sm:block"
-                >
-                  Chat
-                </Link>
-                <button
-                  onClick={logout}
-                  className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20"
-                >
-                  Uitloggen
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      <AppNav title="Library" subtitle="Ontdek interactieve boeken" />
 
       {featuredBook ? (
-      <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
-        <div className={`relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
+      <section className="px-5 pt-8 sm:px-8 sm:pt-10 lg:px-10">
+        <div className={`relative isolate overflow-hidden rounded-[1.75rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
           {featuredBook.bannerImage && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={featuredBook.bannerImage} alt={`Banner van ${featuredBook.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover opacity-85" />
           )}
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.16),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(37,99,235,0.26),transparent_34%),linear-gradient(90deg,rgba(0,0,0,0.90),rgba(0,0,0,0.62),rgba(0,0,0,0.24))]" />
-          <div className="absolute -right-28 top-10 -z-10 h-[480px] w-[480px] rounded-full border border-white/10" />
-          <div className="absolute -right-8 top-28 -z-10 h-[620px] w-[620px] rounded-full border border-white/5" />
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.10),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(37,99,235,0.15),transparent_34%),linear-gradient(90deg,rgba(0,0,0,0.88),rgba(0,0,0,0.66),rgba(0,0,0,0.38))]" />
+          <div className="absolute -right-24 top-8 -z-10 h-[360px] w-[360px] rounded-full border border-white/10" />
+          <div className="absolute -right-6 top-24 -z-10 h-[480px] w-[480px] rounded-full border border-white/5" />
 
-          <div className="relative grid min-h-[430px] items-end gap-8 p-6 sm:p-10 lg:grid-cols-[1fr_420px] lg:p-12">
+          <div className="relative grid min-h-[330px] items-center gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_280px] lg:p-10">
             <div className="max-w-3xl">
               {featuredBook.source === "dashboard" && (
                 <div className="mb-4 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-emerald-200">
@@ -345,13 +272,13 @@ export default function LibraryPage() {
                 <AccessBadge book={featuredBook} />
                 <BookBadge light>{getBookStatusLabel(featuredBook)}</BookBadge>
               </div>
-              <h1 className="text-5xl font-black leading-none sm:text-7xl lg:text-8xl">
+              <h1 className="max-w-4xl text-4xl font-black leading-none sm:text-6xl lg:text-7xl">
                 {featuredBook.title}
               </h1>
-              <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-neutral-200 sm:text-lg">
+              <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">
                 {featuredBook.subtitle}
               </p>
-              <div className="mt-7 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-wrap gap-3">
                 {featuredBook.published ? (
                   <Link
                     href={`/books/${featuredBook.id}/read`}

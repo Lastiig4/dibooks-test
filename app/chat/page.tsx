@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import NotificationBell from "@/components/NotificationBell";
+import AppNav from "@/components/AppNav";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
@@ -215,21 +215,8 @@ export default function ChatPage() {
 
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
-      <NotificationBell />
+      <AppNav title="Chat" subtitle="Berichten met contacten" />
       <section className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-5 py-8 sm:px-8 lg:px-10">
-        <header className="flex flex-wrap items-center justify-between gap-5 rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 shadow-2xl">
-          <DiBooksLogo />
-          <nav className="flex flex-wrap items-center gap-3">
-            <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-white/80 hover:bg-white/10">Library</Link>
-            <Link href="/account" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-white/80 hover:bg-white/10">Account</Link>
-            <Link href="/dashboard" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-white/80 hover:bg-white/10">Dashboard</Link>
-            {isLoggedIn ? (
-              <button onClick={logout} className="rounded-full bg-white px-4 py-2 text-sm font-black text-black hover:bg-blue-100">Uitloggen</button>
-            ) : (
-              <button onClick={() => setAuthModalMode("login")} className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500">Login</button>
-            )}
-          </nav>
-        </header>
 
         <section className="rounded-[2.5rem] border border-blue-400/15 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_35%),rgba(255,255,255,0.035)] p-8 shadow-2xl sm:p-12">
           <p className="text-xs font-black uppercase tracking-[0.45em] text-blue-300">DiBooks Chat</p>

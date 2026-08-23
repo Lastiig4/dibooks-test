@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import NotificationBell from "@/components/NotificationBell";
+import AppNav from "@/components/AppNav";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import type { DiBook } from "@/lib/books";
@@ -293,7 +293,6 @@ export default function BookDetailPage() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#05070d] p-5 text-white">
-      <NotificationBell />
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center shadow-2xl">
           <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">DiBooks</p>
           <h1 className="mt-3 text-3xl font-black">Boek laden...</h1>
@@ -321,46 +320,7 @@ export default function BookDetailPage() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#05070d] text-white">
-      <header className="sticky top-0 z-40 border-b border-white/5 bg-[#05070d]/85 px-5 py-4 backdrop-blur-xl sm:px-8 lg:px-10">
-        <div className="flex items-center justify-between gap-4">
-          <DiBooksLogo />
-          <nav className="flex items-center gap-3">
-            <Link href="/" className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block">
-              Library
-            </Link>
-            {permissions.canUseDashboard && (
-              <Link href="/dashboard" className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block">
-                Dashboard
-              </Link>
-            )}
-            {!isLoggedIn ? (
-              <>
-                <button onClick={() => setAuthModalMode("login")} className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-white hover:bg-white/10">
-                  Login
-                </button>
-                <button onClick={() => setAuthModalMode("register")} className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500">
-                  Registreer
-                </button>
-              </>
-            ) : (
-              <>
-                <Link href="/favorites" className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 hover:bg-yellow-500/20" title="Favorieten">
-                  ★
-                </Link>
-                <Link href="/account" className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block">
-                  Account
-                </Link>
-                <Link href="/chat" className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-100 hover:bg-blue-500/20 sm:block">
-                  Chat
-                </Link>
-                <button onClick={logout} className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20">
-                  Uitloggen
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      <AppNav title="Boekpagina" subtitle={book.title} />
 
       <section className="relative isolate px-5 py-8 sm:px-8 sm:py-12 lg:px-10">
         <HeroBackground book={book} />

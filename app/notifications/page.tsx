@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import NotificationBell from "@/components/NotificationBell";
+import AppNav from "@/components/AppNav";
 import { useDemoAuth } from "@/lib/auth";
 import {
   fetchNotifications,
@@ -149,18 +149,10 @@ export default function NotificationsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#06080d] px-5 py-6 text-white sm:px-8">
-      <NotificationBell />
-      <header className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-5">
-        <DiBooksLogo />
-        <nav className="flex flex-wrap items-center gap-3">
-          <Link href="/" className="rounded-full border border-white/10 px-5 py-3 text-sm font-black uppercase tracking-widest text-white hover:border-white/40">Library</Link>
-          <Link href="/account" className="rounded-full border border-white/10 px-5 py-3 text-sm font-black uppercase tracking-widest text-white hover:border-white/40">Account</Link>
-          <Link href="/chat" className="rounded-full bg-white px-5 py-3 text-sm font-black uppercase tracking-widest text-black hover:bg-blue-100">Chat</Link>
-        </nav>
-      </header>
+    <main className="min-h-screen bg-[#06080d] text-white">
+      <AppNav title="Meldingen" subtitle="Updates en berichten" />
 
-      <section className="mx-auto mt-10 max-w-7xl">
+      <section className="mx-auto mt-10 max-w-7xl px-5 pb-10 sm:px-8">
         <div className="rounded-[2rem] border border-yellow-300/20 bg-yellow-300/[0.06] p-8 shadow-2xl md:p-12">
           <p className="text-xs font-black uppercase tracking-[0.5em] text-yellow-200">Meldingen</p>
           <div className="mt-4 flex flex-wrap items-end justify-between gap-5">

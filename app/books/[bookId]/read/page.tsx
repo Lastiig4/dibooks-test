@@ -3,7 +3,7 @@
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import NotificationBell from "@/components/NotificationBell";
+import { AppNavActions } from "@/components/AppNav";
 import { useParams } from "next/navigation";
 import { books } from "@/lib/books";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -1206,7 +1206,6 @@ export default function ReadBookPage() {
   if (loadState.status === "loading") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#05070d] p-5 text-white">
-      <NotificationBell />
         <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-center shadow-2xl">
           <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">DiBooks Reader</p>
           <h1 className="mt-3 text-4xl font-black">Boek laden...</h1>
@@ -1255,7 +1254,6 @@ export default function ReadBookPage() {
 
   return (
     <main className={`flex h-screen flex-col overflow-hidden ${readerShellClass}`}>
-      <NotificationBell />
       {!isCutsceneNode && (
       <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
@@ -1283,15 +1281,7 @@ export default function ReadBookPage() {
             >
               {resetProgressBusy ? "Resetten..." : "↻ Opnieuw"}
             </button>
-            <Link href="/account" className="hidden rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10 sm:inline-flex">
-              Account
-            </Link>
-            <Link href="/chat" className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-xs font-black text-blue-100 hover:bg-blue-500/20 sm:inline-flex">
-              Chat
-            </Link>
-            <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10">
-              Library
-            </Link>
+            <AppNavActions compact />
           </div>
         </div>
 

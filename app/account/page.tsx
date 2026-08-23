@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import NotificationBell from "@/components/NotificationBell";
+import AppNav from "@/components/AppNav";
 import { useEffect, useMemo, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
@@ -462,23 +462,7 @@ export default function AccountPage() {
 
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
-      <NotificationBell />
-      <header className="sticky top-0 z-30 border-b border-white/5 bg-[#05070d]/85 px-5 py-4 backdrop-blur-xl sm:px-8 lg:px-10">
-        <div className="flex items-center justify-between gap-4">
-          <DiBooksLogo />
-          <nav className="flex items-center gap-3">
-            <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white">Library</Link>
-            <Link href="/favorites" className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 hover:bg-yellow-500/20" title="Favorieten">★</Link>
-            {permissions.canUseDashboard && <Link href="/dashboard" className="hidden rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white sm:block">Dashboard</Link>}
-            {isLoggedIn && <Link href="/chat" className="hidden rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-black text-blue-100 hover:bg-blue-500/20 sm:block">Chat</Link>}
-            {!isLoggedIn ? (
-              <button onClick={() => setAuthModalMode("login")} className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-500">Login</button>
-            ) : (
-              <button onClick={logout} className="rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-500/20">Uitloggen</button>
-            )}
-          </nav>
-        </div>
-      </header>
+      <AppNav title="Account" subtitle="Profiel, contacten en delen" />
 
       <section className="px-5 py-10 sm:px-8 lg:px-10">
         <div className="rounded-[2rem] border border-blue-400/20 bg-gradient-to-br from-blue-950/70 via-neutral-950 to-purple-950/45 p-8 shadow-2xl sm:p-12">

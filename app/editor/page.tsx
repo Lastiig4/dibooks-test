@@ -1,6 +1,6 @@
 "use client";
 
-import NotificationBell from "@/components/NotificationBell";
+import { AppNavActions } from "@/components/AppNav";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -3160,7 +3160,6 @@ ${formatSaveError(error)}`);
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-neutral-950 text-white">
-      <NotificationBell />
       <div className="flex h-full">
         <aside className="flex w-24 flex-col items-center border-r-4 border-black bg-neutral-950 p-3">
           <button
@@ -3310,67 +3309,7 @@ ${formatSaveError(error)}`);
               >
                 {autosaveStatus}
               </span>
-              <button
-                onClick={() => { window.location.href = "/dashboard"; }}
-                className={`rounded-full px-3 py-1 transition ${
-                  editorDarkMode
-                    ? "bg-white/10 text-neutral-200 hover:bg-white/15"
-                    : "bg-black/10 text-neutral-700 hover:bg-black/15"
-                }`}
-                title="Naar Dashboard"
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => { window.location.href = "/account"; }}
-                className={`rounded-full px-3 py-1 transition ${
-                  editorDarkMode
-                    ? "bg-white/10 text-neutral-200 hover:bg-white/15"
-                    : "bg-black/10 text-neutral-700 hover:bg-black/15"
-                }`}
-                title="Naar Account"
-              >
-                Account
-              </button>
-              <button
-                onClick={() => { window.location.href = "/chat"; }}
-                className={`rounded-full px-3 py-1 transition ${
-                  editorDarkMode
-                    ? "bg-blue-500/15 text-blue-200 hover:bg-blue-500/25"
-                    : "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20"
-                }`}
-                title="Naar Chat"
-              >
-                Chat
-              </button>
-              <button
-                onClick={isLoggedIn ? handleDemoLogout : handleDemoLogin}
-                className={`rounded-full px-3 py-1 transition ${
-                  isLoggedIn
-                    ? editorDarkMode
-                      ? "bg-red-500/15 text-red-200 hover:bg-red-500/25"
-                      : "bg-red-600/10 text-red-700 hover:bg-red-600/20"
-                    : editorDarkMode
-                      ? "bg-blue-500/15 text-blue-200 hover:bg-blue-500/25"
-                      : "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20"
-                }`}
-                title={isLoggedIn ? "Uitloggen" : "Login"}
-              >
-                {isLoggedIn ? "Uitloggen" : "Login"}
-              </button>
-              {!isLoggedIn && (
-                <button
-                  onClick={() => setAuthModalMode("register")}
-                  className={`rounded-full px-3 py-1 transition ${
-                    editorDarkMode
-                      ? "bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25"
-                      : "bg-cyan-600/10 text-cyan-700 hover:bg-cyan-600/20"
-                  }`}
-                  title="Registreer"
-                >
-                  Registreer
-                </button>
-              )}
+              <AppNavActions compact />
               <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-600/10 text-cyan-700"}`}>
                 {getPlanLabel(user)}
               </span>

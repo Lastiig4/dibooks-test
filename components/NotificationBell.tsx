@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useDemoAuth } from "@/lib/auth";
 import { fetchUnreadNotificationCount } from "@/lib/supabase/socialFeatures";
 
-export default function NotificationBell() {
+export default function NotificationBell({ variant = "floating" }: { variant?: "floating" | "inline" }) {
   const { user } = useDemoAuth();
   const [count, setCount] = useState(0);
 
@@ -36,10 +36,15 @@ export default function NotificationBell() {
 
   if (!user) return null;
 
+  const className =
+    variant === "inline"
+      ? "relative flex h-11 w-11 items-center justify-center rounded-2xl border border-yellow-300/25 bg-yellow-500/10 text-lg text-yellow-100 shadow-lg transition hover:-translate-y-0.5 hover:border-yellow-300/60 hover:bg-yellow-500/20"
+      : "fixed bottom-4 right-4 z-[90] flex h-12 w-12 items-center justify-center rounded-full border border-yellow-300/25 bg-black/80 text-xl text-white shadow-2xl backdrop-blur transition hover:-translate-y-0.5 hover:border-yellow-300/60 hover:bg-neutral-900 md:bottom-6 md:right-6";
+
   return (
     <Link
       href="/notifications"
-      className="fixed bottom-4 right-4 z-[90] flex h-12 w-12 items-center justify-center rounded-full border border-yellow-300/25 bg-black/80 text-xl text-white shadow-2xl backdrop-blur transition hover:-translate-y-0.5 hover:border-yellow-300/60 hover:bg-neutral-900 md:bottom-6 md:right-6"
+      className={className}
       aria-label={count > 0 ? `${count} ongelezen meldingen` : "Meldingen"}
       title={count > 0 ? `${count} ongelezen meldingen` : "Meldingen"}
     >
