@@ -1,11 +1,16 @@
 {
-  "name": "DiBooks Admin Review Role Race Fix",
+  "name": "DiBooks Editor UI Categories V1",
   "date": "2026-08-23",
   "sql_required": false,
   "files": [
     "app/editor/page.tsx",
-    "app/admin/moderation/page.tsx",
-    "lib/supabase/moderation.ts",
     "PATCH_INFO.txt"
+  ],
+  "features": [
+    "Grouped left sidebar menus",
+    "Compact Opslag top dropdown",
+    "Compact Structuur top dropdown",
+    "Hide plan badge and dashboard UUID",
+    "Move node/path/logic stats out of permanent header"
   ]
 }

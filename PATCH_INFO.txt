@@ -1,38 +1,84 @@
-DiBooks Patch - Admin Review Role Race Fix
-========================================
+DiBooks Patch - Editor UI Categories V1
+=====================================
 
-Probleem:
-Na de snelle auth-updates kan Supabase Auth de gebruiker direct tonen,
-terwijl profiles.role nog een fractie later wordt geladen.
+Doel:
+De Auteur Studio overzichtelijk houden nu DiBooks steeds meer node-types,
+logica en tools krijgt.
 
-Een admin kon daardoor heel kort als 'author' in de browserstate staan.
-De revieweditor controleerde precies in dat moment:
-  if (role !== "admin") -> wegsturen
+LINKERZIJDE
 
-Resultaat:
-"Alleen DiBooks admins kunnen een boek in reviewmodus openen."
-terwijl het account in Supabase WEL admin is.
+Oude losse knoppen zijn samengevoegd tot 4 categorieën:
 
-Fix:
-- Moderatie gebruikt voor toegangscontrole voortaan de echte Supabase adminrol.
-- RPC is_current_dibooks_admin is leidend.
-- profiles.role is fallback.
-- Browser user.role is GEEN security gate meer voor moderatie.
-- Revieweditor wacht op de authoritative check voordat hij toegang weigert.
-- Boekmoderatiepagina gebruikt dezelfde check.
-- Clear/reopen/approve/reject helpers controleren adminrechten server-backed.
-- Supabase RPC's blijven daarnaast zelf adminrechten afdwingen.
+1. Tekst & schrijven
+   - Normale tekst
+   - Speciale tekst
+   - Keuzemenu
+   - Kladblok / lore
 
-Geen SQL nodig.
-Geen wijziging aan DeepSeek nodig.
-Geen wijziging aan auth.ts nodig.
+2. Media & interactie
+   - Cutscene
+   - Minigame
 
-Installeren:
+3. Logica & tools
+   - Flags & variabelen
+   - Functie
+   - Voorwaarde / IF
+
+4. Project
+   - Opslaan / exporteren
+   - Project laden
+   - Hele boek previewen
+
+Klik op een categorie en er opent een compact flyoutmenu rechts van de
+sidebar. Na het kiezen sluit het menu automatisch.
+
+Handleiding, grid-thema en Reset blijven onderaan als losse vaste acties.
+
+BOVENBALK
+
+De lange rij badges is verwijderd.
+
+Niet meer permanent zichtbaar:
+- Author Pro
+- Dashboard UUID/code
+- losse verhaalnode teller
+- losse path teller
+- losse variabele teller
+- losse functie teller
+- losse IF teller
+- losse kladblok teller
+- losse sessiesave badge
+
+Nieuwe compacte dropdowns:
+
+Opslag ▾
+- werkmodus (Dashboard / lokaal / voorstel / review)
+- sessiesave-status
+- wel/niet gekoppeld aan Dashboard
+- eventueel eigenaar van gedeeld boek
+- snel naar Opslaan / exporteren
+
+Structuur ▾
+- verhaalnodes
+- paths
+- variabelen
+- functies
+- voorwaarden / IF
+- kladblokken
+- snelle knop naar Flags & variabelen
+
+Dashboard-ID blijft intern gewoon bestaan, maar wordt niet meer als technische
+UUID in de UI getoond.
+
+Reviewmodus / moderation blijft volledig behouden.
+
+INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep 'app' en 'lib' over dibooks_author_studio.
-3. Bestanden vervangen.
-4. npm run build
-5. Commit/push / Vercel deploy.
+2. Sleep alleen de map 'app' over dibooks_author_studio.
+3. Kies Bestanden vervangen.
+4. Geen SQL nodig.
+5. npm run build
+6. Commit/push.
 
-Deze patch kan bovenop Moderation Incremental V5/V5.1.
-De V5.1 scanner route wordt niet vervangen.
+Deze patch verandert alleen de Editor-UI; node-data, opslag, Reader,
+DeepSeek-moderatie en Supabase-schema worden niet gewijzigd.

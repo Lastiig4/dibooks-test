@@ -25,7 +25,7 @@ import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { Extension } from "@tiptap/core";
 import AuthModal from "@/components/AuthModal";
-import { FREE_NODE_LIMIT, getPlanLabel, getMaxNodesForUser, canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
+import { FREE_NODE_LIMIT, getMaxNodesForUser, canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
 import {
   fetchBookSeriesFromSupabase,
   fetchDashboardBookFromSupabase,
@@ -462,6 +462,131 @@ function SidebarButton({
       </span>
       <span className="sr-only">{label}</span>
     </button>
+  );
+}
+
+type SidebarGroupId = "text" | "media" | "logic" | "project";
+
+function SidebarMenuItem({
+  title,
+  description,
+  accentClass,
+  icon,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  accentClass: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center gap-3 rounded-xl border border-white/8 bg-white/[0.035] p-3 text-left transition hover:border-white/15 hover:bg-white/[0.075]"
+    >
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accentClass}`}
+      >
+        <span className="flex h-6 w-6 items-center justify-center">{icon}</span>
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-black text-white">{title}</span>
+        <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-neutral-500">
+          {description}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function SidebarGroupButton({
+  open,
+  label,
+  className,
+  icon,
+  onToggle,
+  children,
+}: {
+  open: boolean;
+  label: string;
+  className: string;
+  icon: React.ReactNode;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        title={label}
+        aria-label={label}
+        aria-expanded={open}
+        className={`group flex h-14 w-14 items-center justify-center rounded-2xl font-black shadow-sm transition hover:scale-[1.06] active:scale-[0.96] ${className} ${
+          open ? "ring-2 ring-white/70 ring-offset-2 ring-offset-neutral-950" : ""
+        }`}
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center transition group-hover:scale-110">
+          {icon}
+        </span>
+        <span className="sr-only">{label}</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-[4.6rem] top-0 z-[70] w-[280px] rounded-2xl border border-white/10 bg-[#090c13]/98 p-3 text-white shadow-2xl backdrop-blur-xl">
+          <div className="mb-2 px-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-neutral-500">
+              {label}
+            </p>
+          </div>
+          <div className="grid gap-2">{children}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EditorTopMenu({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="group relative">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-white/10 bg-white/[0.055] px-3 py-2 text-xs font-black text-neutral-200 transition hover:bg-white/10 [&::-webkit-details-marker]:hidden">
+        <span>{icon}</span>
+        <span>{label}</span>
+        <span className="text-[9px] text-neutral-500 transition group-open:rotate-180">▼</span>
+      </summary>
+      <div className="absolute right-0 top-[calc(100%+0.5rem)] z-[65] w-72 rounded-2xl border border-white/10 bg-[#090c13]/98 p-3 text-white shadow-2xl backdrop-blur-xl">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+function TopMenuRow({
+  label,
+  value,
+  valueClassName = "text-white",
+}: {
+  label: string;
+  value: React.ReactNode;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl px-3 py-2.5 hover:bg-white/[0.04]">
+      <span className="text-xs font-bold text-neutral-500">{label}</span>
+      <span className={`max-w-[170px] text-right text-xs font-black ${valueClassName}`}>
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -2300,6 +2425,7 @@ export default function Home() {
   const [cutsceneUploadStatus, setCutsceneUploadStatus] = useState("");
   const [storyVariables, setStoryVariables] = useState<StoryVariable[]>([]);
   const [variablesOpen, setVariablesOpen] = useState(false);
+  const [sidebarGroupOpen, setSidebarGroupOpen] = useState<SidebarGroupId | null>(null);
   const [previewVariableValues, setPreviewVariableValues] = useState<Record<string, StoryVariableValue>>({});
   const reviewMode = Boolean(reviewSubmissionId);
 
@@ -4337,104 +4463,185 @@ ${formatSaveError(error)}`);
           </button>
 
           <div className="grid justify-items-center gap-3">
-            <SidebarButton
-              onClick={() => createNode("text")}
-              label="Tekst"
+            <SidebarGroupButton
+              open={sidebarGroupOpen === "text"}
+              onToggle={() =>
+                setSidebarGroupOpen((current) => (current === "text" ? null : "text"))
+              }
+              label="Tekst & schrijven"
               className="bg-blue-600 text-white hover:bg-blue-500"
               icon={<BookIcon />}
-            />
-
-            <SidebarButton
-              onClick={() => createNode("special")}
-              label="Speciale pagina"
-              className="bg-yellow-500 text-black hover:bg-yellow-400"
-              icon={<BookIcon sparkle />}
-            />
-
-            <SidebarButton
-              onClick={() => createNode("cutscene")}
-              label="Cutscene"
-              className="bg-green-600 text-white hover:bg-green-500"
-              icon={<VideoIcon />}
-            />
-
-            <SidebarButton
-              onClick={() => createNode("choice")}
-              label="Keuze menu"
-              className="bg-orange-500 text-white hover:bg-orange-400"
-              icon={
-                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-black/20 text-[11px] font-black tracking-tight">
-                  ABC
-                </div>
-              }
-            />
-
-            <SidebarButton
-              onClick={() => createNode("minigame")}
-              label="Mini game"
-              className="bg-purple-600 text-white hover:bg-purple-500"
-              icon={<JoystickIcon />}
-            />
-
-            <SidebarButton
-              onClick={() => setVariablesOpen(true)}
-              label="Flags & variabelen"
-              className="bg-indigo-600 text-white hover:bg-indigo-500"
-              icon={<FlagVariablesIcon />}
-            />
-
-            <SidebarButton
-              onClick={() => createNode("function")}
-              label="Functie / flags"
-              className="bg-cyan-500 text-slate-950 hover:bg-cyan-300"
-              icon={<FunctionIcon />}
-            />
-
-            <SidebarButton
-              onClick={() => createNode("condition")}
-              label="Voorwaarde / IF"
-              className="bg-teal-600 text-white hover:bg-teal-500"
-              icon={<ConditionIcon />}
-            />
-
-            <SidebarButton
-              onClick={() => createNode("scratchpad")}
-              label="Kladblok / lore"
-              className="bg-white text-slate-950 hover:bg-slate-200"
-              icon={<ScratchpadIcon />}
-            />
-
-            <SidebarButton
-              onClick={saveProject}
-              label="Save menu"
-              className="mt-6 bg-cyan-600 text-white hover:bg-cyan-500"
-              icon={<SaveIcon />}
-            />
-
-            <label
-              title="Load project"
-              aria-label="Load project"
-              className="group flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl bg-sky-700 text-white shadow-sm transition hover:scale-[1.06] hover:bg-sky-600 active:scale-[0.96]"
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center transition group-hover:scale-110">
-                <FolderIcon />
-              </span>
-              <span className="sr-only">Load project</span>
-              <input
-                type="file"
-                accept=".json,.dibooks-project.json"
-                onChange={loadProject}
-                className="hidden"
+              <SidebarMenuItem
+                title="Normale tekst"
+                description="Gewone leesbare verhaalpagina."
+                accentClass="bg-blue-600 text-white"
+                icon={<BookIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("text");
+                }}
               />
-            </label>
+              <SidebarMenuItem
+                title="Speciale tekst"
+                description="Bijv. logboek, dossier, brief of dagboek."
+                accentClass="bg-yellow-500 text-black"
+                icon={<BookIcon sparkle />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("special");
+                }}
+              />
+              <SidebarMenuItem
+                title="Keuzemenu"
+                description="Laat de lezer uit meerdere routes kiezen."
+                accentClass="bg-orange-500 text-white"
+                icon={
+                  <span className="text-[10px] font-black tracking-tight">ABC</span>
+                }
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("choice");
+                }}
+              />
+              <SidebarMenuItem
+                title="Kladblok / lore"
+                description="Interne notities; verschijnt nooit in het verhaal."
+                accentClass="bg-white text-slate-950"
+                icon={<ScratchpadIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("scratchpad");
+                }}
+              />
+            </SidebarGroupButton>
 
-            <SidebarButton
-              onClick={openPreview}
-              label="Play project"
+            <SidebarGroupButton
+              open={sidebarGroupOpen === "media"}
+              onToggle={() =>
+                setSidebarGroupOpen((current) => (current === "media" ? null : "media"))
+              }
+              label="Media & interactie"
               className="bg-emerald-600 text-white hover:bg-emerald-500"
-              icon={<PlayIcon />}
-            />
+              icon={<VideoIcon />}
+            >
+              <SidebarMenuItem
+                title="Cutscene"
+                description="Video of filmfragment tussen verhaalonderdelen."
+                accentClass="bg-green-600 text-white"
+                icon={<VideoIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("cutscene");
+                }}
+              />
+              <SidebarMenuItem
+                title="Minigame"
+                description="Interactieve opdracht met succes- en failroute."
+                accentClass="bg-purple-600 text-white"
+                icon={<JoystickIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("minigame");
+                }}
+              />
+            </SidebarGroupButton>
 
+            <SidebarGroupButton
+              open={sidebarGroupOpen === "logic"}
+              onToggle={() =>
+                setSidebarGroupOpen((current) => (current === "logic" ? null : "logic"))
+              }
+              label="Logica & tools"
+              className="bg-cyan-600 text-white hover:bg-cyan-500"
+              icon={<FunctionIcon />}
+            >
+              <SidebarMenuItem
+                title="Flags & variabelen"
+                description="Beheer centrale booleans, getallen en tekstwaarden."
+                accentClass="bg-indigo-600 text-white"
+                icon={<FlagVariablesIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  setVariablesOpen(true);
+                }}
+              />
+              <SidebarMenuItem
+                title="Functie"
+                description="Verander variabelen tijdens het verhaal."
+                accentClass="bg-cyan-500 text-slate-950"
+                icon={<FunctionIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("function");
+                }}
+              />
+              <SidebarMenuItem
+                title="Voorwaarde / IF"
+                description="Stuur de route op basis van een variabele."
+                accentClass="bg-teal-600 text-white"
+                icon={<ConditionIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("condition");
+                }}
+              />
+            </SidebarGroupButton>
+
+            <SidebarGroupButton
+              open={sidebarGroupOpen === "project"}
+              onToggle={() =>
+                setSidebarGroupOpen((current) => (current === "project" ? null : "project"))
+              }
+              label="Project"
+              className="bg-sky-700 text-white hover:bg-sky-600"
+              icon={<FolderIcon />}
+            >
+              <SidebarMenuItem
+                title="Opslaan"
+                description="Open het DiBooks opslaan- en exportmenu."
+                accentClass="bg-cyan-600 text-white"
+                icon={<SaveIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  saveProject();
+                }}
+              />
+
+              <label className="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-white/8 bg-white/[0.035] p-3 text-left transition hover:border-white/15 hover:bg-white/[0.075]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-700 text-white">
+                  <span className="flex h-6 w-6 items-center justify-center">
+                    <FolderIcon />
+                  </span>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-white">Project laden</span>
+                  <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-neutral-500">
+                    Open een lokale DiBooks projectfile.
+                  </span>
+                </span>
+                <input
+                  type="file"
+                  accept=".json,.dibooks-project.json"
+                  onChange={(event) => {
+                    setSidebarGroupOpen(null);
+                    loadProject(event);
+                  }}
+                  className="hidden"
+                />
+              </label>
+
+              <SidebarMenuItem
+                title="Hele boek previewen"
+                description="Test het verhaal zoals een lezer het ervaart."
+                accentClass="bg-emerald-600 text-white"
+                icon={<PlayIcon />}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  openPreview();
+                }}
+              />
+            </SidebarGroupButton>
           </div>
 
           <div className="mt-6 grid justify-items-center gap-3 border-t border-neutral-800 pt-5">
@@ -4470,63 +4677,105 @@ ${formatSaveError(error)}`);
           ref={flowWrapperRef}
           className={`flex flex-1 flex-col transition-colors ${editorDarkMode ? "bg-[#101521]" : "bg-[#f7f3ea]"}`}
         >
-          <div className={`flex shrink-0 items-center justify-between gap-4 border-b border-black/15 px-5 py-3 ${editorDarkMode ? "bg-slate-950/70 text-white" : "bg-[#fffaf0]/90 text-neutral-950"}`}>
-            <div className="min-w-0">
-              <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${editorDarkMode ? "text-cyan-300" : "text-blue-700"}`}>Auteur Studio</p>
-              <h1 className="truncate text-lg font-black sm:text-2xl">
+          <div
+            className={`flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/15 px-4 py-2.5 sm:px-5 ${
+              editorDarkMode
+                ? "bg-slate-950/70 text-white"
+                : "bg-[#fffaf0]/90 text-neutral-950"
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <p
+                className={`text-[9px] font-black uppercase tracking-[0.25em] ${
+                  editorDarkMode ? "text-cyan-300" : "text-blue-700"
+                }`}
+              >
+                Auteur Studio
+              </p>
+              <h1 className="truncate text-lg font-black sm:text-xl">
                 {dashboardSaveForm.title.trim() || "Naamloos boek"}
               </h1>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs font-black">
-              <span className={`rounded-full px-3 py-1 ${isLoggedIn ? "bg-emerald-500/15 text-emerald-300" : "bg-yellow-500/15 text-yellow-300"}`}>
-                {reviewMode ? "🔒 Admin review • bevroren snapshot" : sharedEditBookId ? "Voorstelmodus • origineel blijft veilig" : isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
-              </span>
-              <span
-                title="Automatische sessie-opslag. Wordt direct hersteld zolang deze browsersessie open blijft."
-                className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-600/10 text-emerald-700"}`}
-              >
-                {autosaveStatus}
-              </span>
+
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <EditorTopMenu label="Opslag" icon="💾">
+                <div className="grid gap-1">
+                  <TopMenuRow
+                    label="Werkmodus"
+                    value={
+                      reviewMode
+                        ? "🔒 Admin review"
+                        : sharedEditBookId
+                          ? "Voorstelmodus"
+                          : isLoggedIn
+                            ? "Dashboard"
+                            : "Lokaal"
+                    }
+                    valueClassName={
+                      reviewMode
+                        ? "text-purple-300"
+                        : isLoggedIn
+                          ? "text-emerald-300"
+                          : "text-yellow-300"
+                    }
+                  />
+                  <TopMenuRow label="Sessiesave" value={autosaveStatus} valueClassName="text-emerald-300" />
+                  <TopMenuRow
+                    label="Dashboardconcept"
+                    value={dashboardBookId ? "Gekoppeld ✓" : "Niet gekoppeld"}
+                    valueClassName={dashboardBookId ? "text-blue-300" : "text-neutral-400"}
+                  />
+                  {sharedEditBookId && (
+                    <TopMenuRow
+                      label="Gedeeld door"
+                      value={sharedEditOwnerName || "Eigenaar"}
+                      valueClassName="text-yellow-200"
+                    />
+                  )}
+                  <div className="mt-2 border-t border-white/10 pt-2">
+                    <button
+                      type="button"
+                      onClick={saveProject}
+                      disabled={reviewMode}
+                      className="w-full rounded-xl bg-cyan-600 px-3 py-2.5 text-xs font-black text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      💾 Opslaan / exporteren
+                    </button>
+                  </div>
+                </div>
+              </EditorTopMenu>
+
+              <EditorTopMenu label="Structuur" icon="◫">
+                <div className="grid gap-1">
+                  <TopMenuRow
+                    label="Verhaalnodes"
+                    value={
+                      maxNodesForCurrentUser !== null
+                        ? `${storyNodeCount} / ${maxNodesForCurrentUser}`
+                        : storyNodeCount
+                    }
+                    valueClassName={nodeLimitReached ? "text-red-300" : "text-white"}
+                  />
+                  <TopMenuRow label="Paths" value={getStoryEdges(edges, nodes).length} />
+                  <TopMenuRow label="Variabelen" value={storyVariables.length} valueClassName="text-indigo-200" />
+                  <TopMenuRow label="Functies" value={functionNodeCount} valueClassName="text-cyan-200" />
+                  <TopMenuRow label="Voorwaarden / IF" value={conditionNodeCount} valueClassName="text-teal-200" />
+                  <TopMenuRow label="Kladblokken" value={scratchpadNodeCount} />
+                  {!reviewMode && (
+                    <div className="mt-2 border-t border-white/10 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setVariablesOpen(true)}
+                        className="w-full rounded-xl border border-indigo-400/20 bg-indigo-500/10 px-3 py-2.5 text-xs font-black text-indigo-100 hover:bg-indigo-500/20"
+                      >
+                        ⚑ Flags & variabelen openen
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </EditorTopMenu>
+
               <AppNavActions compact />
-              <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-600/10 text-cyan-700"}`}>
-                {getPlanLabel(user)}
-              </span>
-              <span className={`rounded-full px-3 py-1 ${nodeLimitReached ? "bg-red-500/15 text-red-300" : editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
-                {storyNodeCount}{maxNodesForCurrentUser !== null ? `/${maxNodesForCurrentUser}` : ""} verhaalnodes
-              </span>
-              <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
-                {getStoryEdges(edges, nodes).length} paths
-              </span>
-              {storyVariables.length > 0 && (
-                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-indigo-500/15 text-indigo-200" : "bg-indigo-600/10 text-indigo-700"}`}>
-                  {storyVariables.length} variabele{storyVariables.length === 1 ? "" : "n"}
-                </span>
-              )}
-              {functionNodeCount > 0 && (
-                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-600/10 text-cyan-700"}`}>
-                  {functionNodeCount} functie
-                </span>
-              )}
-              {conditionNodeCount > 0 && (
-                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-teal-500/15 text-teal-200" : "bg-teal-600/10 text-teal-700"}`}>
-                  {conditionNodeCount} voorwaarde
-                </span>
-              )}
-              {scratchpadNodeCount > 0 && (
-                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-200" : "bg-black/10 text-neutral-700"}`}>
-                  {scratchpadNodeCount} kladblok
-                </span>
-              )}
-              {sharedEditBookId && (
-                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-yellow-500/15 text-yellow-200" : "bg-yellow-500/20 text-yellow-800"}`}>
-                  Gedeeld door {sharedEditOwnerName || "eigenaar"}
-                </span>
-              )}
-              {dashboardBookId && (
-                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-blue-500/15 text-blue-200" : "bg-blue-600/10 text-blue-700"}`}>
-                  Dashboard: {dashboardBookId}
-                </span>
-              )}
             </div>
           </div>
           {reviewMode && reviewSubmission && (
