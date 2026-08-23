@@ -33,6 +33,18 @@ type DetailBook = DiBook & {
   accessType?: BookAccessType;
 };
 
+type PublicSeriesBook = {
+  id: string;
+  title: string;
+  subtitle: string;
+  coverImage: string;
+  status: string;
+  published: boolean;
+  seriesId: string;
+  seriesTitle: string;
+  seriesOrder: number | null;
+};
+
 const FALLBACK_COVER_CLASS = "from-blue-950 via-slate-950 to-purple-950";
 const FALLBACK_ACCENT_CLASS = "border-blue-500/50";
 
@@ -165,6 +177,103 @@ function HeroBackground({ book }: { book: DetailBook }) {
   );
 }
 
+function SeriesShelf({
+  currentBookId,
+  books,
+}: {
+  currentBookId: string;
+  books: PublicSeriesBook[];
+}) {
+  if (books.length === 0) return null;
+
+  const seriesTitle = books[0]?.seriesTitle || "Serie";
+
+  return (
+    <section className="mx-auto max-w-7xl px-5 pb-8 sm:px-8 lg:px-10">
+      <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 shadow-2xl sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.32em] text-purple-300">
+              Onderdeel van serie
+            </p>
+            <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">
+              {seriesTitle}
+            </h2>
+          </div>
+          <p className="text-xs font-bold text-neutral-500">
+            {books.length} {books.length === 1 ? "publiek deel" : "publieke delen"}
+          </p>
+        </div>
+
+        <div className="mt-5 flex gap-4 overflow-x-auto pb-2">
+          {books.map((seriesBook) => {
+            const isCurrent = seriesBook.id === currentBookId;
+            const orderLabel = seriesBook.seriesOrder
+              ? `Boek ${seriesBook.seriesOrder}`
+              : "Deel";
+
+            const card = (
+              <div
+                className={`w-[132px] shrink-0 rounded-2xl border p-2 transition sm:w-[150px] ${
+                  isCurrent
+                    ? "border-purple-300/70 bg-purple-500/15 shadow-[0_0_28px_rgba(192,132,252,0.12)]"
+                    : "border-white/10 bg-black/25 hover:border-white/25 hover:bg-white/[0.07]"
+                }`}
+              >
+                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-black">
+                  {seriesBook.coverImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={seriesBook.coverImage}
+                      alt={`Cover van ${seriesBook.title}`}
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-950 via-neutral-950 to-purple-950 p-3 text-center text-xs font-black text-neutral-500">
+                      Geen cover
+                    </div>
+                  )}
+
+                  <span className="absolute left-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-white backdrop-blur-sm">
+                    {orderLabel}
+                  </span>
+
+                  {!seriesBook.published && (
+                    <span className="absolute bottom-2 left-2 rounded-full bg-yellow-400 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-black">
+                      Binnenkort
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-2 line-clamp-2 text-xs font-black leading-4 text-white">
+                  {seriesBook.title}
+                </p>
+                {isCurrent && (
+                  <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-purple-300">
+                    Dit boek
+                  </p>
+                )}
+              </div>
+            );
+
+            return isCurrent ? (
+              <div key={seriesBook.id}>{card}</div>
+            ) : (
+              <Link
+                key={seriesBook.id}
+                href={`/books/${seriesBook.id}`}
+                title={`Open ${seriesBook.title}`}
+              >
+                {card}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function InfoTile({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -186,6 +295,7 @@ export default function BookDetailPage() {
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [readingProgress, setReadingProgress] = useState<ReadingProgress | null>(null);
   const [resetProgressBusy, setResetProgressBusy] = useState(false);
+  const [seriesBooks, setSeriesBooks] = useState<PublicSeriesBook[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -225,6 +335,57 @@ export default function BookDetailPage() {
       cancelled = true;
     };
   }, [bookId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSeries() {
+      if (!book?.id) {
+        setSeriesBooks([]);
+        return;
+      }
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data, error: seriesError } = await supabase.rpc(
+          "get_public_book_series",
+          { input_book_id: book.id },
+        );
+
+        if (seriesError) {
+          console.warn("Kon publieke serie niet laden.", seriesError);
+          if (!cancelled) setSeriesBooks([]);
+          return;
+        }
+
+        const mappedBooks: PublicSeriesBook[] = (data ?? []).map((row: any) => ({
+          id: row.book_id,
+          title: row.title ?? "Ongetiteld boek",
+          subtitle: row.subtitle ?? "",
+          coverImage: row.cover_image ?? "",
+          status: row.status ?? "Concept",
+          published: !!row.published,
+          seriesId: row.series_id,
+          seriesTitle: row.series_title ?? "Serie",
+          seriesOrder:
+            row.series_order === null || row.series_order === undefined
+              ? null
+              : Number(row.series_order),
+        }));
+
+        if (!cancelled) setSeriesBooks(mappedBooks);
+      } catch (seriesLoadError) {
+        console.warn("Kon publieke serie niet laden.", seriesLoadError);
+        if (!cancelled) setSeriesBooks([]);
+      }
+    }
+
+    void loadSeries();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [book?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -416,6 +577,8 @@ export default function BookDetailPage() {
           <ArtworkPanel book={book} />
         </div>
       </section>
+
+      <SeriesShelf currentBookId={book.id} books={seriesBooks} />
 
       <section className="mx-auto grid max-w-7xl gap-8 px-5 pb-14 sm:px-8 lg:grid-cols-[1fr_360px] lg:px-10">
         <article className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl sm:p-8">

@@ -1,16 +1,30 @@
-DiBooks Patch - Volledige cover zichtbaar
-=========================================
+DiBooks Patch - Publieke serie-strip
+=====================================
 
-Wijziging:
-- De cover gebruikt nu object-contain in plaats van object-cover.
-- Hierdoor wordt de volledige geselecteerde cover altijd zichtbaar.
-- De afbeelding wordt niet meer afgesneden om het covervak te vullen.
-- Eventuele lege ruimte rond een afwijkende beeldverhouding krijgt een zwarte achtergrond.
-- Titel-overlay blijft verwijderd.
-- Genre/status badges blijven behouden.
+RESULTAAT
+Op iedere publieke boekpagina van een boek dat aan een serie gekoppeld is,
+verschijnt direct onder de hero een compacte serie-strip.
 
-Installeren:
-1. Pak de ZIP uit.
-2. Sleep de map 'app' over dibooks_author_studio.
-3. Kies 'Bestanden vervangen'.
-4. Herstart indien nodig met: npm run dev
+Voorbeeld:
+White Ashes
+[Boek 1 cover] [Boek 2 cover] [Boek 3 cover]
+
+- Covers zijn aanklikbaar en openen de bijbehorende boekpagina.
+- Het huidige boek is gemarkeerd met 'Dit boek'.
+- Volgorde gebruikt series_order.
+- Binnenkort-boeken krijgen een Binnenkort-badge.
+- Privé concepten worden NOOIT getoond.
+- Heeft een boek geen serie? Dan verschijnt er geen serieblok.
+
+INSTALLEREN
+1. Supabase -> SQL Editor -> New query.
+2. Plak de inhoud van SERIESTRIP_SUPABASE.sql en klik Run.
+3. Sleep daarna de map 'app' over dibooks_author_studio.
+4. Kies Bestanden vervangen.
+5. Herstart indien nodig:
+   npm run dev
+
+LET OP
+De serie moet uiteraard al bestaan en het boek moet via Dashboard aan die serie
+gekoppeld zijn. Minimaal het huidige boek moet publiek zichtbaar zijn voordat de
+publieke serie-RPC resultaat geeft.
