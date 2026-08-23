@@ -1,0 +1,79 @@
+DiBooks Patch - Series
+=========================
+
+WAT DEZE PATCH TOEVOEGT
+
+Dashboard
+- Nieuwe knop 'Series' naast '+ Nieuw boek'.
+- Auteur kan series aanmaken, bewerken en verwijderen.
+- Serie verwijderen verwijdert NOOIT de boeken.
+- Bij Nieuw boek kun je kiezen:
+    Serie: Geen serie / een bestaande serie
+    Deel in serie: 1, 2, 3, ...
+- Bij Boekgegevens kun je serie en deel later aanpassen.
+- Dashboardkaart toont bijvoorbeeld:
+    De Sterrenkronieken • Boek 1
+
+Auteur Studio
+- Bij het opslaan van een NIEUW boek naar Dashboard staat dezelfde serie-keuze.
+- '+ Nieuwe serie' opent dezelfde centrale Series-manager.
+- Bij bestaande Dashboardboeken blijft 'Concept bijwerken' alleen projectdata opslaan;
+  serie/metadata wijzig je via Boekgegevens in Dashboard.
+
+Supabase
+- Nieuwe tabel: book_series
+- Nieuwe books-kolommen:
+    series_id
+    series_order
+- Iedere auteur ziet/beheert alleen zijn eigen series via RLS.
+- Boeken blijven bestaan als een serie wordt verwijderd.
+
+Extra fixes
+- Geen hardcoded persoonlijke auteursnaam of persoonlijke boektitel meer in de opslaanschermen/templates.
+- Standaard cover-themes gebruiken geen persoonlijke voorbeeldcovers meer bij nieuwe boeken.
+- Voorwaarde/IF-nodes worden in Dashboard-publicatiecontrole als utility-node behandeld,
+  net als Functie-nodes.
+- TRUE en ELSE/FALSE routes worden bij publicatie gecontroleerd.
+- Functie-, IF- en kladbloknodes tellen niet mee voor de gratis verhaalnode-limiet bij Dashboard-save.
+
+INSTALLEREN
+
+1. BELANGRIJK: voer eerst de SQL uit:
+   supabase/migrations/20260823_160000_add_book_series.sql
+
+   Makkelijkste manier:
+   - Open Supabase
+   - SQL Editor
+   - New query
+   - Plak de volledige inhoud van dat SQL-bestand
+   - Run
+
+   Gebruik je Supabase CLI/migrations, dan kun je uiteraard je normale migration-flow gebruiken.
+
+2. Pak deze ZIP uit.
+
+3. Sleep deze mappen over dibooks_author_studio:
+   - app
+   - components
+   - lib
+   - supabase
+
+4. Kies 'Bestanden vervangen' wanneer Windows daarom vraagt.
+
+5. Herstart:
+   npm run dev
+
+SNELLE TEST
+
+1. Dashboard -> Series.
+2. Maak een serie aan, bijvoorbeeld 'De Sterrenkronieken'.
+3. Klik '+ Nieuw boek'.
+4. Kies de serie en Deel 1.
+5. Sla het boek op.
+6. Controleer of de serie op de Dashboardkaart staat.
+7. Open daarna een leeg/nieuw project in Auteur Studio -> Opslaan.
+8. Controleer of dezelfde serie daar in de dropdown staat.
+
+LET OP
+De publieke seriepagina en 'vorig/volgend boek' op de openbare boekpagina zitten nog NIET
+in deze patch. Deze patch legt eerst de database + auteurbeheer + boekkoppeling goed vast.

@@ -5,6 +5,15 @@ import { ensureSupabaseProfile, type DemoAuthUser } from "@/lib/auth";
 
 export type DashboardBookStatus = "Concept" | "Testversie" | "Binnenkort";
 
+export type BookSeries = {
+  id: string;
+  ownerId: string;
+  title: string;
+  description: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type DashboardBookInput = {
   id?: string | null;
   title: string;
@@ -27,6 +36,8 @@ export type DashboardBookInput = {
   publishedAt?: string | null;
   removedFromLibraryAt?: string | null;
   accessType?: "free" | "premium";
+  seriesId?: string | null;
+  seriesOrder?: number | null;
   projectData?: any;
 };
 
@@ -83,6 +94,8 @@ function mapRowToDashboardBook(row: any) {
     updatedAt: row.updated_at,
     publishedAt: row.published_at ?? undefined,
     removedFromLibraryAt: row.removed_from_library_at ?? undefined,
+    seriesId: row.series_id ?? null,
+    seriesOrder: row.series_order ?? null,
     projectData: row.project_data ?? undefined,
     projectVersion: row.project_version ?? undefined,
     projectUpdatedAt: row.project_updated_at ?? undefined,
@@ -117,32 +130,194 @@ async function getUniqueSlug(ownerId: string, title: string, existingBookId?: st
   return nextSlug;
 }
 
-export async function fetchDashboardBooksFromSupabase() {
+export async function fetchDashboardBooksFromSupabase(user?: DemoAuthUser) {
   const supabase = createSupabaseBrowserClient();
 
-  const { data, error } = await supabase
-    .from("dashboard_books")
+  // We lezen rechtstreeks uit books + book_projects. Daardoor zijn nieuwe
+  // metadata-kolommen (zoals series_id) meteen beschikbaar zonder dat een
+  // bestaande dashboard_books-view opnieuw gemaakt hoeft te worden.
+  let booksQuery = supabase
+    .from("books")
     .select("*")
     .order("updated_at", { ascending: false });
 
-  if (error) throw error;
+  if (user?.id) {
+    booksQuery = booksQuery.eq("owner_id", user.id);
+  }
 
-  return (data ?? []).map(mapRowToDashboardBook);
+  const { data: books, error: booksError } = await booksQuery;
+
+  if (booksError) throw booksError;
+
+  const bookIds = (books ?? []).map((book: any) => book.id).filter(Boolean);
+  let projectByBookId = new Map<string, any>();
+
+  if (bookIds.length > 0) {
+    const { data: projects, error: projectsError } = await supabase
+      .from("book_projects")
+      .select("book_id, project_data, version")
+      .in("book_id", bookIds);
+
+    if (projectsError) throw projectsError;
+    projectByBookId = new Map((projects ?? []).map((project: any) => [project.book_id, project]));
+  }
+
+  return (books ?? []).map((book: any) => {
+    const project = projectByBookId.get(book.id);
+    return mapRowToDashboardBook({
+      ...book,
+      project_data: project?.project_data,
+      project_version: project?.version,
+    });
+  });
 }
 
 export async function fetchDashboardBookFromSupabase(bookId: string) {
   const supabase = createSupabaseBrowserClient();
 
-  const { data, error } = await supabase
-    .from("dashboard_books")
+  const { data: book, error: bookError } = await supabase
+    .from("books")
     .select("*")
     .eq("id", bookId)
     .maybeSingle();
 
-  if (error) throw error;
-  if (!data) return null;
+  if (bookError) throw bookError;
+  if (!book) return null;
 
-  return mapRowToDashboardBook(data);
+  const { data: project, error: projectError } = await supabase
+    .from("book_projects")
+    .select("book_id, project_data, version")
+    .eq("book_id", bookId)
+    .maybeSingle();
+
+  if (projectError) throw projectError;
+
+  return mapRowToDashboardBook({
+    ...book,
+    project_data: project?.project_data,
+    project_version: project?.version,
+  });
+}
+
+export async function fetchBookSeriesFromSupabase(user: DemoAuthUser) {
+  const supabase = createSupabaseBrowserClient();
+
+  const { data, error } = await supabase
+    .from("book_series")
+    .select("*")
+    .eq("owner_id", user.id)
+    .order("title", { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row: any): BookSeries => ({
+    id: row.id,
+    ownerId: row.owner_id,
+    title: row.title,
+    description: row.description ?? "",
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
+  }));
+}
+
+export async function createBookSeriesInSupabase(
+  user: DemoAuthUser,
+  input: { title: string; description?: string },
+) {
+  const profileResult = await ensureSupabaseProfile(user);
+  if (!profileResult.ok) {
+    throw new Error(profileResult.message || "DiBooks profile kon niet worden aangemaakt.");
+  }
+
+  const title = input.title.trim();
+  if (!title) throw new Error("Geef de serie eerst een naam.");
+
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("book_series")
+    .insert({
+      owner_id: user.id,
+      title,
+      description: input.description?.trim() ?? "",
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Je hebt al een serie met deze naam.");
+    }
+    throwSupabaseError(error);
+  }
+
+  return {
+    id: data.id,
+    ownerId: data.owner_id,
+    title: data.title,
+    description: data.description ?? "",
+    createdAt: data.created_at ?? undefined,
+    updatedAt: data.updated_at ?? undefined,
+  } satisfies BookSeries;
+}
+
+export async function updateBookSeriesInSupabase(
+  user: DemoAuthUser,
+  seriesId: string,
+  input: { title: string; description?: string },
+) {
+  const title = input.title.trim();
+  if (!title) throw new Error("Geef de serie eerst een naam.");
+
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("book_series")
+    .update({
+      title,
+      description: input.description?.trim() ?? "",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", seriesId)
+    .eq("owner_id", user.id)
+    .select("*")
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Je hebt al een serie met deze naam.");
+    }
+    throwSupabaseError(error);
+  }
+
+  return {
+    id: data.id,
+    ownerId: data.owner_id,
+    title: data.title,
+    description: data.description ?? "",
+    createdAt: data.created_at ?? undefined,
+    updatedAt: data.updated_at ?? undefined,
+  } satisfies BookSeries;
+}
+
+export async function deleteBookSeriesFromSupabase(user: DemoAuthUser, seriesId: string) {
+  const supabase = createSupabaseBrowserClient();
+
+  // Eerst de boekvolgorde opruimen. De FK zet series_id ook op NULL,
+  // maar zo blijft er geen los series_order-getal achter.
+  const { error: unlinkError } = await supabase
+    .from("books")
+    .update({ series_id: null, series_order: null })
+    .eq("owner_id", user.id)
+    .eq("series_id", seriesId);
+
+  if (unlinkError) throwSupabaseError(unlinkError);
+
+  const { error } = await supabase
+    .from("book_series")
+    .delete()
+    .eq("id", seriesId)
+    .eq("owner_id", user.id);
+
+  if (error) throwSupabaseError(error);
 }
 
 export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: DashboardBookInput) {
@@ -177,6 +352,8 @@ export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: Das
     published_at: input.publishedAt ?? null,
     removed_from_library_at: input.removedFromLibraryAt ?? null,
     access_type: input.accessType || "free",
+    series_id: input.seriesId || null,
+    series_order: input.seriesId ? Math.max(1, Number(input.seriesOrder) || 1) : null,
   };
 
   if (slug) bookPayload.slug = slug;

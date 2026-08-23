@@ -22,12 +22,15 @@ import {
 } from "@/lib/auth";
 import {
   deleteDashboardBookFromSupabase,
+  fetchBookSeriesFromSupabase,
   fetchDashboardBooksFromSupabase,
   publishDashboardBookInSupabase,
   removeDashboardBookFromLibraryInSupabase,
   saveDashboardBookToSupabase,
   updateDashboardBookMediaInSupabase,
+  type BookSeries,
 } from "@/lib/supabase/dashboardBooks";
+import BookSeriesManagerModal from "@/components/BookSeriesManagerModal";
 import {
   fetchBookFeedbackForUser,
   fetchBookRevisionsForUser,
@@ -58,6 +61,8 @@ type DashboardBook = DiBook & {
   projectData?: any;
   colorTheme?: string;
   accessType?: "free" | "premium";
+  seriesId?: string | null;
+  seriesOrder?: number | null;
 };
 
 type NewBookForm = {
@@ -73,13 +78,15 @@ type NewBookForm = {
   readTime: string;
   colorTheme: string;
   accessType: "free" | "premium";
+  seriesId: string;
+  seriesOrder: string;
 };
 
 const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
 
 const defaultForm: NewBookForm = {
   title: "",
-  author: "Giovanni",
+  author: "",
   subtitle: "",
   description: "",
   genres: ["Interactief"],
@@ -90,6 +97,8 @@ const defaultForm: NewBookForm = {
   readTime: "Concept",
   colorTheme: "blue",
   accessType: "free",
+  seriesId: "",
+  seriesOrder: "1",
 };
 
 const ageRatings = ["AL", "6+", "9+", "12+", "16+", "18+"];
@@ -116,36 +125,36 @@ const colorThemes: Record<
     label: "Blauw / sci-fi",
     coverClass: "from-blue-950 via-slate-950 to-purple-950",
     accentClass: "border-blue-500/60",
-    coverImage: "/books/the-sovereign/cover.svg",
-    bannerImage: "/books/the-sovereign/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
   gold: {
     label: "Goud / dossier",
     coverClass: "from-yellow-950 via-neutral-950 to-stone-900",
     accentClass: "border-yellow-400/40",
-    coverImage: "/books/briars-logs/cover.svg",
-    bannerImage: "/books/briars-logs/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
   red: {
     label: "Rood / fantasy",
     coverClass: "from-red-950 via-stone-950 to-yellow-950",
     accentClass: "border-red-400/40",
-    coverImage: "/books/crown-of-ash/cover.svg",
-    bannerImage: "/books/crown-of-ash/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
   green: {
     label: "Groen / mystery",
     coverClass: "from-cyan-950 via-neutral-950 to-emerald-950",
     accentClass: "border-cyan-400/40",
-    coverImage: "/books/echoes-of-lumina/cover.svg",
-    bannerImage: "/books/echoes-of-lumina/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
   orange: {
     label: "Oranje / thriller",
     coverClass: "from-orange-950 via-stone-950 to-red-950",
     accentClass: "border-orange-400/40",
-    coverImage: "/books/the-dust-protocol/cover.svg",
-    bannerImage: "/books/the-dust-protocol/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
 };
 
@@ -257,21 +266,34 @@ function isCompletePublishNode(node: any) {
     return true;
   }
 
+  if (nodeType === "condition") {
+    return Boolean(
+      (node?.data?.conditionVariableId ?? node?.content?.conditionVariableId ?? node?.data?.conditionKey ?? node?.content?.conditionKey) &&
+      (node?.data?.conditionTrueTargetNodeId ?? node?.content?.conditionTrueTargetNodeId) &&
+      (node?.data?.conditionFalseTargetNodeId ?? node?.content?.conditionFalseTargetNodeId)
+    );
+  }
+
   return false;
 }
 
 function getPublishNodeStats(projectData: any) {
   const nodes = getPublishableNodes(projectData);
-  const storyContentNodes = nodes.filter((node: any) => getNodeType(node) !== "function");
+  const storyContentNodes = nodes.filter((node: any) => {
+    const type = getNodeType(node);
+    return type !== "function" && type !== "condition";
+  });
   const completeNodes = storyContentNodes.filter(isCompletePublishNode);
   const scratchpadNodes = getScratchpadNodeCount(projectData);
   const functionNodes = nodes.filter((node: any) => getNodeType(node) === "function").length;
+  const conditionNodes = nodes.filter((node: any) => getNodeType(node) === "condition").length;
 
   return {
     totalNodes: storyContentNodes.length,
     completeNodes: completeNodes.length,
     scratchpadNodes,
     functionNodes,
+    conditionNodes,
     isFullBook: storyContentNodes.length >= FULL_BOOK_NODE_BADGE_THRESHOLD,
   };
 }
@@ -410,6 +432,34 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
         warnings.push(`Functie-node '${title}' heeft nog geen ingevulde flag/teller actie.`);
       }
     }
+
+    if (nodeType === "condition") {
+      const variableKey = String(
+        node?.data?.conditionVariableId ??
+        node?.content?.conditionVariableId ??
+        node?.data?.conditionKey ??
+        node?.content?.conditionKey ??
+        "",
+      ).trim();
+      const trueTarget = String(node?.data?.conditionTrueTargetNodeId ?? node?.content?.conditionTrueTargetNodeId ?? "").trim();
+      const falseTarget = String(node?.data?.conditionFalseTargetNodeId ?? node?.content?.conditionFalseTargetNodeId ?? "").trim();
+
+      if (!variableKey) {
+        errors.push(`Voorwaarde-node '${title}' heeft nog geen variabele gekozen.`);
+      }
+
+      if (!trueTarget) {
+        errors.push(`Voorwaarde-node '${title}' mist een TRUE-route.`);
+      } else if (!nodeIds.has(trueTarget)) {
+        errors.push(`Voorwaarde-node '${title}' heeft een TRUE-route naar een node die niet bestaat.`);
+      }
+
+      if (!falseTarget) {
+        errors.push(`Voorwaarde-node '${title}' mist een ELSE/FALSE-route.`);
+      } else if (!nodeIds.has(falseTarget)) {
+        errors.push(`Voorwaarde-node '${title}' heeft een ELSE/FALSE-route naar een node die niet bestaat.`);
+      }
+    }
   });
 
   edges.forEach((edge: any) => {
@@ -447,6 +497,13 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
         const failTarget = getMiniGameTarget(currentNode, "fail");
         if (successTarget && nodeIds.has(successTarget)) queue.push(successTarget);
         if (failTarget && nodeIds.has(failTarget)) queue.push(failTarget);
+      }
+
+      if (getNodeType(currentNode) === "condition") {
+        const trueTarget = currentNode?.data?.conditionTrueTargetNodeId ?? currentNode?.content?.conditionTrueTargetNodeId;
+        const falseTarget = currentNode?.data?.conditionFalseTargetNodeId ?? currentNode?.content?.conditionFalseTargetNodeId;
+        if (trueTarget && nodeIds.has(trueTarget)) queue.push(trueTarget);
+        if (falseTarget && nodeIds.has(falseTarget)) queue.push(falseTarget);
       }
     }
 
@@ -554,10 +611,12 @@ function BookDashboardCard({
   onOpenDetails,
   onShare,
   canPublish,
+  seriesTitle,
 }: {
   book: DashboardBook;
   onPublish: (bookId: string) => void;
   canPublish: boolean;
+  seriesTitle?: string;
   onRemoveFromLibrary: (bookId: string) => void;
   onDeleteDraft: (bookId: string) => void;
   onOpenMedia: (book: DashboardBook) => void;
@@ -578,6 +637,11 @@ function BookDashboardCard({
       <div className="grid gap-5 p-5">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-300">{book.author}</p>
+          {seriesTitle && (
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-purple-300">
+              {seriesTitle}{book.seriesOrder ? ` • Boek ${book.seriesOrder}` : ""}
+            </p>
+          )}
           <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-neutral-300">{book.subtitle}</p>
         </div>
 
@@ -607,7 +671,9 @@ function BookDashboardCard({
         {book.projectData && (
           <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-neutral-300">
             Project: {getPublishNodeStats(book.projectData).totalNodes} verhaalnodes • {getPublishNodeStats(book.projectData).completeNodes} compleet
-            {getPublishNodeStats(book.projectData).scratchpadNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).scratchpadNodes} kladblok` : ""}{getPublishNodeStats(book.projectData).functionNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).functionNodes} functie` : ""}
+            {getPublishNodeStats(book.projectData).scratchpadNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).scratchpadNodes} kladblok` : ""}
+            {getPublishNodeStats(book.projectData).functionNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).functionNodes} functie` : ""}
+            {getPublishNodeStats(book.projectData).conditionNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).conditionNodes} IF` : ""}
             {getPublishNodeStats(book.projectData).isFullBook ? " • Volledig interactief" : ""}
           </div>
         )}
@@ -748,7 +814,10 @@ function SharedBookCard({
         </span>
       </div>
       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-cyan-50/80">
-        {nodeCount} verhaalnodes{scratchpadCount > 0 ? ` • ${scratchpadCount} kladblok` : ""}{getPublishNodeStats(book.projectData).functionNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).functionNodes} functie` : ""} • origineel blijft van {book.ownerName || "de eigenaar"}
+        {nodeCount} verhaalnodes{scratchpadCount > 0 ? ` • ${scratchpadCount} kladblok` : ""}
+        {getPublishNodeStats(book.projectData).functionNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).functionNodes} functie` : ""}
+        {getPublishNodeStats(book.projectData).conditionNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).conditionNodes} IF` : ""}
+        {" • "}origineel blijft van {book.ownerName || "de eigenaar"}
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
         <Link href={`/books/${book.id}/read`} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
@@ -1215,12 +1284,16 @@ function MediaManagerModal({
 function NewBookModal({
   form,
   setForm,
+  series,
+  onOpenSeries,
   onClose,
   onSave,
   mode = "new",
 }: {
   form: NewBookForm;
   setForm: React.Dispatch<React.SetStateAction<NewBookForm>>;
+  series: BookSeries[];
+  onOpenSeries: () => void;
   onClose: () => void;
   onSave: () => void;
   mode?: "new" | "edit";
@@ -1287,9 +1360,56 @@ function NewBookModal({
               <input
                 value={form.title}
                 onChange={(event) => updateField("title", event.target.value)}
-                placeholder="Bijv. The Sovereign"
+                placeholder="Bijv. De laatste reis"
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
               />
+            </div>
+
+
+
+            <div className="rounded-2xl border border-purple-400/20 bg-purple-500/[0.07] p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="min-w-0 flex-1">
+                  <span className="mb-2 block text-sm font-black text-neutral-300">Serie</span>
+                  <select
+                    value={form.seriesId}
+                    onChange={(event) => {
+                      updateField("seriesId", event.target.value);
+                      if (event.target.value && !form.seriesOrder) updateField("seriesOrder", "1");
+                    }}
+                    className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-purple-400"
+                  >
+                    <option value="">Geen serie / losstaand boek</option>
+                    {series.map((item) => (
+                      <option key={item.id} value={item.id}>{item.title}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={onOpenSeries}
+                  className="rounded-2xl border border-purple-400/30 bg-purple-500/10 px-4 py-3 text-sm font-black text-purple-100 hover:bg-purple-500/20"
+                >
+                  + Nieuwe serie
+                </button>
+              </div>
+
+              <label className="mt-3 block">
+                <span className="mb-2 block text-sm font-black text-neutral-300">Deel in serie</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.seriesOrder}
+                  disabled={!form.seriesId}
+                  onChange={(event) => updateField("seriesOrder", event.target.value)}
+                  placeholder="Bijv. 1"
+                  className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-purple-400 disabled:cursor-not-allowed disabled:opacity-40"
+                />
+                <p className="mt-2 text-xs font-semibold text-neutral-500">
+                  Bijvoorbeeld: serie <strong>De Sterrenkronieken</strong>, boek <strong>De laatste reis</strong>, deel <strong>1</strong>.
+                </p>
+              </label>
             </div>
 
             <div>
@@ -1479,6 +1599,8 @@ export default function DashboardPage() {
   const { permissions, loginWithCredentials, registerWithCredentials, logout, user, role } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [draftDashboardBooks, setDraftDashboardBooks] = useState<DashboardBook[]>([]);
+  const [bookSeries, setBookSeries] = useState<BookSeries[]>([]);
+  const [seriesManagerContext, setSeriesManagerContext] = useState<"dashboard" | "new" | "edit" | null>(null);
   const [newBookOpen, setNewBookOpen] = useState(false);
   const [mediaBook, setMediaBook] = useState<DashboardBook | null>(null);
   const [detailsBook, setDetailsBook] = useState<DashboardBook | null>(null);
@@ -1498,6 +1620,7 @@ export default function DashboardPage() {
   async function refreshDashboardBooks() {
     if (!user) {
       setDraftDashboardBooks([]);
+      setBookSeries([]);
       return;
     }
 
@@ -1505,8 +1628,9 @@ export default function DashboardPage() {
     setDashboardError(null);
 
     try {
-      const [supabaseBooks, contacts, shares, shared, feedback, revisions] = await Promise.all([
-        fetchDashboardBooksFromSupabase(),
+      const [supabaseBooks, series, contacts, shares, shared, feedback, revisions] = await Promise.all([
+        fetchDashboardBooksFromSupabase(user),
+        fetchBookSeriesFromSupabase(user),
         fetchShareableContacts(user),
         fetchBookSharesForOwner(user),
         fetchSharedBooks(user),
@@ -1514,6 +1638,7 @@ export default function DashboardPage() {
         fetchBookRevisionsForUser(user),
       ]);
       setDraftDashboardBooks(supabaseBooks as DashboardBook[]);
+      setBookSeries(series);
       setShareableContacts(contacts);
       setOwnerShares(shares);
       setSharedBooks(shared);
@@ -1639,6 +1764,8 @@ export default function DashboardPage() {
         accentClass: theme.accentClass,
         colorTheme: form.colorTheme,
         accessType: form.accessType,
+        seriesId: form.seriesId || null,
+        seriesOrder: form.seriesId ? Math.max(1, Number.parseInt(form.seriesOrder || "1", 10) || 1) : null,
         published: false,
         featured: false,
         mostRead: false,
@@ -1657,7 +1784,7 @@ export default function DashboardPage() {
         savedBook as DashboardBook,
         ...currentBooks.filter((book) => book.id !== savedBook.id),
       ]);
-      setForm(defaultForm);
+      setForm({ ...defaultForm, author: user.name ?? "" });
       setNewBookOpen(false);
     } catch (error) {
       console.error(error);
@@ -1682,7 +1809,7 @@ export default function DashboardPage() {
     setDetailsBook(book);
     setDetailsForm({
       title: book.title ?? "",
-      author: book.author ?? user?.name ?? "Giovanni",
+      author: book.author ?? user?.name ?? "",
       subtitle: book.subtitle ?? "",
       description: book.description ?? "",
       genres: Array.isArray(book.genres) && book.genres.length > 0 ? book.genres : ["Interactief"],
@@ -1693,6 +1820,8 @@ export default function DashboardPage() {
       readTime: book.readTime ?? "Concept",
       colorTheme: book.colorTheme ?? "blue",
       accessType: book.accessType ?? "free",
+      seriesId: book.seriesId ?? "",
+      seriesOrder: book.seriesOrder ? String(book.seriesOrder) : "1",
     });
   }
 
@@ -1730,6 +1859,8 @@ export default function DashboardPage() {
         accentClass: detailsBook.accentClass || theme.accentClass,
         colorTheme: detailsForm.colorTheme,
         accessType: detailsForm.accessType,
+        seriesId: detailsForm.seriesId || null,
+        seriesOrder: detailsForm.seriesId ? Math.max(1, Number.parseInt(detailsForm.seriesOrder || "1", 10) || 1) : null,
         published: false,
         featured: detailsBook.featured ?? false,
         mostRead: detailsBook.mostRead ?? false,
@@ -1964,12 +2095,23 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
             <p className="text-sm font-black uppercase tracking-[0.32em] text-neutral-500">Mijn boeken</p>
             <h2 className="mt-2 text-3xl font-black sm:text-4xl">Auteurcollectie</h2>
           </div>
-          <button
-            onClick={() => setNewBookOpen(true)}
-            className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
-          >
-            + Nieuw boek
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setSeriesManagerContext("dashboard")}
+              className="rounded-2xl border border-purple-400/30 bg-purple-500/10 px-5 py-3 text-sm font-black text-purple-100 hover:bg-purple-500/20"
+            >
+              Series
+            </button>
+            <button
+              onClick={() => {
+                setForm({ ...defaultForm, author: user?.name ?? "" });
+                setNewBookOpen(true);
+              }}
+              className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
+            >
+              + Nieuw boek
+            </button>
+          </div>
         </div>
 
         {dashboardLoading && (
@@ -1986,7 +2128,18 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
           {allBooks.map((book) => (
-            <BookDashboardCard key={`${book.source}-${book.id}`} book={book} onPublish={publishBookToLibrary} canPublish={permissions.canPublishBook} onRemoveFromLibrary={removeBookFromLibrary} onDeleteDraft={deleteDraftBook} onOpenMedia={setMediaBook} onOpenDetails={openBookDetails} onShare={setShareBook} />
+            <BookDashboardCard
+              key={`${book.source}-${book.id}`}
+              book={book}
+              seriesTitle={bookSeries.find((series) => series.id === book.seriesId)?.title}
+              onPublish={publishBookToLibrary}
+              canPublish={permissions.canPublishBook}
+              onRemoveFromLibrary={removeBookFromLibrary}
+              onDeleteDraft={deleteDraftBook}
+              onOpenMedia={setMediaBook}
+              onOpenDetails={openBookDetails}
+              onShare={setShareBook}
+            />
           ))}
         </div>
 
@@ -2059,6 +2212,8 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
         <NewBookModal
           form={form}
           setForm={setForm}
+          series={bookSeries}
+          onOpenSeries={() => setSeriesManagerContext("new")}
           onClose={() => setNewBookOpen(false)}
           onSave={saveNewBook}
           mode="new"
@@ -2069,9 +2224,33 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
         <NewBookModal
           form={detailsForm}
           setForm={setDetailsForm}
+          series={bookSeries}
+          onOpenSeries={() => setSeriesManagerContext("edit")}
           onClose={() => setDetailsBook(null)}
           onSave={saveBookDetails}
           mode="edit"
+        />
+      )}
+      {seriesManagerContext && user && (
+        <BookSeriesManagerModal
+          user={user}
+          series={bookSeries}
+          onClose={() => setSeriesManagerContext(null)}
+          onChanged={async () => {
+            await refreshDashboardBooks();
+          }}
+          onCreated={(createdSeries) => {
+            if (seriesManagerContext === "new") {
+              setForm((current) => ({ ...current, seriesId: createdSeries.id, seriesOrder: current.seriesOrder || "1" }));
+            }
+            if (seriesManagerContext === "edit") {
+              setDetailsForm((current) => ({ ...current, seriesId: createdSeries.id, seriesOrder: current.seriesOrder || "1" }));
+            }
+          }}
+          onDeleted={(seriesId) => {
+            setForm((current) => current.seriesId === seriesId ? { ...current, seriesId: "", seriesOrder: "1" } : current);
+            setDetailsForm((current) => current.seriesId === seriesId ? { ...current, seriesId: "", seriesOrder: "1" } : current);
+          }}
         />
       )}
       {mediaBook && (

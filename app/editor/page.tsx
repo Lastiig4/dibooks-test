@@ -27,10 +27,13 @@ import { Extension } from "@tiptap/core";
 import AuthModal from "@/components/AuthModal";
 import { FREE_NODE_LIMIT, getPlanLabel, getMaxNodesForUser, canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
 import {
+  fetchBookSeriesFromSupabase,
   fetchDashboardBookFromSupabase,
   saveDashboardBookToSupabase,
   updateDashboardBookProjectInSupabase,
+  type BookSeries,
 } from "@/lib/supabase/dashboardBooks";
+import BookSeriesManagerModal from "@/components/BookSeriesManagerModal";
 import {
   fetchSharedBookForEditor,
   submitBookRevision,
@@ -1530,6 +1533,8 @@ type DashboardSaveForm = {
   readTime: string;
   colorTheme: string;
   accessType: "free" | "premium";
+  seriesId: string;
+  seriesOrder: string;
 };
 
 const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
@@ -1558,36 +1563,36 @@ const dashboardColorThemes: Record<
     label: "Blauw / sci-fi",
     coverClass: "from-blue-950 via-slate-950 to-purple-950",
     accentClass: "border-blue-500/60",
-    coverImage: "/books/the-sovereign/cover.svg",
-    bannerImage: "/books/the-sovereign/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
   gold: {
     label: "Goud / dossier",
     coverClass: "from-yellow-950 via-neutral-950 to-stone-900",
     accentClass: "border-yellow-400/40",
-    coverImage: "/books/briars-logs/cover.svg",
-    bannerImage: "/books/briars-logs/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
   red: {
     label: "Rood / fantasy",
     coverClass: "from-red-950 via-stone-950 to-yellow-950",
     accentClass: "border-red-400/40",
-    coverImage: "/books/crown-of-ash/cover.svg",
-    bannerImage: "/books/crown-of-ash/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
   green: {
     label: "Groen / mystery",
     coverClass: "from-cyan-950 via-neutral-950 to-emerald-950",
     accentClass: "border-cyan-400/40",
-    coverImage: "/books/echoes-of-lumina/cover.svg",
-    bannerImage: "/books/echoes-of-lumina/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
   orange: {
     label: "Oranje / thriller",
     coverClass: "from-orange-950 via-stone-950 to-red-950",
     accentClass: "border-orange-400/40",
-    coverImage: "/books/the-dust-protocol/cover.svg",
-    bannerImage: "/books/the-dust-protocol/banner.svg",
+    coverImage: "",
+    bannerImage: "",
   },
 };
 
@@ -1604,6 +1609,8 @@ const defaultDashboardSaveForm: DashboardSaveForm = {
   readTime: "Concept",
   colorTheme: "blue",
   accessType: "free",
+  seriesId: "",
+  seriesOrder: "1",
 };
 
 function slugifyDashboardBook(value: string) {
@@ -1635,6 +1642,8 @@ function SaveToDashboardModal({
   setForm,
   existingBookId,
   isLoggedIn,
+  series,
+  onOpenSeries,
   onClose,
   onSaveDashboard,
   onDownloadProject,
@@ -1644,6 +1653,8 @@ function SaveToDashboardModal({
   setForm: React.Dispatch<React.SetStateAction<DashboardSaveForm>>;
   existingBookId: string | null;
   isLoggedIn: boolean;
+  series: BookSeries[];
+  onOpenSeries: () => void;
   onClose: () => void;
   onSaveDashboard: () => void;
   onDownloadProject: () => void;
@@ -1776,6 +1787,50 @@ function SaveToDashboardModal({
                 placeholder="Bijv. De laatste reis"
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
               />
+            </div>
+
+            <div className="rounded-2xl border border-purple-400/20 bg-purple-500/[0.07] p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="min-w-0 flex-1">
+                  <span className="mb-2 block text-sm font-black text-neutral-300">Serie</span>
+                  <select
+                    value={form.seriesId}
+                    onChange={(event) => {
+                      updateField("seriesId", event.target.value);
+                      if (event.target.value && !form.seriesOrder) updateField("seriesOrder", "1");
+                    }}
+                    className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-purple-400"
+                  >
+                    <option value="">Geen serie / losstaand boek</option>
+                    {series.map((item) => (
+                      <option key={item.id} value={item.id}>{item.title}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={onOpenSeries}
+                  disabled={!isLoggedIn}
+                  className="rounded-2xl border border-purple-400/30 bg-purple-500/10 px-4 py-3 text-sm font-black text-purple-100 hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  + Nieuwe serie
+                </button>
+              </div>
+              <label className="mt-3 block">
+                <span className="mb-2 block text-sm font-black text-neutral-300">Deel in serie</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.seriesOrder}
+                  disabled={!form.seriesId}
+                  onChange={(event) => updateField("seriesOrder", event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-purple-400 disabled:cursor-not-allowed disabled:opacity-40"
+                />
+                <p className="mt-2 text-xs font-semibold text-neutral-500">
+                  Bijvoorbeeld: serie <strong>De Sterrenkronieken</strong>, boek <strong>De laatste reis</strong>, deel <strong>1</strong>.
+                </p>
+              </label>
             </div>
 
             <div>
@@ -2007,6 +2062,8 @@ export default function Home() {
   const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout, user, role } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false);
+  const [dashboardSeries, setDashboardSeries] = useState<BookSeries[]>([]);
+  const [seriesManagerOpen, setSeriesManagerOpen] = useState(false);
   const [dashboardBookId, setDashboardBookId] = useState<string | null>(null);
   const [sharedEditBookId, setSharedEditBookId] = useState<string | null>(null);
   const [sharedEditOwnerName, setSharedEditOwnerName] = useState<string>("");
@@ -2060,6 +2117,29 @@ export default function Home() {
           },
     );
   }, [user?.name]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSeries() {
+      if (!user) {
+        setDashboardSeries([]);
+        return;
+      }
+
+      try {
+        const series = await fetchBookSeriesFromSupabase(user);
+        if (!cancelled) setDashboardSeries(series);
+      } catch (error) {
+        console.warn("Kon series niet laden in de editor.", error);
+      }
+    }
+
+    void loadSeries();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
 
   useEffect(() => {
@@ -2124,6 +2204,8 @@ export default function Home() {
           readTime: dashboardBook.readTime ?? "Concept",
           colorTheme: (dashboardBook as any).colorTheme ?? "blue",
           accessType: dashboardBook.accessType ?? "free",
+          seriesId: (dashboardBook as any).seriesId ?? "",
+          seriesOrder: (dashboardBook as any).seriesOrder ? String((dashboardBook as any).seriesOrder) : "1",
         });
 
         const projectData = await resolveProjectCutsceneUrls(dashboardBook.projectData);
@@ -2575,8 +2657,8 @@ export default function Home() {
     }
 
     const maxNodes = getMaxNodesForUser(user);
-    if (!sharedEditBookId && maxNodes !== null && nodes.length > maxNodes) {
-      alert(`Gratis accounts kunnen maximaal ${FREE_NODE_LIMIT} nodes opslaan in Dashboard. Verwijder nodes of upgrade later naar Author Pro voor onbeperkt bouwen.`);
+    if (!sharedEditBookId && maxNodes !== null && storyNodeCount > maxNodes) {
+      alert(`Gratis accounts kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes opslaan in Dashboard. Kladblok-, functie- en voorwaarde-nodes tellen niet mee. Verwijder verhaalnodes of upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
@@ -2638,12 +2720,14 @@ ${formatSaveError(error)}`);
         status: dashboardSaveForm.status,
         ageRating: dashboardSaveForm.ageRating,
         readTime: dashboardSaveForm.readTime.trim() || "Concept",
-        coverImage: theme.coverImage,
-        bannerImage: theme.bannerImage,
+        coverImage: "",
+        bannerImage: "",
         coverClass: theme.coverClass,
         accentClass: theme.accentClass,
         colorTheme: dashboardSaveForm.colorTheme,
         accessType: dashboardSaveForm.accessType,
+        seriesId: dashboardSaveForm.seriesId || null,
+        seriesOrder: dashboardSaveForm.seriesId ? Math.max(1, Number.parseInt(dashboardSaveForm.seriesOrder || "1", 10) || 1) : null,
         published: false,
         featured: false,
         mostRead: false,
@@ -5031,10 +5115,37 @@ ${formatSaveError(error)}`);
           setForm={setDashboardSaveForm}
           existingBookId={sharedEditBookId ? sharedEditBookId : dashboardBookId}
           isLoggedIn={isLoggedIn}
+          series={dashboardSeries}
+          onOpenSeries={() => setSeriesManagerOpen(true)}
           onClose={() => setSaveDashboardOpen(false)}
           onSaveDashboard={saveCurrentBookToDashboard}
           onDownloadProject={downloadProjectFile}
           onDownloadReaderStory={downloadReaderStoryFile}
+        />
+      )}
+      {seriesManagerOpen && user && (
+        <BookSeriesManagerModal
+          user={user}
+          series={dashboardSeries}
+          onClose={() => setSeriesManagerOpen(false)}
+          onChanged={async () => {
+            const nextSeries = await fetchBookSeriesFromSupabase(user);
+            setDashboardSeries(nextSeries);
+          }}
+          onCreated={(createdSeries) => {
+            setDashboardSaveForm((current) => ({
+              ...current,
+              seriesId: createdSeries.id,
+              seriesOrder: current.seriesOrder || "1",
+            }));
+          }}
+          onDeleted={(seriesId) => {
+            setDashboardSaveForm((current) =>
+              current.seriesId === seriesId
+                ? { ...current, seriesId: "", seriesOrder: "1" }
+                : current,
+            );
+          }}
         />
       )}
       {authModalMode && (
