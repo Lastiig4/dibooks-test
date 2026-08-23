@@ -1,21 +1,22 @@
-DiBooks Instant Auth - V3 Auth Lock Fix
-=====================================
+DiBooks Instant Auth V4 - No getSession race
+=============================================
 
-Waarschijnlijke oorzaak van ~60 sec login:
-Supabase onAuthStateChange startte meteen opnieuw Supabase databasecalls
-(profiles upsert/select) terwijl de auth-event callback nog actief was.
+Deze patch is gebaseerd op de auth.ts die je zelf zojuist hebt gestuurd.
 
-Supabase auth gebruikt intern een lock. Nieuwe Supabase-calls vanuit de
-auth-callback kunnen daardoor signInWithPassword laten wachten tot een timeout.
+Belangrijkste fix:
+- bootAuthOnce doet NIET langer getSession() en onAuthStateChange tegelijk.
+- Supabase onAuthStateChange levert zelf INITIAL_SESSION.
+- In de auth callback worden alleen lokale React/DiBooks states aangepast.
+- Profile queries starten pas NA de callback.
+- TOKEN_REFRESHED veroorzaakt geen onnodige profile upsert/select.
+- loginWithCredentials start niet langer zelf óók een profile refresh.
+- registerWithCredentials idem.
 
-Fix:
-- onAuthStateChange doet nu GEEN databasecall meer.
-- UI wordt direct ingelogd zodra het auth-event binnenkomt.
-- Profile role/plan lookup wordt via setTimeout(..., 0) pas gestart nadat
-  de auth callback klaar is en de lock kan zijn vrijgegeven.
-- loginWithCredentials doet hetzelfde.
-- Registratie gebruikt dezelfde lock-veilige flow.
-- Console timing toegevoegd als signInWithPassword langer dan 1,5 sec duurt.
+Waarom:
+Supabase gebruikt navigator Web Locks rond auth-operaties. Er zijn bekende
+deadlock/race-problemen wanneer auth-initialisatie/getSession en listeners
+tegelijk lopen. Het symptoom kan zijn dat signInWithPassword tientallen
+seconden wacht.
 
 Installeren:
 1. ZIP uitpakken.
@@ -26,14 +27,14 @@ Installeren:
 6. Commit/push.
 
 Test:
-Open DevTools -> Console en log in.
+- Sluit voor de eerste test liefst andere DiBooks-tabs.
+- Refresh de site.
+- Log uit.
+- Log opnieuw in.
 
-Normaal:
-- modal verdwijnt vrijwel direct na de echte Supabase login.
-- geen melding of slechts een kleine timingmelding.
-
-Als het nog steeds heel lang duurt, zoek dan in Console naar:
+De bestaande consolemeting blijft aanwezig:
 [DiBooks Auth] Supabase signInWithPassword duurde XXXXX ms.
 
-Als daar bijvoorbeeld 50000-60000 ms staat, weten we dat de vertraging niet
-meer in DiBooks zit maar in de daadwerkelijke Supabase Auth request.
+Als V4 nog steeds ~60 seconden geeft EN die consolemelding zelf ~60000 ms
+aangeeft, dan zit de vertraging daadwerkelijk binnen de Supabase auth-call /
+browser Web Lock en gaan we als volgende stap de client-lock zelf aanpakken.

@@ -353,7 +353,7 @@ function refreshProfileFromSupabase(
 function bootAuthOnce() {
   if (authBootPromise) return authBootPromise;
 
-  authBootPromise = (async () => {
+  authBootPromise = Promise.resolve().then(() => {
     const supabase = getSupabaseOrAlert();
 
     if (!supabase) {
@@ -361,26 +361,14 @@ function bootAuthOnce() {
       return;
     }
 
-    // Eén gedeelde Supabase-client + één auth listener voor de hele app.
-    void (async () => {
-      const sessionResult = await supabase.auth.getSession();
-      const { data, error } = sessionResult;
-
-      if (error) {
-        console.warn(
-          "Supabase getSession gaf geen actieve sessie.",
-          error.message,
-        );
-      }
-
-      const mappedUser = mapSupabaseUser(data.session?.user ?? null);
-      void refreshProfileFromSupabase(mappedUser);
-    })();
-
-    supabase.auth.onAuthStateChange((_event, session) => {
+    // BELANGRIJK:
+    // Geen getSession() tegelijk met het registreren van onAuthStateChange.
+    // De Supabase listener geeft zelf INITIAL_SESSION zodra de client klaar is.
+    // Daarmee vermijden we een bekende navigator.locks race/deadlock.
+    supabase.auth.onAuthStateChange((event, session) => {
       if (logoutInProgress && session) return;
 
-      if (!session) {
+      if (event === "SIGNED_OUT" || !session) {
         logoutInProgress = false;
         emitAuthSnapshot({
           user: null,
@@ -394,12 +382,7 @@ function bootAuthOnce() {
       const mappedUser = mapSupabaseUser(session.user);
       if (!mappedUser) return;
 
-      // BELANGRIJK:
-      // Geen Supabase databasecalls starten terwijl onAuthStateChange nog loopt.
-      // Supabase houdt tijdens auth-events intern een auth-lock vast. Een profiel-
-      // query vanuit deze callback kan daardoor de signIn promise tot een timeout
-      // blokkeren. We werken de UI direct bij en stellen de profielquery uit tot
-      // de callback volledig is afgerond.
+      // Alleen lokale state in deze callback. Geen Supabase databasecall.
       emitAuthSnapshot({
         user: mappedUser,
         loading: false,
@@ -407,12 +390,20 @@ function bootAuthOnce() {
       });
       broadcastAuthChange();
 
-      window.setTimeout(() => {
-        if (logoutInProgress || authSnapshot.user?.id !== mappedUser.id) return;
-        void refreshProfileFromSupabase(mappedUser);
-      }, 0);
+      // Alleen bij events waarbij profieldata relevant kan zijn opnieuw laden.
+      // TOKEN_REFRESHED hoeft geen extra database roundtrip te veroorzaken.
+      if (
+        event === "INITIAL_SESSION" ||
+        event === "SIGNED_IN" ||
+        event === "USER_UPDATED"
+      ) {
+        window.setTimeout(() => {
+          if (logoutInProgress || authSnapshot.user?.id !== mappedUser.id) return;
+          void refreshProfileFromSupabase(mappedUser);
+        }, 0);
+      }
     });
-  })();
+  });
 
   return authBootPromise;
 }
@@ -629,14 +620,9 @@ export function useDemoAuth() {
       broadcastAuthChange();
     }
 
-    // Profielverrijking pas in een volgende event-loop tick. Zo kan de auth-lock
-    // van signInWithPassword eerst volledig worden vrijgegeven.
-    if (mappedUser) {
-      window.setTimeout(() => {
-        if (logoutInProgress || authSnapshot.user?.id !== mappedUser.id) return;
-        void refreshProfileFromSupabase(mappedUser);
-      }, 0);
-    }
+    // Profielverrijking wordt centraal door de auth-listener afgehandeld.
+    // Zo starten loginWithCredentials en onAuthStateChange niet allebei
+    // dezelfde Supabase profielquery.
 
     return { ok: true };
   }
@@ -707,12 +693,7 @@ export function useDemoAuth() {
       broadcastAuthChange();
     }
 
-    if (mappedUser) {
-      window.setTimeout(() => {
-        if (logoutInProgress || authSnapshot.user?.id !== mappedUser.id) return;
-        void refreshProfileFromSupabase(mappedUser);
-      }, 0);
-    }
+    // Profielverrijking wordt centraal door de auth-listener afgehandeld.
 
     return {
       ok: true,
