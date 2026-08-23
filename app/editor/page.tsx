@@ -95,7 +95,7 @@ const FontSize = Extension.create({
   },
 });
 
-type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "function" | "scratchpad";
+type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "function" | "condition" | "scratchpad";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 
@@ -126,6 +126,28 @@ type FunctionAction = {
   amount?: number;
   textValue?: string;
 };
+
+type ConditionOperator =
+  | "is_true"
+  | "is_false"
+  | "equals"
+  | "not_equals"
+  | "greater_than"
+  | "greater_or_equal"
+  | "less_than"
+  | "less_or_equal"
+  | "contains";
+
+function getDefaultConditionOperatorForType(type: StoryVariableType): ConditionOperator {
+  if (type === "boolean") return "is_true";
+  return "equals";
+}
+
+function getDefaultConditionValueForType(type: StoryVariableType): StoryVariableValue {
+  if (type === "number") return 0;
+  if (type === "text") return "";
+  return true;
+}
 
 function getDefaultStoryVariableValue(type: StoryVariableType): StoryVariableValue {
   if (type === "boolean") return false;
@@ -172,6 +194,12 @@ type DiNodeData = {
   miniGameSuccessTargetNodeId?: string;
   miniGameFailTargetNodeId?: string;
   functionActions?: FunctionAction[];
+  conditionVariableId?: string;
+  conditionKey?: string;
+  conditionOperator?: ConditionOperator;
+  conditionValue?: StoryVariableValue;
+  conditionTrueTargetNodeId?: string;
+  conditionFalseTargetNodeId?: string;
 };
 
 const MANUAL_PAGE_BREAK_MARKER = "[[NIEUWE_PAGINA]]";
@@ -197,6 +225,7 @@ const nodeColors: Record<DiNodeType, string> = {
   choice: "#f97316",
   minigame: "#9333ea",
   function: "#06b6d4",
+  condition: "#14b8a6",
   scratchpad: "#f8fafc",
 };
 
@@ -207,6 +236,7 @@ const nodeLabels: Record<DiNodeType, string> = {
   choice: "Keuze",
   minigame: "Mini game",
   function: "Functie",
+  condition: "Voorwaarde / IF",
   scratchpad: "Kladblok",
 };
 
@@ -316,6 +346,14 @@ function FunctionIcon() {
   return (
     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-black tracking-tight">
       Fx
+    </div>
+  );
+}
+
+function ConditionIcon() {
+  return (
+    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-[12px] font-black tracking-tight">
+      IF
     </div>
   );
 }
@@ -600,6 +638,15 @@ function isNodeComplete(node: Node<DiNodeData> | undefined) {
 
   if (node.data.type === "function") {
     return true;
+  }
+
+  if (node.data.type === "condition") {
+    return (
+      !!(node.data.conditionVariableId || node.data.conditionKey) &&
+      !!node.data.conditionOperator &&
+      !!node.data.conditionTrueTargetNodeId &&
+      !!node.data.conditionFalseTargetNodeId
+    );
   }
 
   if (node.data.type === "scratchpad") {
@@ -1980,7 +2027,8 @@ export default function Home() {
   const maxNodesForCurrentUser = getMaxNodesForUser(user);
   const runtimeNodeCount = getStoryNodes(nodes).length;
   const functionNodeCount = nodes.filter((node) => node.data.type === "function").length;
-  const storyNodeCount = runtimeNodeCount - functionNodeCount;
+  const conditionNodeCount = nodes.filter((node) => node.data.type === "condition").length;
+  const storyNodeCount = runtimeNodeCount - functionNodeCount - conditionNodeCount;
   const scratchpadNodeCount = nodes.length - runtimeNodeCount;
   const nodeLimitReached = maxNodesForCurrentUser !== null && storyNodeCount >= maxNodesForCurrentUser;
   const autosaveReadyRef = useRef(false);
@@ -1989,6 +2037,7 @@ export default function Home() {
   const [cutsceneUploadStatus, setCutsceneUploadStatus] = useState("");
   const [storyVariables, setStoryVariables] = useState<StoryVariable[]>([]);
   const [variablesOpen, setVariablesOpen] = useState(false);
+  const [previewVariableValues, setPreviewVariableValues] = useState<Record<string, StoryVariableValue>>({});
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
@@ -2662,6 +2711,80 @@ ${formatSaveError(error)}`);
     event.target.value = "";
   }
 
+  function createInitialPreviewVariableValues() {
+    return Object.fromEntries(
+      storyVariables.map((variable) => [variable.id, variable.defaultValue]),
+    ) as Record<string, StoryVariableValue>;
+  }
+
+  function getPreviewVariableValue(variableId?: string, variableKey?: string) {
+    const variable =
+      storyVariables.find((item) => item.id === variableId) ??
+      storyVariables.find((item) => item.name === variableKey);
+
+    if (!variable) return undefined;
+    return previewVariableValues[variable.id] ?? variable.defaultValue;
+  }
+
+  function evaluatePreviewCondition(node: Node<DiNodeData>) {
+    const variable =
+      storyVariables.find((item) => item.id === node.data.conditionVariableId) ??
+      storyVariables.find((item) => item.name === node.data.conditionKey);
+
+    if (!variable) return false;
+
+    const actualValue = previewVariableValues[variable.id] ?? variable.defaultValue;
+    const operator = node.data.conditionOperator ?? getDefaultConditionOperatorForType(variable.type);
+    const expectedValue = node.data.conditionValue ?? getDefaultConditionValueForType(variable.type);
+
+    if (operator === "is_true") return actualValue === true;
+    if (operator === "is_false") return actualValue === false;
+
+    if (variable.type === "number") {
+      const actual = Number(actualValue);
+      const expected = Number(expectedValue);
+      if (operator === "equals") return actual === expected;
+      if (operator === "not_equals") return actual !== expected;
+      if (operator === "greater_than") return actual > expected;
+      if (operator === "greater_or_equal") return actual >= expected;
+      if (operator === "less_than") return actual < expected;
+      if (operator === "less_or_equal") return actual <= expected;
+      return false;
+    }
+
+    const actual = String(actualValue ?? "");
+    const expected = String(expectedValue ?? "");
+    if (operator === "equals") return actual === expected;
+    if (operator === "not_equals") return actual !== expected;
+    if (operator === "contains") return actual.includes(expected);
+    return false;
+  }
+
+  function executePreviewFunctionActions(node: Node<DiNodeData>) {
+    setPreviewVariableValues((current) => {
+      const next = { ...current };
+
+      for (const action of node.data.functionActions ?? []) {
+        const variable =
+          storyVariables.find((item) => item.id === action.variableId) ??
+          storyVariables.find((item) => item.name === action.key);
+
+        if (!variable) continue;
+
+        const currentValue = next[variable.id] ?? variable.defaultValue;
+
+        if (action.type === "set_flag") next[variable.id] = true;
+        if (action.type === "clear_flag") next[variable.id] = false;
+        if (action.type === "increment") next[variable.id] = Number(currentValue) + (action.amount ?? 1);
+        if (action.type === "decrement") next[variable.id] = Number(currentValue) - (action.amount ?? 1);
+        if (action.type === "set_number") next[variable.id] = action.amount ?? 0;
+        if (action.type === "set_text") next[variable.id] = action.textValue ?? "";
+      }
+
+      return next;
+    });
+  }
+
   function openPreview() {
     if (!startNodeId) {
       alert("Kies eerst een start-node.");
@@ -2675,6 +2798,7 @@ ${formatSaveError(error)}`);
       return;
     }
 
+    setPreviewVariableValues(createInitialPreviewVariableValues());
     setPreviewNodeId(startNodeId);
     setPreviewPageIndex(0);
     setPreviewPageCount(1);
@@ -2688,6 +2812,7 @@ ${formatSaveError(error)}`);
     setPreviewPageIndex(0);
     setPreviewPageCount(1);
     setReaderVisiblePageCount(1);
+    setPreviewVariableValues({});
   }
 
   function goToPreviewNode(nodeId: string) {
@@ -2709,9 +2834,9 @@ ${formatSaveError(error)}`);
 
   function createNode(type: DiNodeType) {
     const maxNodes = getMaxNodesForUser(user);
-    const isUtilityNode = type === "scratchpad" || type === "function";
+    const isUtilityNode = type === "scratchpad" || type === "function" || type === "condition";
     if (!isUtilityNode && maxNodes !== null && storyNodeCount >= maxNodes) {
-      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes gebruiken. Kladblok- en functie-nodes tellen niet mee. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
+      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes gebruiken. Kladblok-, functie- en voorwaarde-nodes tellen niet mee. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
@@ -2770,6 +2895,12 @@ ${formatSaveError(error)}`);
           type === "function"
             ? [{ id: `function_action_${Date.now()}`, type: "set_flag", key: "", variableId: "", amount: 1 }]
             : undefined,
+        conditionVariableId: type === "condition" ? "" : undefined,
+        conditionKey: type === "condition" ? "" : undefined,
+        conditionOperator: type === "condition" ? "is_true" : undefined,
+        conditionValue: type === "condition" ? true : undefined,
+        conditionTrueTargetNodeId: type === "condition" ? "" : undefined,
+        conditionFalseTargetNodeId: type === "condition" ? "" : undefined,
       },
     };
 
@@ -3048,6 +3179,17 @@ ${formatSaveError(error)}`);
             };
           }
 
+          if (node.data.type === "condition") {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                conditionTrueTargetNodeId: node.data.conditionTrueTargetNodeId === deletedNodeId ? "" : node.data.conditionTrueTargetNodeId,
+                conditionFalseTargetNodeId: node.data.conditionFalseTargetNodeId === deletedNodeId ? "" : node.data.conditionFalseTargetNodeId,
+              },
+            };
+          }
+
           return node;
         }),
     );
@@ -3278,6 +3420,44 @@ ${formatSaveError(error)}`);
     );
   }
 
+  function updateSelectedConditionData(updates: Partial<DiNodeData>) {
+    if (!selectedNodeId) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedNodeId
+          ? { ...node, data: { ...node.data, ...updates } }
+          : node,
+      ),
+    );
+  }
+
+  function updateSelectedConditionRoute(routeType: "true" | "false", targetNodeId: string) {
+    if (!selectedNodeId) return;
+    const dataKey = routeType === "true" ? "conditionTrueTargetNodeId" : "conditionFalseTargetNodeId";
+    updateSelectedConditionData({ [dataKey]: targetNodeId } as Partial<DiNodeData>);
+
+    setEdges((currentEdges) => {
+      const filteredEdges = currentEdges.filter((edge) => {
+        const conditionResult = (edge.data as { conditionResult?: string } | undefined)?.conditionResult;
+        return !(edge.source === selectedNodeId && conditionResult === routeType);
+      });
+      if (!targetNodeId) return filteredEdges;
+      const nextEdge: Edge = {
+        id: `condition_${selectedNodeId}_${routeType}_${targetNodeId}_${Date.now()}`,
+        source: selectedNodeId,
+        target: targetNodeId,
+        sourceHandle: "out",
+        targetHandle: "in",
+        label: routeType === "true" ? "TRUE" : "ELSE",
+        data: { conditionResult: routeType },
+        animated: false,
+        style: { stroke: "#dc2626", strokeWidth: 5 },
+      };
+      return [...filteredEdges, nextEdge];
+    });
+  }
+
   function addStoryVariable() {
     const existingNames = new Set(storyVariables.map((variable) => variable.name));
     let index = storyVariables.length + 1;
@@ -3336,6 +3516,18 @@ ${formatSaveError(error)}`);
 
     setNodes((currentNodes) =>
       currentNodes.map((node) => {
+        if (node.data.type === "condition") {
+          if (node.data.conditionVariableId !== variableId) return node;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              conditionKey: nextName,
+              conditionOperator: previousVariable.type === nextType ? node.data.conditionOperator : getDefaultConditionOperatorForType(nextType),
+              conditionValue: previousVariable.type === nextType ? node.data.conditionValue : getDefaultConditionValueForType(nextType),
+            },
+          };
+        }
         if (node.data.type !== "function") return node;
 
         const nextActions = (node.data.functionActions ?? []).map((action) => {
@@ -3370,20 +3562,21 @@ ${formatSaveError(error)}`);
     const variable = storyVariables.find((item) => item.id === variableId);
     if (!variable) return;
 
-    const referenceCount = nodes.reduce(
-      (total, node) =>
-        total +
-        (node.data.functionActions ?? []).filter(
-          (action) =>
-            action.variableId === variableId ||
-            (!action.variableId && action.key === variable.name),
-        ).length,
-      0,
-    );
+    const referenceCount = nodes.reduce((total, node) => {
+      const functionReferences = (node.data.functionActions ?? []).filter(
+        (action) => action.variableId === variableId || (!action.variableId && action.key === variable.name),
+      ).length;
+      const conditionReference =
+        node.data.type === "condition" &&
+        (node.data.conditionVariableId === variableId || (!node.data.conditionVariableId && node.data.conditionKey === variable.name))
+          ? 1
+          : 0;
+      return total + functionReferences + conditionReference;
+    }, 0);
 
     const confirmed = window.confirm(
       referenceCount > 0
-        ? `Variabele "${variable.name}" wordt in ${referenceCount} functie-actie(s) gebruikt. Verwijderen wist die koppelingen. Doorgaan?`
+        ? `Variabele "${variable.name}" wordt op ${referenceCount} plek(ken) gebruikt. Verwijderen wist die koppelingen. Doorgaan?`
         : `Variabele "${variable.name}" verwijderen?`,
     );
 
@@ -3395,6 +3588,10 @@ ${formatSaveError(error)}`);
 
     setNodes((currentNodes) =>
       currentNodes.map((node) => {
+        if (node.data.type === "condition") {
+          if (node.data.conditionVariableId !== variableId && !(!node.data.conditionVariableId && node.data.conditionKey === variable.name)) return node;
+          return { ...node, data: { ...node.data, conditionVariableId: "", conditionKey: "" } };
+        }
         if (node.data.type !== "function") return node;
 
         return {
@@ -3446,6 +3643,12 @@ ${formatSaveError(error)}`);
           miniGameSuccessTargetNodeId: node.data.miniGameSuccessTargetNodeId ?? "",
           miniGameFailTargetNodeId: node.data.miniGameFailTargetNodeId ?? "",
           functionActions: node.data.functionActions ?? [],
+          conditionVariableId: node.data.conditionVariableId ?? "",
+          conditionKey: node.data.conditionKey ?? "",
+          conditionOperator: node.data.conditionOperator ?? "",
+          conditionValue: node.data.conditionValue ?? null,
+          conditionTrueTargetNodeId: node.data.conditionTrueTargetNodeId ?? "",
+          conditionFalseTargetNodeId: node.data.conditionFalseTargetNodeId ?? "",
           specialSubtype: node.data.specialSubtype ?? "",
         },
       })),
@@ -3551,6 +3754,13 @@ ${formatSaveError(error)}`);
               label="Functie / flags"
               className="bg-cyan-500 text-slate-950 hover:bg-cyan-300"
               icon={<FunctionIcon />}
+            />
+
+            <SidebarButton
+              onClick={() => createNode("condition")}
+              label="Voorwaarde / IF"
+              className="bg-teal-600 text-white hover:bg-teal-500"
+              icon={<ConditionIcon />}
             />
 
             <SidebarButton
@@ -3661,6 +3871,11 @@ ${formatSaveError(error)}`);
               {functionNodeCount > 0 && (
                 <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-600/10 text-cyan-700"}`}>
                   {functionNodeCount} functie
+                </span>
+              )}
+              {conditionNodeCount > 0 && (
+                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-teal-500/15 text-teal-200" : "bg-teal-600/10 text-teal-700"}`}>
+                  {conditionNodeCount} voorwaarde
                 </span>
               )}
               {scratchpadNodeCount > 0 && (
@@ -3819,6 +4034,7 @@ ${formatSaveError(error)}`);
 
               {selectedNode.data.type !== "choice" &&
                 selectedNode.data.type !== "minigame" &&
+                selectedNode.data.type !== "condition" &&
                 selectedNode.data.type !== "scratchpad" && (
               <div className="rounded-xl bg-neutral-900 p-3">
                 <div className="mb-3 flex items-center justify-between">
@@ -4251,6 +4467,100 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
+              {selectedNode.data.type === "condition" && (
+                <div className="rounded-xl border border-teal-500/25 bg-teal-950/30 p-4">
+                  <div className="mb-4">
+                    <h3 className="font-black text-teal-200">Voorwaarde / IF</h3>
+                    <p className="mt-1 text-sm leading-6 text-neutral-400">
+                      Controleer een bestaande variabele. Klopt de voorwaarde, dan volgt TRUE; anders automatisch ELSE.
+                    </p>
+                  </div>
+
+                  {storyVariables.length === 0 ? (
+                    <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-4 text-sm font-bold leading-6 text-indigo-100/80">
+                      Maak eerst een variabele via de paarse vlagknop links.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      <div>
+                        <label className="mb-2 block text-sm font-black">Variabele</label>
+                        <select
+                          value={storyVariables.find((v) => v.id === selectedNode.data.conditionVariableId)?.id ?? storyVariables.find((v) => v.name === selectedNode.data.conditionKey)?.id ?? ""}
+                          onChange={(event) => {
+                            const variable = storyVariables.find((item) => item.id === event.target.value);
+                            updateSelectedConditionData({
+                              conditionVariableId: variable?.id ?? "",
+                              conditionKey: variable?.name ?? "",
+                              conditionOperator: variable ? getDefaultConditionOperatorForType(variable.type) : "is_true",
+                              conditionValue: variable ? getDefaultConditionValueForType(variable.type) : true,
+                            });
+                          }}
+                          className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-teal-400"
+                        >
+                          <option value="">Kies een variabele...</option>
+                          {storyVariables.map((variable) => (
+                            <option key={variable.id} value={variable.id}>
+                              {variable.name} — {variable.type === "boolean" ? "ja/nee" : variable.type === "number" ? "getal" : "tekst"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {(() => {
+                        const conditionVariable = storyVariables.find((v) => v.id === selectedNode.data.conditionVariableId) ?? storyVariables.find((v) => v.name === selectedNode.data.conditionKey);
+                        if (!conditionVariable) return null;
+                        return (
+                          <>
+                            <div>
+                              <label className="mb-2 block text-sm font-black">Voorwaarde</label>
+                              <select
+                                value={selectedNode.data.conditionOperator ?? getDefaultConditionOperatorForType(conditionVariable.type)}
+                                onChange={(event) => updateSelectedConditionData({ conditionOperator: event.target.value as ConditionOperator })}
+                                className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-teal-400"
+                              >
+                                {conditionVariable.type === "boolean" && <><option value="is_true">Is waar / aan</option><option value="is_false">Is niet waar / uit</option></>}
+                                {conditionVariable.type === "number" && <><option value="equals">Is gelijk aan</option><option value="not_equals">Is niet gelijk aan</option><option value="greater_than">Is groter dan</option><option value="greater_or_equal">Is groter dan of gelijk aan</option><option value="less_than">Is kleiner dan</option><option value="less_or_equal">Is kleiner dan of gelijk aan</option></>}
+                                {conditionVariable.type === "text" && <><option value="equals">Is gelijk aan</option><option value="not_equals">Is niet gelijk aan</option><option value="contains">Bevat tekst</option></>}
+                              </select>
+                            </div>
+                            {conditionVariable.type === "number" && (
+                              <div>
+                                <label className="mb-2 block text-sm font-black">Vergelijk met</label>
+                                <input type="number" value={typeof selectedNode.data.conditionValue === "number" ? selectedNode.data.conditionValue : 0} onChange={(event) => updateSelectedConditionData({ conditionValue: Number(event.target.value) || 0 })} className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-teal-400" />
+                              </div>
+                            )}
+                            {conditionVariable.type === "text" && (
+                              <div>
+                                <label className="mb-2 block text-sm font-black">Vergelijk met</label>
+                                <input value={typeof selectedNode.data.conditionValue === "string" ? selectedNode.data.conditionValue : ""} onChange={(event) => updateSelectedConditionData({ conditionValue: event.target.value })} placeholder="Bijv. Dust" className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-teal-400" />
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+
+                      <div className="rounded-xl border border-emerald-800 bg-emerald-950/20 p-3">
+                        <label className="mb-2 block text-sm font-black text-emerald-200">TRUE route</label>
+                        <select value={selectedNode.data.conditionTrueTargetNodeId ?? ""} onChange={(event) => updateSelectedConditionRoute("true", event.target.value)} className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-emerald-400">
+                          <option value="">Nog geen TRUE-doel...</option>
+                          {availableTargetNodes.map((node) => <option key={node.id} value={node.id}>{node.data.label} — {nodeLabels[node.data.type]}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="rounded-xl border border-rose-900 bg-rose-950/20 p-3">
+                        <label className="mb-2 block text-sm font-black text-rose-200">ELSE / FALSE route</label>
+                        <select value={selectedNode.data.conditionFalseTargetNodeId ?? ""} onChange={(event) => updateSelectedConditionRoute("false", event.target.value)} className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-rose-400">
+                          <option value="">Nog geen ELSE-doel...</option>
+                          {availableTargetNodes.map((node) => <option key={node.id} value={node.id}>{node.data.label} — {nodeLabels[node.data.type]}</option>)}
+                        </select>
+                      </div>
+
+                      <p className="rounded-xl border border-teal-500/20 bg-black/20 p-3 text-xs font-bold leading-5 text-teal-100/80">ELSE is geen aparte variabele of node: hij wordt gevolgd als de IF-voorwaarde niet klopt.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {selectedNode.data.type === "minigame" && (
                 <div className="rounded-xl bg-neutral-900 p-3">
                   <div className="mb-4">
@@ -4438,6 +4748,7 @@ ${formatSaveError(error)}`);
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600"><JoystickIcon /></span><span><strong className="text-white">Mini game</strong><br />Interactief moment met success/fail route.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white"><FlagVariablesIcon /></span><span><strong className="text-white">Flags & variabelen</strong><br />Centrale lijst met alle flags, tellers en tekstvariabelen van dit boek.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-slate-950"><FunctionIcon /></span><span><strong className="text-white">Functie / flags</strong><br />Onzichtbare node die centrale variabelen aanpast en automatisch doorgaat.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white"><ConditionIcon /></span><span><strong className="text-white">Voorwaarde / IF</strong><br />Controleert een variabele en kiest TRUE of ELSE.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-950"><ScratchpadIcon /></span><span><strong className="text-white">Kladblok</strong><br />Notities, lore en ideeën. Geen paths en niet zichtbaar voor lezers.</span></div>
                   </div>
                 </section>
@@ -4543,16 +4854,20 @@ ${formatSaveError(error)}`);
             ) : (
               <div className="mt-6 grid gap-4">
                 {storyVariables.map((variable, variableIndex) => {
-                  const referenceCount = nodes.reduce(
-                    (total, node) =>
-                      total +
-                      (node.data.functionActions ?? []).filter(
-                        (action) =>
-                          action.variableId === variable.id ||
-                          (!action.variableId && action.key === variable.name),
-                      ).length,
-                    0,
-                  );
+                  const referenceCount = nodes.reduce((total, node) => {
+                    const functionReferences = (node.data.functionActions ?? []).filter(
+                      (action) =>
+                        action.variableId === variable.id ||
+                        (!action.variableId && action.key === variable.name),
+                    ).length;
+                    const conditionReference =
+                      node.data.type === "condition" &&
+                      (node.data.conditionVariableId === variable.id ||
+                        (!node.data.conditionVariableId && node.data.conditionKey === variable.name))
+                        ? 1
+                        : 0;
+                    return total + functionReferences + conditionReference;
+                  }, 0);
 
                   return (
                     <div
@@ -4565,7 +4880,7 @@ ${formatSaveError(error)}`);
                             Variabele {variableIndex + 1}
                           </p>
                           <p className="mt-1 text-xs font-semibold text-neutral-500">
-                            {referenceCount} functie-actie{referenceCount === 1 ? "" : "s"} gekoppeld
+                            {referenceCount} koppeling{referenceCount === 1 ? "" : "en"} met functie/IF
                           </p>
                         </div>
                         <button
@@ -4883,6 +5198,7 @@ ${formatSaveError(error)}`);
                         alert("Deze functie-node heeft nog geen vervolgpath.");
                         return;
                       }
+                      executePreviewFunctionActions(previewNode);
                       goToPreviewNode(targetId);
                     }}
                     className="mt-6 rounded-xl bg-cyan-500 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300"
@@ -4892,6 +5208,37 @@ ${formatSaveError(error)}`);
                 </div>
               </div>
             )}
+
+            {previewNode.data.type === "condition" && (() => {
+              const variable = storyVariables.find((item) => item.id === previewNode.data.conditionVariableId) ?? storyVariables.find((item) => item.name === previewNode.data.conditionKey);
+              const result = evaluatePreviewCondition(previewNode);
+              const targetId = result ? previewNode.data.conditionTrueTargetNodeId : previewNode.data.conditionFalseTargetNodeId;
+              const currentValue = getPreviewVariableValue(previewNode.data.conditionVariableId, previewNode.data.conditionKey);
+              return (
+                <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 p-6">
+                  <div className="rounded-2xl border border-teal-500/25 bg-teal-950/30 p-8">
+                    <p className="text-sm font-bold uppercase tracking-widest text-teal-300">Voorwaarde / IF</p>
+                    <h1 className="mt-2 text-3xl font-black">{previewNode.data.label}</h1>
+                    <p className="mt-4 text-sm leading-6 text-teal-100/80">In de echte reader gebeurt deze controle onzichtbaar. In preview zie je de uitkomst zodat je de logica kunt testen.</p>
+                    <div className="mt-5 grid gap-3">
+                      <div className="rounded-xl bg-black/25 p-3 text-sm font-bold text-teal-50">Variabele: {variable?.name ?? "niet gekoppeld"}</div>
+                      <div className="rounded-xl bg-black/25 p-3 text-sm font-bold text-teal-50">Huidige waarde: {String(currentValue ?? "onbekend")}</div>
+                      <div className={`rounded-xl p-4 text-lg font-black ${result ? "bg-emerald-500/20 text-emerald-200" : "bg-rose-500/20 text-rose-200"}`}>Uitkomst: {result ? "TRUE" : "ELSE / FALSE"}</div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!variable) { alert("Deze voorwaarde heeft geen geldige variabele gekoppeld."); return; }
+                        if (!targetId) { alert(result ? "Deze voorwaarde heeft nog geen TRUE-route." : "Deze voorwaarde heeft nog geen ELSE-route."); return; }
+                        goToPreviewNode(targetId);
+                      }}
+                      className={`mt-6 rounded-xl px-5 py-3 font-black text-white ${result ? "bg-emerald-600 hover:bg-emerald-500" : "bg-rose-600 hover:bg-rose-500"}`}
+                    >
+                      Volg {result ? "TRUE" : "ELSE"} route
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {previewNode.data.type === "minigame" && (
               <>
@@ -5057,7 +5404,9 @@ ${formatSaveError(error)}`);
             {previewNode.data.type !== "text" &&
               previewNode.data.type !== "special" &&
               previewNode.data.type !== "choice" &&
-              previewNode.data.type !== "minigame" && (
+              previewNode.data.type !== "minigame" &&
+              previewNode.data.type !== "function" &&
+              previewNode.data.type !== "condition" && (
                 <>
                   {previewPaths.length === 0 && (
                     <div className="rounded-xl bg-neutral-900 p-4 text-neutral-300">

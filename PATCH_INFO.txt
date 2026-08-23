@@ -1,27 +1,38 @@
-DiBooks Patch – Flags & Variabelen
+DiBooks Patch - Condition / IF node
+====================================
+
+Deze patch is gebouwd bovenop de werkende Flags & Variabelen + Functie-node versie.
 
 INSTALLEREN
 1. Pak deze ZIP uit.
-2. Open de uitgepakte map.
-3. Sleep de map 'app' naar de hoofdmap van dibooks_author_studio.
-4. Kies 'Bestanden in doel vervangen' wanneer Windows daarom vraagt.
-5. Start daarna DiBooks zoals normaal met: npm run dev
+2. Sleep de map 'app' naar de hoofdmap van dibooks_author_studio.
+3. Kies 'Bestanden vervangen' wanneer Windows dit vraagt.
+4. Start/herstart daarna DiBooks met:
+   npm run dev
 
-DEZE PATCH VOEGT TOE
-- Centrale knop 'Flags & variabelen' in de linker toolbar.
-- Boolean-, getal- en tekstvariabelen.
-- Startwaarde en omschrijving per variabele.
-- Variabelen worden opgeslagen in projectbestand, sessiesave, Dashboard en reader-export.
-- Oude projecten zonder variabelen blijven werken.
-- Functie-nodes kiezen variabelen uit de centrale lijst.
-- Ondersteuning voor tekstvariabelen in functie-acties.
-- Verwijderen/hernoemen van variabelen houdt functie-koppelingen veilig bij.
+NIEUW
+- Nieuwe Voorwaarde / IF-node in de linker toolbar.
+- Kiest een variabele uit de centrale Flags & Variabelen-lijst.
+- Boolean: Is waar / Is niet waar.
+- Getal: =, !=, >, >=, <, <=.
+- Tekst: gelijk, niet gelijk, bevat.
+- Twee vaste routes: TRUE en ELSE/FALSE.
+- TRUE/ELSE maken automatisch gelabelde paths op de grid.
+- Condition-nodes tellen net als Functie-nodes niet mee als gewone verhaalnode.
+- Condition-data wordt opgeslagen in project, Dashboard/autosave en reader-export.
+- Variabele hernoemen/type wijzigen werkt door naar gekoppelde IF-nodes.
+- Verwijderen van een gebruikte variabele waarschuwt ook voor IF-koppelingen.
+- Preview heeft nu runtime variabelen:
+  * Functie-node verandert de actuele waarde.
+  * IF-node leest daarna die actuele waarde en kiest TRUE of ELSE.
+- Hardcoded persoonlijke auteur- of boektitels zijn niet toegevoegd.
 
-PRIVACY / GENERIEKE INTERFACE
-- Hardcoded naam 'Giovanni' verwijderd.
-- Hardcoded boektitel 'The Sovereign' verwijderd.
-- Auteur wordt alleen automatisch ingevuld met de naam van de ingelogde gebruiker.
-- Generieke placeholders en previewtitels voor andere auteurs.
-
-EXTRA
-- Kleine bestaande TypeScript-fout rond DOM Node.TEXT_NODE / ELEMENT_NODE gecorrigeerd.
+SNELLE TEST
+1. Maak boolean: has_medallion, startwaarde False.
+2. Maak Functie-node: Flag aanzetten -> has_medallion.
+3. Maak Voorwaarde / IF-node: has_medallion -> Is waar / aan.
+4. Kies een TRUE-doel en een ELSE-doel.
+5. Laat het verhaal via de Functie-node naar de IF-node lopen.
+6. Play: na de Functie-node moet de IF-node TRUE tonen.
+7. Sla de Functie-node over en ga met startwaarde False naar de IF-node:
+   de IF-node moet ELSE/FALSE tonen.
