@@ -9,9 +9,11 @@ import { useDemoAuth } from "@/lib/auth";
 function DiBooksMiniLogo() {
   return (
     <Link href="/" className="group flex items-end leading-none" aria-label="DiBooks Library">
-      <span className="text-3xl font-black tracking-tight text-white transition group-hover:text-blue-200 sm:text-4xl">DI</span>
+      <span className="text-4xl font-black tracking-tight text-white transition group-hover:text-blue-200 sm:text-5xl">
+        DI
+      </span>
       <span
-        className="ml-1 hidden text-3xl italic text-white transition group-hover:text-blue-200 sm:inline sm:text-4xl"
+        className="ml-1 text-4xl italic text-white transition group-hover:text-blue-200 sm:text-5xl"
         style={{ fontFamily: "Georgia, Times New Roman, serif" }}
       >
         Books
@@ -23,7 +25,7 @@ function DiBooksMiniLogo() {
 function MenuPanel({ children, align = "right" }: { children: ReactNode; align?: "left" | "right" }) {
   return (
     <div
-      className={`absolute top-full z-[95] mt-3 min-w-64 rounded-3xl border border-white/10 bg-[#080b12]/95 p-3 shadow-2xl backdrop-blur-xl ${
+      className={`absolute top-full z-[95] mt-3 min-w-72 rounded-3xl border border-white/10 bg-[#080b12]/95 p-3 shadow-2xl backdrop-blur-xl ${
         align === "right" ? "right-0" : "left-0"
       }`}
     >
@@ -38,7 +40,9 @@ function MenuLink({ href, icon, title, subtitle }: { href: string; icon: string;
       href={href}
       className="flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-white/10"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/8 text-lg ring-1 ring-white/10">{icon}</span>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/8 text-lg ring-1 ring-white/10">
+        {icon}
+      </span>
       <span className="min-w-0">
         <span className="block text-sm font-black text-white">{title}</span>
         {subtitle && <span className="mt-0.5 block truncate text-xs font-bold text-neutral-500">{subtitle}</span>}
@@ -75,6 +79,43 @@ function IconButton({
   );
 }
 
+function GuestAuthButtons({
+  compact,
+  onLogin,
+  onRegister,
+}: {
+  compact?: boolean;
+  onLogin: () => void;
+  onRegister: () => void;
+}) {
+  return (
+    <div className={`flex items-center gap-2 ${compact ? "scale-[0.96] origin-right" : ""}`}>
+      <Link
+        href="/editor"
+        title="Auteur Studio"
+        aria-label="Auteur Studio"
+        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20"
+      >
+        ✒️
+      </Link>
+      <button
+        type="button"
+        onClick={onLogin}
+        className="rounded-2xl border border-white/12 bg-white/[0.05] px-4 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-white/10 sm:px-5"
+      >
+        Login
+      </button>
+      <button
+        type="button"
+        onClick={onRegister}
+        className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/30 transition hover:-translate-y-0.5 hover:bg-blue-500 sm:px-5"
+      >
+        Registreer
+      </button>
+    </div>
+  );
+}
+
 export function AppNavActions({ compact = false }: { compact?: boolean }) {
   const { isLoggedIn, permissions, user, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
   const [openMenu, setOpenMenu] = useState<"reader" | "settings" | null>(null);
@@ -99,88 +140,69 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
   }, []);
 
   return (
-    <div ref={wrapRef} className={`relative flex items-center gap-2 ${compact ? "scale-[0.96] origin-right" : ""}`}>
-      <Link
-        href="/editor"
-        title="Auteur Studio"
-        aria-label="Auteur Studio"
-        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20"
-      >
-        ✒️
-      </Link>
+    <>
+      <div ref={wrapRef} className={`relative flex items-center gap-2 ${compact ? "scale-[0.96] origin-right" : ""}`}>
+        {isLoggedIn ? (
+          <>
+            <Link
+              href="/editor"
+              title="Auteur Studio"
+              aria-label="Auteur Studio"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20"
+            >
+              ✒️
+            </Link>
 
-      <NotificationBell variant="inline" />
+            <NotificationBell variant="inline" />
 
-      <div className="relative">
-        <IconButton title="Lezen en sociaal" active={openMenu === "reader"} onClick={() => setOpenMenu(openMenu === "reader" ? null : "reader")}>👤</IconButton>
-        {openMenu === "reader" && (
-          <MenuPanel>
-            <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.32em] text-neutral-500">Lezer</p>
-            <MenuLink href="/" icon="📚" title="Library" subtitle="Alle boeken" />
-            {permissions.canUseDashboard && <MenuLink href="/dashboard" icon="🗂️" title="Dashboard" subtitle="Mijn boeken" />}
-            {isLoggedIn && <MenuLink href="/favorites" icon="★" title="Favorieten" subtitle="Bewaarde boeken" />}
-            {isLoggedIn && <MenuLink href="/chat" icon="💬" title="Chat" subtitle="Berichten met contacten" />}
-            {!isLoggedIn && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenMenu(null);
-                  setAuthModalMode("login");
-                }}
-                className="mt-2 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500"
-              >
-                Login om alles te gebruiken
-              </button>
-            )}
-          </MenuPanel>
-        )}
-      </div>
+            <div className="relative">
+              <IconButton title="Menu" active={openMenu === "reader"} onClick={() => setOpenMenu(openMenu === "reader" ? null : "reader")}>
+                👤
+              </IconButton>
+              {openMenu === "reader" && (
+                <MenuPanel>
+                  <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.32em] text-neutral-500">
+                    Menu
+                  </p>
+                  <MenuLink href="/" icon="📚" title="Library" subtitle="Alle boeken" />
+                  {permissions.canUseDashboard && <MenuLink href="/dashboard" icon="🗂️" title="Dashboard" subtitle="Mijn boeken" />}
+                  <MenuLink href="/favorites" icon="★" title="Favorieten" subtitle="Bewaarde boeken" />
+                  <MenuLink href="/chat" icon="💬" title="Chat" subtitle="Berichten met contacten" />
+                </MenuPanel>
+              )}
+            </div>
 
-      <div className="relative">
-        <IconButton title="Account en instellingen" active={openMenu === "settings"} onClick={() => setOpenMenu(openMenu === "settings" ? null : "settings")}>⚙️</IconButton>
-        {openMenu === "settings" && (
-          <MenuPanel>
-            <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.32em] text-neutral-500">Account</p>
-            {isLoggedIn ? (
-              <>
-                <MenuLink href="/account" icon="⚙️" title="Account" subtitle={user?.email ?? "Profiel en plan"} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenMenu(null);
-                    logout();
-                  }}
-                  className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-3 py-3 text-left text-sm font-black text-red-100 hover:bg-red-500/20"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-red-500/15">⎋</span>
-                  Uitloggen
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenMenu(null);
-                    setAuthModalMode("login");
-                  }}
-                  className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500"
-                >
-                  Login
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenMenu(null);
-                    setAuthModalMode("register");
-                  }}
-                  className="mt-2 w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white hover:bg-white/10"
-                >
-                  Registreer
-                </button>
-              </>
-            )}
-          </MenuPanel>
+            <div className="relative">
+              <IconButton title="Account en instellingen" active={openMenu === "settings"} onClick={() => setOpenMenu(openMenu === "settings" ? null : "settings")}>
+                ⚙️
+              </IconButton>
+              {openMenu === "settings" && (
+                <MenuPanel>
+                  <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.32em] text-neutral-500">
+                    Account
+                  </p>
+                  <MenuLink href="/account" icon="⚙️" title="Account" subtitle={user?.email ?? "Profiel en plan"} />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(null);
+                      logout();
+                    }}
+                    className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-3 py-3 text-left text-sm font-black text-red-100 hover:bg-red-500/20"
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-red-500/15">⎋</span>
+                    Uitloggen
+                  </button>
+                </MenuPanel>
+              )}
+            </div>
+          </>
+        ) : (
+          <GuestAuthButtons
+            compact={compact}
+            onLogin={() => setAuthModalMode("login")}
+            onRegister={() => setAuthModalMode("register")}
+          />
         )}
       </div>
 
@@ -193,14 +215,14 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
           onRegister={registerWithCredentials}
         />
       )}
-    </div>
+    </>
   );
 }
 
 export default function AppNav({ title, subtitle, compact = false }: { title?: string; subtitle?: string; compact?: boolean }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-white/5 bg-[#05070d]/88 px-5 py-3 backdrop-blur-xl sm:px-8 lg:px-10">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+    <header className="sticky top-0 z-40 border-b border-white/5 bg-[#05070d]/90 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+      <div className="flex w-full items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
           <DiBooksMiniLogo />
           {(title || subtitle) && (

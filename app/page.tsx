@@ -8,7 +8,6 @@ import {
   fetchComingSoonDashboardBooksFromSupabase,
   fetchPublishedDashboardBooksFromSupabase,
 } from "@/lib/supabase/dashboardBooks";
-import AuthModal from "@/components/AuthModal";
 import { useDemoAuth } from "@/lib/auth";
 
 type DashboardBook = DiBook & {
@@ -145,24 +144,57 @@ function BookCard({ book, large = false }: { book: DashboardBook; large?: boolea
 
 function FeaturedPanel({ book }: { book: DashboardBook }) {
   const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
+  const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
+  const hasCustomCover = !!book.coverImage;
 
   return (
-    <Link href={`/books/${book.id}`} className="hidden w-[255px] justify-self-end lg:block">
-      <div className={`overflow-hidden rounded-3xl border ${accentClass} bg-neutral-950/90 shadow-2xl backdrop-blur-md transition hover:-translate-y-1`}>
-        <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-4 py-3">
-          <BookBadge>{book.primaryGenre}</BookBadge>
-          <div className="flex items-center gap-1.5">
+    <Link href={`/books/${book.id}`} className="hidden w-[190px] justify-self-end xl:block">
+      <div className={`overflow-hidden rounded-[1.25rem] border ${accentClass} bg-neutral-950/80 shadow-xl backdrop-blur-md transition hover:-translate-y-1`}>
+        <div className={`relative h-56 overflow-hidden bg-gradient-to-br ${coverClass}`}>
+          {hasCustomCover && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={book.coverImage} alt={`Cover van ${book.title}`} className="absolute inset-0 h-full w-full object-cover opacity-90" />
+          )}
+          {!hasCustomCover && (
+            <>
+              <div className="absolute left-4 top-4 text-[9px] font-black uppercase tracking-[0.34em] text-white/28">DiBooks</div>
+              <div className="absolute -right-12 top-10 h-36 w-36 rounded-full border border-white/10" />
+              <div className="absolute -right-5 top-24 h-48 w-48 rounded-full border border-white/8" />
+            </>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="absolute left-3 right-3 top-3 flex flex-wrap gap-1.5">
+            <BookBadge>{book.primaryGenre}</BookBadge>
             <AccessBadge book={book} />
-            <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
           </div>
-        </div>
-        <CoverArtwork book={book} />
-        <div className="flex min-h-[112px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-4 backdrop-blur-[2px]">
-          <p className="text-[9px] font-black uppercase tracking-[0.34em] text-blue-300/80">Interactive story</p>
-          <h3 className="mt-2 line-clamp-2 text-2xl font-black leading-none text-white">{book.title}</h3>
+          <div className="absolute bottom-3 left-3 right-3">
+            <p className="text-[8px] font-black uppercase tracking-[0.30em] text-blue-300/80">Uitgelicht</p>
+            <h3 className="mt-1 line-clamp-2 text-xl font-black leading-none text-white">{book.title}</h3>
+          </div>
         </div>
       </div>
     </Link>
+  );
+}
+
+function GuestLibraryStrip() {
+  return (
+    <section className="px-4 pt-5 sm:px-6 lg:px-8">
+      <div className="rounded-3xl border border-blue-300/15 bg-blue-500/[0.06] p-5 shadow-xl shadow-blue-950/10 sm:flex sm:items-center sm:justify-between sm:gap-6">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.28em] text-blue-200">Nog geen account?</p>
+          <p className="mt-2 max-w-3xl text-sm font-bold leading-6 text-neutral-300">
+            Maak gratis een account om boeken te lezen, voortgang op te slaan en favorieten te bewaren. Login en registreer staan rechtsboven los in de balk.
+          </p>
+        </div>
+        <Link
+          href="/editor"
+          className="mt-4 inline-flex rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200 sm:mt-0"
+        >
+          Probeer Auteur Studio
+        </Link>
+      </div>
+    </section>
   );
 }
 
@@ -200,8 +232,7 @@ function makeGenreRows(allBooks: DashboardBook[]) {
 export default function LibraryPage() {
   const [publishedBooks, setPublishedBooks] = useState<DashboardBook[]>([]);
   const [comingSoonBooks, setComingSoonBooks] = useState<DashboardBook[]>([]);
-  const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
-  const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
+  const { isLoggedIn, permissions } = useDemoAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -248,17 +279,17 @@ export default function LibraryPage() {
       <AppNav title="Library" subtitle="Ontdek interactieve boeken" />
 
       {featuredBook ? (
-      <section className="px-5 pt-8 sm:px-8 sm:pt-10 lg:px-10">
-        <div className={`relative isolate overflow-hidden rounded-[1.75rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
+      <section className="px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+        <div className={`relative isolate overflow-hidden rounded-[1.5rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
           {featuredBook.bannerImage && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={featuredBook.bannerImage} alt={`Banner van ${featuredBook.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover opacity-85" />
           )}
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.10),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(37,99,235,0.15),transparent_34%),linear-gradient(90deg,rgba(0,0,0,0.88),rgba(0,0,0,0.66),rgba(0,0,0,0.38))]" />
-          <div className="absolute -right-24 top-8 -z-10 h-[360px] w-[360px] rounded-full border border-white/10" />
-          <div className="absolute -right-6 top-24 -z-10 h-[480px] w-[480px] rounded-full border border-white/5" />
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.08),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(37,99,235,0.10),transparent_34%),linear-gradient(90deg,rgba(0,0,0,0.88),rgba(0,0,0,0.72),rgba(0,0,0,0.50))]" />
+          <div className="absolute -right-20 top-8 -z-10 h-[280px] w-[280px] rounded-full border border-white/8" />
+          <div className="absolute -right-4 top-20 -z-10 h-[380px] w-[380px] rounded-full border border-white/5" />
 
-          <div className="relative grid min-h-[330px] items-center gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_280px] lg:p-10">
+          <div className="relative grid min-h-[285px] items-center gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_210px] lg:p-9">
             <div className="max-w-3xl">
               {featuredBook.source === "dashboard" && (
                 <div className="mb-4 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-emerald-200">
@@ -272,7 +303,7 @@ export default function LibraryPage() {
                 <AccessBadge book={featuredBook} />
                 <BookBadge light>{getBookStatusLabel(featuredBook)}</BookBadge>
               </div>
-              <h1 className="max-w-4xl text-4xl font-black leading-none sm:text-6xl lg:text-7xl">
+              <h1 className="max-w-4xl text-4xl font-black leading-none sm:text-5xl lg:text-6xl">
                 {featuredBook.title}
               </h1>
               <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">
@@ -316,6 +347,8 @@ export default function LibraryPage() {
         </section>
       )}
 
+      {!isLoggedIn && <GuestLibraryStrip />}
+
       {comingSoonBooks.length > 0 && <BookRow title="Binnenkort" rowBooks={comingSoonBooks} />}
 
       {liveBooks.length > 0 && <BookRow title="Nieuw in de Library" rowBooks={liveBooks} />}
@@ -352,15 +385,6 @@ export default function LibraryPage() {
         DiBooks Library • {allBooks.length} boeken in catalogus • {liveBooks.length} live • {comingSoonBooks.length} binnenkort
       </footer>
 
-      {authModalMode && (
-        <AuthModal
-          mode={authModalMode}
-          onModeChange={setAuthModalMode}
-          onClose={() => setAuthModalMode(null)}
-          onLogin={loginWithCredentials}
-          onRegister={registerWithCredentials}
-        />
-      )}
     </main>
   );
 }
