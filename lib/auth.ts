@@ -5,7 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type UserRole = "guest" | "reader" | "author" | "admin";
-export type UserPlan = "free" | "reader_plus" | "author_pro" | "member"; // member = oude naam, wordt als author_pro behandeld
+export type UserPlan = "free" | "reader_plus" | "author_pro" | "member";
 
 export type AuthActionResult = { ok: boolean; message?: string };
 
@@ -78,11 +78,20 @@ export const AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH = 5;
 export const FULL_BOOK_NODE_BADGE_THRESHOLD = 20;
 
 export function isAuthorProUser(user: DemoAuthUser | null) {
-  return !!user && (user.role === "admin" || user.plan === "author_pro" || user.plan === "member");
+  return !!user && (
+    user.role === "admin" ||
+    user.plan === "author_pro" ||
+    user.plan === "member"
+  );
 }
 
 export function canReadPremiumBooks(user: DemoAuthUser | null) {
-  return !!user && (user.role === "admin" || user.plan === "reader_plus" || user.plan === "author_pro" || user.plan === "member");
+  return !!user && (
+    user.role === "admin" ||
+    user.plan === "reader_plus" ||
+    user.plan === "author_pro" ||
+    user.plan === "member"
+  );
 }
 
 export function getMaxNodesForUser(user: DemoAuthUser | null) {
@@ -110,13 +119,21 @@ export function getAccountLabel(user: DemoAuthUser | null) {
 
 function readCachedUser(): DemoAuthUser | null {
   if (typeof window === "undefined") return null;
+
   try {
     const raw = window.localStorage.getItem(AUTH_CACHE_KEY);
     if (!raw) return null;
+
     const parsed = JSON.parse(raw) as Partial<DemoAuthUser>;
     if (!parsed.id || !parsed.email) return null;
+
     const role: Exclude<UserRole, "guest"> =
-      parsed.role === "admin" ? "admin" : parsed.role === "reader" ? "reader" : "author";
+      parsed.role === "admin"
+        ? "admin"
+        : parsed.role === "reader"
+          ? "reader"
+          : "author";
+
     const plan: UserPlan =
       parsed.plan === "reader_plus"
         ? "reader_plus"
@@ -138,14 +155,16 @@ function readCachedUser(): DemoAuthUser | null {
 
 function writeCachedUser(user: DemoAuthUser | null) {
   if (typeof window === "undefined") return;
+
   try {
     if (!user) {
       window.localStorage.removeItem(AUTH_CACHE_KEY);
       return;
     }
+
     window.localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(user));
   } catch {
-    // Browseropslag kan vol of geblokkeerd zijn. Auth blijft dan via Supabase werken.
+    // Browseropslag kan vol of geblokkeerd zijn. Auth blijft via Supabase werken.
   }
 }
 
@@ -156,13 +175,20 @@ type AuthSnapshot = {
 };
 
 const cachedUser = typeof window !== "undefined" ? readCachedUser() : null;
+
 let authSnapshot: AuthSnapshot = {
   user: cachedUser,
   loading: !cachedUser,
   initialized: false,
 };
+
 let authBootPromise: Promise<void> | null = null;
 const authSubscribers = new Set<() => void>();
+
+// Voorkomt dubbele profile upsert/select wanneer signInWithPassword én
+// onAuthStateChange vrijwel tegelijkertijd dezelfde gebruiker doorgeven.
+const profileRefreshes = new Map<string, Promise<void>>();
+let logoutInProgress = false;
 
 function emitAuthSnapshot(next: Partial<AuthSnapshot>) {
   authSnapshot = { ...authSnapshot, ...next };
@@ -176,8 +202,14 @@ function mapSupabaseUser(user: User | null): DemoAuthUser | null {
   const metadata = user.user_metadata ?? {};
   const appMetadata = user.app_metadata ?? {};
   const metadataRole = metadata.role || appMetadata.role;
+
   const role: Exclude<UserRole, "guest"> =
-    metadataRole === "admin" ? "admin" : metadataRole === "reader" ? "reader" : "author";
+    metadataRole === "admin"
+      ? "admin"
+      : metadataRole === "reader"
+        ? "reader"
+        : "author";
+
   const metadataPlan = metadata.plan || appMetadata.plan;
   const plan: UserPlan =
     metadataPlan === "reader_plus"
@@ -188,7 +220,12 @@ function mapSupabaseUser(user: User | null): DemoAuthUser | null {
 
   return {
     id: user.id,
-    name: String(metadata.full_name || metadata.name || user.email?.split("@")[0] || "Auteur"),
+    name: String(
+      metadata.full_name ||
+        metadata.name ||
+        user.email?.split("@")[0] ||
+        "Auteur",
+    ),
     email: user.email ?? "",
     role,
     plan,
@@ -207,7 +244,9 @@ function getSupabaseOrAlert() {
   }
 }
 
-async function applySupabaseProfile(user: DemoAuthUser | null): Promise<DemoAuthUser | null> {
+async function applySupabaseProfile(
+  user: DemoAuthUser | null,
+): Promise<DemoAuthUser | null> {
   if (!user) return null;
 
   const supabase = getSupabaseOrAlert();
@@ -220,14 +259,22 @@ async function applySupabaseProfile(user: DemoAuthUser | null): Promise<DemoAuth
     .maybeSingle();
 
   if (error) {
-    console.warn("Kon DiBooks profile niet laden. Gebruik auth fallback.", error.message);
+    console.warn(
+      "Kon DiBooks profile niet laden. Gebruik auth fallback.",
+      error.message,
+    );
     return user;
   }
 
   if (!data) return user;
 
   const role: Exclude<UserRole, "guest"> =
-    data.role === "admin" ? "admin" : data.role === "reader" ? "reader" : "author";
+    data.role === "admin"
+      ? "admin"
+      : data.role === "reader"
+        ? "reader"
+        : "author";
+
   const plan: UserPlan =
     data.plan === "reader_plus"
       ? "reader_plus"
@@ -244,26 +291,63 @@ async function applySupabaseProfile(user: DemoAuthUser | null): Promise<DemoAuth
   };
 }
 
-async function refreshProfileFromSupabase(mappedUser: DemoAuthUser | null) {
+function refreshProfileFromSupabase(
+  mappedUser: DemoAuthUser | null,
+): Promise<void> {
   if (!mappedUser) {
-    emitAuthSnapshot({ user: null, loading: false, initialized: true });
+    emitAuthSnapshot({
+      user: null,
+      loading: false,
+      initialized: true,
+    });
     broadcastAuthChange();
-    return;
+    return Promise.resolve();
   }
 
-  // Zet direct de Supabase sessie-user, zodat de UI niet kort naar "uitgelogd" springt.
-  emitAuthSnapshot({ user: mappedUser, loading: false, initialized: true });
+  // De UI krijgt de ingelogde gebruiker DIRECT. Profielverrijking gebeurt
+  // daarna op de achtergrond en blokkeert login niet meer.
+  emitAuthSnapshot({
+    user: mappedUser,
+    loading: false,
+    initialized: true,
+  });
   broadcastAuthChange();
 
-  try {
-    await ensureSupabaseProfile(mappedUser);
-    const profiledUser = await applySupabaseProfile(mappedUser);
-    emitAuthSnapshot({ user: profiledUser ?? mappedUser, loading: false, initialized: true });
-    broadcastAuthChange();
-  } catch (profileError) {
-    console.warn("DiBooks profile check mislukt.", profileError);
-    emitAuthSnapshot({ user: mappedUser, loading: false, initialized: true });
-  }
+  const existingRefresh = profileRefreshes.get(mappedUser.id);
+  if (existingRefresh) return existingRefresh;
+
+  const refreshPromise = (async () => {
+    try {
+      await ensureSupabaseProfile(mappedUser);
+      const profiledUser = await applySupabaseProfile(mappedUser);
+
+      // Een langzame profielquery mag iemand die ondertussen is uitgelogd
+      // nooit opnieuw in de UI zetten.
+      if (authSnapshot.user?.id !== mappedUser.id || logoutInProgress) return;
+
+      emitAuthSnapshot({
+        user: profiledUser ?? mappedUser,
+        loading: false,
+        initialized: true,
+      });
+      broadcastAuthChange();
+    } catch (profileError) {
+      console.warn("DiBooks profile check mislukt.", profileError);
+
+      if (authSnapshot.user?.id === mappedUser.id && !logoutInProgress) {
+        emitAuthSnapshot({
+          user: mappedUser,
+          loading: false,
+          initialized: true,
+        });
+      }
+    } finally {
+      profileRefreshes.delete(mappedUser.id);
+    }
+  })();
+
+  profileRefreshes.set(mappedUser.id, refreshPromise);
+  return refreshPromise;
 }
 
 function bootAuthOnce() {
@@ -271,29 +355,41 @@ function bootAuthOnce() {
 
   authBootPromise = (async () => {
     const supabase = getSupabaseOrAlert();
+
     if (!supabase) {
       emitAuthSnapshot({ loading: false, initialized: true });
       return;
     }
 
-    // Belangrijk: niet naar guest resetten tijdens route/tab wissels. We houden cache vast
-    // tot Supabase echt bevestigt dat er geen sessie meer is.
-    supabase.auth.getSession().then(async ({ data, error }) => {
+    // Eén gedeelde Supabase-client + één auth listener voor de hele app.
+    void supabase.auth.getSession().then(({ data, error }) => {
       if (error) {
-        console.warn("Supabase getSession gaf geen actieve sessie.", error.message);
+        console.warn(
+          "Supabase getSession gaf geen actieve sessie.",
+          error.message,
+        );
       }
-      await refreshProfileFromSupabase(mapSupabaseUser(data.session?.user ?? null));
+
+      const mappedUser = mapSupabaseUser(data.session?.user ?? null);
+      void refreshProfileFromSupabase(mappedUser);
     });
 
     supabase.auth.onAuthStateChange((_event, session) => {
-      void refreshProfileFromSupabase(mapSupabaseUser(session?.user ?? null));
+      if (logoutInProgress && session) return;
+
+      if (!session) logoutInProgress = false;
+      void refreshProfileFromSupabase(
+        mapSupabaseUser(session?.user ?? null),
+      );
     });
   })();
 
   return authBootPromise;
 }
 
-export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
+export function getAuthPermissions(
+  user: DemoAuthUser | null,
+): AuthPermissions {
   const role: UserRole = user?.role ?? "guest";
   const isAuthor = role === "author" || role === "admin";
   const isAdmin = role === "admin";
@@ -314,28 +410,53 @@ export function getAuthPermissions(user: DemoAuthUser | null): AuthPermissions {
   };
 }
 
-export async function ensureSupabaseProfile(user: DemoAuthUser): Promise<AuthActionResult> {
+export async function ensureSupabaseProfile(
+  user: DemoAuthUser,
+): Promise<AuthActionResult> {
   const supabase = getSupabaseOrAlert();
-  if (!supabase) return { ok: false, message: "Supabase is nog niet ingesteld." };
+  if (!supabase) {
+    return {
+      ok: false,
+      message: "Supabase is nog niet ingesteld.",
+    };
+  }
 
-  const displayName = user.name?.trim() || user.email?.split("@")[0] || "Auteur";
+  const displayName =
+    user.name?.trim() ||
+    user.email?.split("@")[0] ||
+    "Auteur";
 
-  // Belangrijk: ignoreDuplicates voorkomt dat een bestaande admin/author profile
-  // per ongeluk wordt overschreven. Ontbreekt de profile-row, dan maken we hem aan.
   const { error } = await supabase.from("profiles").upsert(
     {
       id: user.id,
       email: user.email,
       display_name: displayName,
-      role: user.role === "admin" ? "admin" : user.role === "reader" ? "reader" : "author",
-      plan: user.plan === "member" ? "author_pro" : user.plan || "free",
+      role:
+        user.role === "admin"
+          ? "admin"
+          : user.role === "reader"
+            ? "reader"
+            : "author",
+      plan:
+        user.plan === "member"
+          ? "author_pro"
+          : user.plan || "free",
     },
-    { onConflict: "id", ignoreDuplicates: true },
+    {
+      onConflict: "id",
+      ignoreDuplicates: true,
+    },
   );
 
   if (error) {
-    console.error("Kon DiBooks profile niet controleren/aanmaken.", error);
-    return { ok: false, message: error.message };
+    console.error(
+      "Kon DiBooks profile niet controleren/aanmaken.",
+      error,
+    );
+    return {
+      ok: false,
+      message: error.message,
+    };
   }
 
   return { ok: true };
@@ -348,15 +469,25 @@ async function promptForLogin() {
   const password = window.prompt("Wachtwoord:");
   if (!password) return null;
 
-  return { email: email.trim(), password };
+  return {
+    email: email.trim(),
+    password,
+  };
 }
 
 async function promptForRegistration() {
-  const name = window.prompt("Naam / auteursnaam:")?.trim() || "Auteur";
-  const email = window.prompt("E-mailadres voor je DiBooks account:");
+  const name =
+    window.prompt("Naam / auteursnaam:")?.trim() ||
+    "Auteur";
+
+  const email = window.prompt(
+    "E-mailadres voor je DiBooks account:",
+  );
   if (!email) return null;
 
-  const password = window.prompt("Kies een wachtwoord, minimaal 6 tekens:");
+  const password = window.prompt(
+    "Kies een wachtwoord, minimaal 6 tekens:",
+  );
   if (!password) return null;
 
   if (password.length < 6) {
@@ -364,11 +495,17 @@ async function promptForRegistration() {
     return null;
   }
 
-  return { name, email: email.trim(), password };
+  return {
+    name,
+    email: email.trim(),
+    password,
+  };
 }
 
 export function useDemoAuth() {
-  const [snapshot, setSnapshot] = useState<AuthSnapshot>(() => authSnapshot);
+  const [snapshot, setSnapshot] = useState<AuthSnapshot>(
+    () => authSnapshot,
+  );
 
   useEffect(() => {
     function handleSnapshotUpdate() {
@@ -382,54 +519,95 @@ export function useDemoAuth() {
       void bootAuthOnce();
       handleSnapshotUpdate();
     };
-    window.addEventListener(DIBOOKS_AUTH_CHANGED_EVENT, handleAuthChanged);
+
+    window.addEventListener(
+      DIBOOKS_AUTH_CHANGED_EVENT,
+      handleAuthChanged,
+    );
 
     return () => {
       authSubscribers.delete(handleSnapshotUpdate);
-      window.removeEventListener(DIBOOKS_AUTH_CHANGED_EVENT, handleAuthChanged);
+      window.removeEventListener(
+        DIBOOKS_AUTH_CHANGED_EVENT,
+        handleAuthChanged,
+      );
     };
   }, []);
 
   const user = snapshot.user;
   const loading = snapshot.loading;
-  const permissions = useMemo(() => getAuthPermissions(user), [user]);
+  const permissions = useMemo(
+    () => getAuthPermissions(user),
+    [user],
+  );
 
-  async function loginWithCredentials(credentials: LoginCredentials): Promise<AuthActionResult> {
+  async function loginWithCredentials(
+    credentials: LoginCredentials,
+  ): Promise<AuthActionResult> {
     const supabase = getSupabaseOrAlert();
-    if (!supabase) return { ok: false, message: "Supabase is nog niet ingesteld." };
+    if (!supabase) {
+      return {
+        ok: false,
+        message: "Supabase is nog niet ingesteld.",
+      };
+    }
 
     const email = credentials.email.trim();
     if (!email || !credentials.password) {
-      return { ok: false, message: "Vul je e-mailadres en wachtwoord in." };
+      return {
+        ok: false,
+        message: "Vul je e-mailadres en wachtwoord in.",
+      };
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password: credentials.password,
-    });
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password: credentials.password,
+      });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return {
+        ok: false,
+        message: error.message,
+      };
     }
 
     const mappedUser = mapSupabaseUser(data.user);
-    await refreshProfileFromSupabase(mappedUser);
+
+    // NIET awaiten: zodra Supabase de login bevestigt, mag de modal dicht.
+    // Role/plan uit profiles worden daarna op de achtergrond bijgewerkt.
+    void refreshProfileFromSupabase(mappedUser);
+
     return { ok: true };
   }
 
-  async function registerWithCredentials(credentials: RegisterCredentials): Promise<AuthActionResult> {
+  async function registerWithCredentials(
+    credentials: RegisterCredentials,
+  ): Promise<AuthActionResult> {
     const supabase = getSupabaseOrAlert();
-    if (!supabase) return { ok: false, message: "Supabase is nog niet ingesteld." };
+    if (!supabase) {
+      return {
+        ok: false,
+        message: "Supabase is nog niet ingesteld.",
+      };
+    }
 
     const name = credentials.name.trim() || "Auteur";
     const email = credentials.email.trim();
 
     if (!email || !credentials.password) {
-      return { ok: false, message: "Vul je naam, e-mailadres en wachtwoord in." };
+      return {
+        ok: false,
+        message: "Vul je naam, e-mailadres en wachtwoord in.",
+      };
     }
 
     if (credentials.password.length < 6) {
-      return { ok: false, message: "Gebruik een wachtwoord van minimaal 6 tekens." };
+      return {
+        ok: false,
+        message: "Gebruik een wachtwoord van minimaal 6 tekens.",
+      };
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -445,19 +623,27 @@ export function useDemoAuth() {
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return {
+        ok: false,
+        message: error.message,
+      };
     }
 
     if (data.user && !data.session) {
       return {
         ok: true,
-        message: "Account aangemaakt. Check je e-mail om je account te bevestigen, of zet e-mailbevestiging tijdelijk uit in Supabase tijdens testen.",
+        message:
+          "Account aangemaakt. Check je e-mail om je account te bevestigen, of zet e-mailbevestiging tijdelijk uit in Supabase tijdens testen.",
       };
     }
 
     const mappedUser = mapSupabaseUser(data.user);
-    await refreshProfileFromSupabase(mappedUser);
-    return { ok: true, message: "Account aangemaakt en ingelogd." };
+    void refreshProfileFromSupabase(mappedUser);
+
+    return {
+      ok: true,
+      message: "Account aangemaakt en ingelogd.",
+    };
   }
 
   async function login() {
@@ -465,7 +651,9 @@ export function useDemoAuth() {
     if (!credentials) return;
 
     const result = await loginWithCredentials(credentials);
-    if (!result.ok) alert(`Login mislukt: ${result.message}`);
+    if (!result.ok) {
+      alert(`Login mislukt: ${result.message}`);
+    }
   }
 
   async function register() {
@@ -473,23 +661,49 @@ export function useDemoAuth() {
     if (!credentials) return;
 
     const result = await registerWithCredentials(credentials);
-    if (!result.ok) alert(`Registreren mislukt: ${result.message}`);
-    else if (result.message) alert(result.message);
+
+    if (!result.ok) {
+      alert(`Registreren mislukt: ${result.message}`);
+    } else if (result.message) {
+      alert(result.message);
+    }
   }
 
   async function logout() {
     const supabase = getSupabaseOrAlert();
     if (!supabase) return;
 
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      alert(`Uitloggen mislukt: ${error.message}`);
-      return;
-    }
-
-    emitAuthSnapshot({ user: null, loading: false, initialized: true });
+    // UX eerst: de hele DiBooks UI ziet DIRECT guest.
+    logoutInProgress = true;
+    emitAuthSnapshot({
+      user: null,
+      loading: false,
+      initialized: true,
+    });
     writeCachedUser(null);
     broadcastAuthChange();
+
+    // Supabase afmelden gebeurt daarna. De gebruiker hoeft niet op deze
+    // server-roundtrip te wachten om de interface te zien veranderen.
+    void supabase.auth
+      .signOut()
+      .then(({ error }) => {
+        if (error) {
+          console.warn(
+            "Supabase logout kon server-side niet volledig worden afgerond.",
+            error.message,
+          );
+        }
+      })
+      .catch((error) => {
+        console.warn(
+          "Supabase logout netwerkfout.",
+          error,
+        );
+      })
+      .finally(() => {
+        logoutInProgress = false;
+      });
   }
 
   return {

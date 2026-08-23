@@ -1,5 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 
+let browserClient: ReturnType<typeof createBrowserClient> | null = null;
+
 export function createSupabaseBrowserClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey =
@@ -12,5 +14,12 @@ export function createSupabaseBrowserClient() {
     );
   }
 
-  return createBrowserClient(supabaseUrl, supabaseKey);
+  // Eén browserclient voor de volledige client-app.
+  // Voorheen werd bij vrijwel elke helper/hook opnieuw een Supabase-client
+  // aangemaakt, inclusief extra auth state listeners en storage synchronisatie.
+  if (!browserClient) {
+    browserClient = createBrowserClient(supabaseUrl, supabaseKey);
+  }
+
+  return browserClient;
 }

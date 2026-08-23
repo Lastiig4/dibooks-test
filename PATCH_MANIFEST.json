@@ -1,17 +1,11 @@
 {
-  "name": "DiBooks Moderation Core",
-  "version": 1,
+  "name": "DiBooks Instant Auth",
   "date": "2026-08-23",
   "files": [
-    "PATCH_INFO.txt",
-    "MODERATION_CORE_SUPABASE.sql",
+    "lib/auth.ts",
+    "lib/supabase/client.ts",
     "components/AppNav.tsx",
-    "app/editor/page.tsx",
-    "app/notifications/page.tsx",
-    "app/dashboard/page.tsx",
-    "app/admin/moderation/page.tsx",
-    "lib/supabase/dashboardBooks.ts",
-    "lib/supabase/moderation.ts",
-    "supabase/migrations/20260823_190000_moderation_core.sql"
-  ]
+    "PATCH_INFO.txt"
+  ],
+  "sql_required": false
 }

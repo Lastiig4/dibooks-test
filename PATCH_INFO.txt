@@ -1,52 +1,53 @@
-DiBooks Patch - Moderation Core v1
-===================================
+DiBooks Patch - Instant Auth
+===========================
 
-DIT ZIT ERIN
-- Dashboard: 'Publiceer naar Library' is vervangen door 'Indienen voor beoordeling'.
-- Bij indienen wordt in Supabase een IMMUTABLE snapshot van metadata + volledige projectdata gemaakt.
-- Boek wordt tijdens 'In beoordeling' vergrendeld voor de auteur.
-- Alle accounts met role=admin krijgen via het bestaande Meldingen-systeem een nieuwe melding.
-- Instellingen/gear-menu krijgt voor admins: 'Boekmoderatie'.
-- Nieuwe adminpagina: /admin/moderation met wachtrij + geschiedenis.
-- Admin opent een inzending in /editor?review=<id>.
-- Auteur Studio wordt dan een speciale alleen-lezen reviewmodus:
-  * nodes kunnen niet worden verplaatst/gewijzigd;
-  * rechterpaneel is een review-inspector;
-  * hele boek kan via Preview worden afgespeeld;
-  * gemarkeerde nodes tonen een ⚠ boven de node;
-  * flagredenen verschijnen in de review-inspector.
-- Admin kan Goedkeuren & publiceren of Afwijzen + verplichte feedback.
-- Goedkeuren publiceert EXACT de bevroren review-snapshot.
-- Databasebeveiliging blokkeert ook een rechtstreekse author-update naar published=true; review kan dus niet alleen via de UI worden omzeild.
-- Afwijzen ontgrendelt het boek en feedback verschijnt in Dashboard + Meldingen.
-- Goedgekeurde live versie blijft vergrendeld. Uit Library halen zet hem terug naar draft; daarna moet een nieuwe versie opnieuw worden beoordeeld.
+WAAROM LOGIN EN LOGOUT TRAAG WAREN
 
-BELANGRIJK OVER AUTOMATISCHE AI-SCAN
-Deze patch bouwt de moderation_flags-tabel en de ⚠ UI al in, maar de automatische AI-node scanner zelf zit bewust nog NIET in v1. Dat is de volgende patch. De menselijke reviewflow werkt dus eerst zelfstandig en veilig.
+Login:
+1. Supabase signInWithPassword
+2. profiles UPSERT
+3. profiles SELECT
+4. onAuthStateChange kon dezelfde profile-flow nogmaals starten
+5. AuthModal wachtte op al die stappen voordat hij sloot
+
+Logout:
+- De UI wachtte op de Supabase signOut netwerk-call.
+- De eerdere defensieve logout-fix kon daarna ook nog een extra session-check doen.
+
+Extra:
+- createSupabaseBrowserClient() maakte bij iedere aanroep opnieuw een browserclient.
+
+WAT DEZE PATCH VERANDERT
+
+- Eén gedeelde Supabase browserclient voor de hele app.
+- Login wacht alleen nog op de echte wachtwoord-login.
+- Zodra Supabase de login bevestigt, is de UI direct ingelogd.
+- Profile role/plan wordt daarna op de achtergrond geladen.
+- Dubbele gelijktijdige profile refreshes voor dezelfde user worden samengevoegd.
+- Logout zet de DiBooks UI/cache direct op guest.
+- Supabase signOut loopt daarna zonder de UI te blokkeren.
+- Een trage oude profile request kan na logout de gebruiker niet opnieuw zichtbaar maken.
+- Admin -> Boekmoderatie blijft behouden in AppNav.
 
 INSTALLEREN
-1. Supabase -> SQL Editor -> New query.
-2. Plak ALLES uit MODERATION_CORE_SUPABASE.sql en klik Run.
-3. Pak de ZIP uit.
-4. Sleep deze mappen over dibooks_author_studio:
-   - app
-   - components
-   - lib
-   - supabase
-5. Kies 'Bestanden vervangen'.
-6. npm run build (aanrader) of npm run dev.
-7. Commit/push naar GitHub/Vercel.
 
-TESTFLOW
-A. Log in als Author Pro.
-B. Dashboard -> kies een geldig concept -> 'Indienen voor beoordeling'.
-C. Controleer dat kaart 'In beoordeling' toont en niet meer bewerkbaar is.
-D. Log in als admin.
-E. Bel-icoon/Meldingen moet 'Nieuw boek ter beoordeling' tonen.
-F. Gear -> Boekmoderatie -> Open in reviewmodus.
-G. Controleer dat nodes niet te wijzigen zijn en Preview wel werkt.
-H. Wijs een testboek af met feedback -> auteur krijgt melding + feedback en kan weer aanpassen.
-I. Dien opnieuw in en keur goed -> exact die snapshot wordt live gepubliceerd.
+1. Pak de ZIP uit.
+2. Sleep 'lib' en 'components' over dibooks_author_studio.
+3. Kies Bestanden vervangen.
+4. Geen SQL nodig.
+5. Test lokaal:
+   npm run build
+6. Daarna commit/push.
 
-ADMIN TESTACCOUNT
-Je bestaande profiel moet in Supabase role='admin' hebben. De UI leest die rol al uit profiles.
+TEST
+
+- Klik Login en log in.
+  De modal hoort vrijwel direct na de Supabase login-response te verdwijnen.
+- Klik Uitloggen.
+  De navbar hoort onmiddellijk naar Login / Registreer te wisselen.
+
+LET OP
+
+De daadwerkelijke Supabase wachtwoordcontrole blijft natuurlijk een netwerk-call.
+Dus 0 milliseconden login kan niet, maar de extra profile roundtrips blokkeren
+de interface niet meer.

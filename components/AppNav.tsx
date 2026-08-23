@@ -140,7 +140,7 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
                   {user?.role === "admin" && (
                     <MenuLink href="/admin/moderation" icon="🛡️" title="Boekmoderatie" subtitle="Boeken in beoordeling" />
                   )}
-                  <button type="button" onClick={() => { setOpenMenu(null); logout(); }} className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-3 py-3 text-left text-sm font-black text-red-100 hover:bg-red-500/20">
+                  <button type="button" onClick={() => { setOpenMenu(null); void logout(); }} className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-3 py-3 text-left text-sm font-black text-red-100 hover:bg-red-500/20">
                     <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-red-500/15">⎋</span>
                     Uitloggen
                   </button>
