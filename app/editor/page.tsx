@@ -1466,7 +1466,7 @@ const dashboardColorThemes: Record<
 
 const defaultDashboardSaveForm: DashboardSaveForm = {
   title: "",
-  author: "Giovanni",
+  author: "Author name",
   subtitle: "",
   description: "",
   genres: ["Interactief"],
@@ -1646,7 +1646,7 @@ function SaveToDashboardModal({
               <input
                 value={form.title}
                 onChange={(event) => updateField("title", event.target.value)}
-                placeholder="Bijv. The Sovereign"
+                placeholder="Boektitel"
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
               />
             </div>
@@ -1967,7 +1967,7 @@ export default function Home() {
 
         setDashboardSaveForm({
           title: dashboardBook.title ?? "",
-          author: dashboardBook.author ?? user.name ?? "Giovanni",
+          author: dashboardBook.author ?? user.name ?? "Auteur",
           subtitle: dashboardBook.subtitle ?? "",
           description: "description" in dashboardBook ? (dashboardBook.description ?? "") : "",
           genres: Array.isArray(dashboardBook.genres) && dashboardBook.genres.length > 0 ? dashboardBook.genres : ["Interactief"],
