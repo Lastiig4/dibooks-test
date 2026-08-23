@@ -13,6 +13,10 @@ export type ModerationFlag = {
   severity: "low" | "medium" | "high" | string;
   reason: string;
   source: string;
+  resolution?: "pending" | "cleared" | string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
   createdAt?: string;
 };
 
@@ -173,9 +177,31 @@ export async function fetchAdminModerationSubmission(user: DemoAuthUser, submiss
       severity: flag.severity ?? "medium",
       reason: flag.reason ?? "Deze node is gemarkeerd voor menselijke controle.",
       source: flag.source ?? "manual",
+      resolution: flag.resolution ?? "pending",
+      reviewedBy: flag.reviewed_by ?? undefined,
+      reviewedAt: flag.reviewed_at ?? undefined,
+      reviewNote: flag.review_note ?? undefined,
       createdAt: flag.created_at ?? undefined,
     })),
   } satisfies ModerationSubmissionDetail;
+}
+
+export async function clearModerationFlag(
+  user: DemoAuthUser,
+  flagId: string,
+  note = "",
+) {
+  assertAdmin(user);
+  if (!flagId) throw new Error("Moderatiemelding ontbreekt.");
+
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("clear_moderation_flag", {
+    input_flag_id: flagId,
+    input_note: note.trim(),
+  });
+
+  if (error) throw new Error(formatSupabaseError(error));
+  return !!data;
 }
 
 export async function reviewModerationSubmission(

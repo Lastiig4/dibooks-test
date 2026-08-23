@@ -1,74 +1,51 @@
-DiBooks Patch - DeepSeek Node Moderation
-========================================
+DiBooks Patch - Moderation Alert Navigator V2
+============================================
 
-Deze patch VERVANGT alleen de automatische OpenAI-scanner door DeepSeek.
-Moderation Core zelf blijft hetzelfde.
+GEBRUIK DEZE V2 IN PLAATS VAN DE EERDERE NAVIGATOR-PATCH.
 
-Provider:
-- DeepSeek API
-- model: deepseek-v4-flash
-- thinking: disabled
-- JSON Output
+Wat de admin in de revieweditor krijgt:
 
-Waarom Flash:
-- snel
-- goedkoop
-- ruim voldoende voor eerste inhoudelijke triage
-- admin blijft altijd degene die beslist
+ROOD - Ernstige meldingen
+- Staan altijd bovenaan.
+- Klik erop: DiBooks centreert meteen op de betreffende node en selecteert hem.
+- In het rechter inspectiepaneel staat de volledige reden.
+- Een rode/high melding mag door de admin worden toegestaan, maar ALLEEN
+  met een verplichte korte motivatie. Die motivatie wordt opgeslagen.
 
-WAT BLIJFT HETZELFDE
-- Auteur dient boek in.
-- Review-snapshot wordt bevroren.
-- Admin krijgt melding.
-- Boekmoderatie-pagina blijft bestaan.
-- Revieweditor blijft read-only.
-- Verdachte nodes krijgen ⚠.
-- Admin accepteert of wijst af met feedback.
-- AI kan NOOIT zelfstandig afwijzen.
+ORANJE - Overige waarschuwingen
+- Staan in een tweede rij.
+- Klik erop: springt eveneens direct naar de node.
+- Admin moet expliciet klikken op 'Beoordeeld & akkoord'.
 
-INSTALLEREN
+Afgehandeld:
+- De melding wordt groen: '✓ Akkoord'.
+- Status wordt persistent opgeslagen in Supabase.
+- Refresh / andere admin behoudt dus de reviewstatus.
+- Teller toont bijvoorbeeld 5/8 afgehandeld.
+- 'Volgende open melding' springt naar de eerstvolgende unresolved flag.
+
+Boek goedkeuren:
+- 'Goedkeuren & publiceren' blijft vergrendeld zolang er minimaal één
+  waarschuwing openstaat.
+- Dit wordt OOK database-side gecontroleerd; de frontend kan dit niet omzeilen.
+- Afwijzen mag altijd direct en vereist feedback zoals eerder.
+
+INSTALLATIE
 
 1. Supabase -> SQL Editor -> New query.
-2. Voer DEEPSEEK_NODE_MODERATION_SUPABASE.sql uit.
+2. Plak ALLES uit MODERATION_FLAG_RESOLUTION_SUPABASE.sql.
+3. Klik Run.
 
-   Dit verwijdert geen handmatige adminflags.
-   Bij een nieuwe scan worden alleen oude automatische OpenAI/DeepSeek-flags
-   van dezelfde inzending vervangen.
+4. Pak de ZIP uit.
+5. Sleep over dibooks_author_studio:
+   - app
+   - lib
+   - supabase
+6. Kies Bestanden vervangen.
 
-3. Pak de ZIP uit.
-4. Sleep de map 'app' en 'supabase' over dibooks_author_studio.
-5. Kies Bestanden vervangen.
+7. Test:
+   npm run build
 
-6. Zet lokaal in .env.local:
+8. Commit/push.
 
-   DEEPSEEK_API_KEY=jouw_deepseek_key
-
-7. Zet in Vercel:
-   Project -> Settings -> Environment Variables
-
-   Key:
-   DEEPSEEK_API_KEY
-
-   Value:
-   alleen jouw DeepSeek API key
-
-   Sensitive: aan
-   Environments: Production and Preview
-
-8. Redeploy.
-
-Je bestaande OPENAI_API_KEY mag uit Vercel worden verwijderd als DiBooks hem
-nergens anders gebruikt. Hij wordt door deze scanner niet meer aangeroepen.
-
-TEST
-- Open een pending boek als admin.
-- Klik 'AI opnieuw scannen'.
-- Na de scan moet je een melding krijgen met aantal flags.
-- Open de reviewmodus.
-- Gemarkeerde nodes krijgen de bestaande ⚠.
-
-De scanner beoordeelt context:
-een normaal fantasygevecht hoort niet automatisch als probleem gemarkeerd te
-worden. Expliciete/grafische, haatdragende, seksuele, uitbuitende, gevaarlijk
-instructieve of leeftijdsgevoelige passages worden eerder voor menselijke
-controle gemarkeerd.
+Geen wijziging nodig aan DEEPSEEK_API_KEY.

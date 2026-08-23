@@ -44,6 +44,7 @@ import {
 } from "@/lib/supabase/mediaStorage";
 import {
   fetchAdminModerationSubmission,
+  clearModerationFlag,
   reviewModerationSubmission,
   type ModerationFlag,
   type ModerationSubmissionDetail,
@@ -2266,6 +2267,7 @@ export default function Home() {
   const [reviewSubmissionId, setReviewSubmissionId] = useState<string | null>(null);
   const [reviewSubmission, setReviewSubmission] = useState<ModerationSubmissionDetail | null>(null);
   const [reviewFlags, setReviewFlags] = useState<ModerationFlag[]>([]);
+  const [reviewAlertsCollapsed, setReviewAlertsCollapsed] = useState(false);
   const [reviewActionBusy, setReviewActionBusy] = useState(false);
   const [dashboardSaveForm, setDashboardSaveForm] = useState<DashboardSaveForm>(defaultDashboardSaveForm);
   const [startNodeId, setStartNodeId] = useState<string>("node_1");
@@ -2278,6 +2280,8 @@ export default function Home() {
   const [previewPageCount, setPreviewPageCount] = useState(1);
   const [readerVisiblePageCount, setReaderVisiblePageCount] = useState(1);
   const flowWrapperRef = useRef<HTMLDivElement | null>(null);
+  const reviewFlowInstanceRef = useRef<any>(null);
+  const reviewInspectionAsideRef = useRef<HTMLElement | null>(null);
   const [flowViewport, setFlowViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const nodeTypes = useMemo(() => ({ bullet: BulletNode }), []);
   const maxNodesForCurrentUser = getMaxNodesForUser(user);
@@ -2381,6 +2385,7 @@ export default function Home() {
 
           setReviewSubmission(submission);
           setReviewFlags(submission.flags ?? []);
+          setReviewAlertsCollapsed(false);
           setHelpOpen(false);
           setDashboardBookId(null);
           setSharedEditBookId(null);
@@ -2585,6 +2590,26 @@ export default function Home() {
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const editingTextNode = nodes.find((node) => node.id === editingTextNodeId);
   const selectedReviewFlags = selectedNode ? reviewFlags.filter((flag) => flag.nodeId === selectedNode.id) : [];
+
+  function getReviewFlagKey(flag: ModerationFlag) {
+    return flag.flagId || `${flag.nodeId}-${flag.category}-${flag.reason}`;
+  }
+
+  const isReviewFlagCleared = (flag: ModerationFlag) =>
+    String(flag.resolution ?? "pending").toLowerCase() === "cleared";
+
+  const severeReviewFlags = reviewFlags.filter(
+    (flag) => String(flag.severity ?? "").toLowerCase() === "high",
+  );
+  const attentionReviewFlags = reviewFlags.filter(
+    (flag) => String(flag.severity ?? "").toLowerCase() !== "high",
+  );
+  const orderedReviewFlags = [...severeReviewFlags, ...attentionReviewFlags];
+  const unresolvedReviewFlags = orderedReviewFlags.filter(
+    (flag) => !isReviewFlagCleared(flag),
+  );
+  const unresolvedReviewFlagCount = unresolvedReviewFlags.length;
+  const clearedReviewFlagCount = reviewFlags.length - unresolvedReviewFlagCount;
 
   const flowNodes = nodes.map((node) => {
     const nodeFlags = reviewFlags.filter((flag) => flag.nodeId === node.id);
@@ -4071,10 +4096,107 @@ ${formatSaveError(error)}`);
     };
   }
 
+  function jumpToReviewFlag(flag: ModerationFlag) {
+    const targetNode = nodes.find((node) => node.id === flag.nodeId);
+
+    if (!targetNode) {
+      alert(`De gemarkeerde node ${flag.nodeId} bestaat niet in deze review-snapshot.`);
+      return;
+    }
+
+    setSelectedNodeId(targetNode.id);
+
+    window.requestAnimationFrame(() => {
+      const instance = reviewFlowInstanceRef.current;
+      if (instance?.setCenter) {
+        instance.setCenter(
+          Number(targetNode.position?.x ?? 0),
+          Number(targetNode.position?.y ?? 0),
+          {
+            zoom: 1.05,
+            duration: 450,
+          },
+        );
+      }
+
+      reviewInspectionAsideRef.current?.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    });
+  }
+
+  function jumpToNextReviewFlag() {
+    const nextFlag = unresolvedReviewFlags[0] ?? orderedReviewFlags[0];
+    if (nextFlag) jumpToReviewFlag(nextFlag);
+  }
+
+  async function handleClearReviewFlag(flag: ModerationFlag) {
+    if (!user || user.role !== "admin" || !flag.flagId || reviewActionBusy) return;
+    if (isReviewFlagCleared(flag)) return;
+
+    const isHigh = String(flag.severity ?? "").toLowerCase() === "high";
+    let note = "";
+
+    if (isHigh) {
+      const entered = window.prompt(
+        "Deze melding is als ERNSTIG gemarkeerd. Waarom mag deze passage volgens jou toch worden toegestaan? Deze motivatie wordt opgeslagen in het reviewlog.",
+      );
+      if (entered === null) return;
+      note = entered.trim();
+
+      if (!note) {
+        alert("Bij een ernstige melding is een korte motivatie verplicht.");
+        return;
+      }
+    } else {
+      const confirmed = window.confirm(
+        "Markeer deze waarschuwing als door jou beoordeeld en akkoord?",
+      );
+      if (!confirmed) return;
+    }
+
+    setReviewActionBusy(true);
+
+    try {
+      await clearModerationFlag(user, flag.flagId, note);
+      setReviewFlags((current) =>
+        current.map((item) =>
+          item.flagId === flag.flagId
+            ? {
+                ...item,
+                resolution: "cleared",
+                reviewedBy: user.id,
+                reviewedAt: new Date().toISOString(),
+                reviewNote: note || item.reviewNote,
+              }
+            : item,
+        ),
+      );
+    } catch (clearError) {
+      console.error(clearError);
+      alert(
+        `Melding afhandelen mislukt: ${
+          clearError instanceof Error ? clearError.message : "onbekende fout"
+        }`,
+      );
+    } finally {
+      setReviewActionBusy(false);
+    }
+  }
+
   async function handleReviewDecision(decision: "approved" | "rejected") {
     if (!user || user.role !== "admin" || !reviewSubmission) return;
     if (reviewSubmission.status !== "pending") {
       alert("Deze inzending is al verwerkt.");
+      return;
+    }
+
+    if (decision === "approved" && unresolvedReviewFlagCount > 0) {
+      alert(
+        `Je kunt dit boek nog niet goedkeuren. Handel eerst alle ${unresolvedReviewFlagCount} openstaande moderatiemelding${unresolvedReviewFlagCount === 1 ? "" : "en"} af.`,
+      );
+      jumpToNextReviewFlag();
       return;
     }
 
@@ -4355,10 +4477,175 @@ ${formatSaveError(error)}`);
               <div className="flex flex-wrap gap-2">
                 <button onClick={openPreview} className="rounded-xl border border-blue-400/30 bg-blue-500/15 px-4 py-2 text-xs font-black text-blue-100 hover:bg-blue-500/25">▶ Hele boek previewen</button>
                 <button disabled={reviewActionBusy || reviewSubmission.status !== "pending"} onClick={() => handleReviewDecision("rejected")} className="rounded-xl border border-red-400/30 bg-red-500/15 px-4 py-2 text-xs font-black text-red-100 hover:bg-red-500/25 disabled:opacity-40">✕ Afwijzen + feedback</button>
-                <button disabled={reviewActionBusy || reviewSubmission.status !== "pending"} onClick={() => handleReviewDecision("approved")} className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-black hover:bg-emerald-400 disabled:opacity-40">✓ Goedkeuren & publiceren</button>
+                <button
+                  disabled={reviewActionBusy || reviewSubmission.status !== "pending" || unresolvedReviewFlagCount > 0}
+                  onClick={() => handleReviewDecision("approved")}
+                  title={unresolvedReviewFlagCount > 0 ? `Nog ${unresolvedReviewFlagCount} moderatiemelding${unresolvedReviewFlagCount === 1 ? "" : "en"} afhandelen` : "Goedkeuren en publiceren"}
+                  className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-black hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {unresolvedReviewFlagCount > 0
+                    ? `🔒 Eerst ${unresolvedReviewFlagCount} melding${unresolvedReviewFlagCount === 1 ? "" : "en"} afhandelen`
+                    : "✓ Goedkeuren & publiceren"}
+                </button>
               </div>
             </div>
           )}
+
+          {reviewMode && reviewSubmission && (
+            <div className="shrink-0 border-b border-white/10 bg-[#090b11] px-5 py-3 text-white">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-neutral-500">
+                      Moderatiemeldingen
+                    </p>
+                    <p className="mt-1 text-sm font-black">
+                      {reviewFlags.length === 0
+                        ? "Geen AI-markeringen"
+                        : `${clearedReviewFlagCount}/${reviewFlags.length} afgehandeld`}
+                    </p>
+                  </div>
+
+                  {severeReviewFlags.length > 0 && (
+                    <span className="rounded-full border border-red-400/30 bg-red-500/15 px-3 py-1 text-xs font-black text-red-200">
+                      🔴 {severeReviewFlags.length} ernstig
+                    </span>
+                  )}
+
+                  {attentionReviewFlags.length > 0 && (
+                    <span className="rounded-full border border-amber-400/30 bg-amber-500/15 px-3 py-1 text-xs font-black text-amber-100">
+                      🟠 {attentionReviewFlags.length} controle
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {reviewFlags.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={jumpToNextReviewFlag}
+                      className="rounded-xl border border-purple-400/30 bg-purple-500/15 px-4 py-2 text-xs font-black text-purple-100 hover:bg-purple-500/25"
+                    >
+                      {unresolvedReviewFlagCount > 0
+                        ? `Volgende open melding (${unresolvedReviewFlagCount})`
+                        : "Alle meldingen afgehandeld ✓"}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setReviewAlertsCollapsed((current) => !current)}
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-neutral-200 hover:bg-white/10"
+                  >
+                    {reviewAlertsCollapsed ? "Meldingen tonen" : "Meldingen inklappen"}
+                  </button>
+                </div>
+              </div>
+
+              {!reviewAlertsCollapsed && reviewFlags.length > 0 && (
+                <div className="mt-3 grid gap-3">
+                  {severeReviewFlags.length > 0 && (
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="w-24 shrink-0 pt-2">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-300">
+                          Ernstig
+                        </p>
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+                        {severeReviewFlags.map((flag) => {
+                          const targetNode = nodes.find((node) => node.id === flag.nodeId);
+                          const flagKey = getReviewFlagKey(flag);
+                          const cleared = isReviewFlagCleared(flag);
+
+                          return (
+                            <button
+                              key={flagKey}
+                              type="button"
+                              onClick={() => jumpToReviewFlag(flag)}
+                              className={`min-w-[270px] max-w-[340px] shrink-0 rounded-2xl border p-3 text-left transition ${
+                                cleared
+                                  ? "border-emerald-400/25 bg-emerald-500/10 opacity-70"
+                                  : "border-red-400/40 bg-red-500/15 hover:bg-red-500/25"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <p className={`text-[10px] font-black uppercase tracking-widest ${cleared ? "text-emerald-200" : "text-red-200"}`}>
+                                  {cleared ? "✓ Akkoord" : "⚠ Ernstig"} • {flag.category}
+                                </p>
+                                <span className="shrink-0 text-[10px] font-black text-neutral-500">
+                                  {flag.nodeId}
+                                </span>
+                              </div>
+                              <p className="mt-1 truncate text-sm font-black text-white">
+                                {targetNode?.data.label || "Onbekende node"}
+                              </p>
+                              <p className="mt-1 truncate text-xs font-semibold text-neutral-300">
+                                {flag.reason}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {attentionReviewFlags.length > 0 && (
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="w-24 shrink-0 pt-2">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">
+                          Controle
+                        </p>
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+                        {attentionReviewFlags.map((flag) => {
+                          const targetNode = nodes.find((node) => node.id === flag.nodeId);
+                          const flagKey = getReviewFlagKey(flag);
+                          const cleared = isReviewFlagCleared(flag);
+
+                          return (
+                            <button
+                              key={flagKey}
+                              type="button"
+                              onClick={() => jumpToReviewFlag(flag)}
+                              className={`min-w-[270px] max-w-[340px] shrink-0 rounded-2xl border p-3 text-left transition ${
+                                cleared
+                                  ? "border-emerald-400/25 bg-emerald-500/10 opacity-70"
+                                  : "border-amber-400/35 bg-amber-500/10 hover:bg-amber-500/20"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <p className={`text-[10px] font-black uppercase tracking-widest ${cleared ? "text-emerald-200" : "text-amber-200"}`}>
+                                  {cleared ? "✓ Akkoord" : "⚠ Controle"} • {flag.category}
+                                </p>
+                                <span className="shrink-0 text-[10px] font-black text-neutral-500">
+                                  {flag.nodeId}
+                                </span>
+                              </div>
+                              <p className="mt-1 truncate text-sm font-black text-white">
+                                {targetNode?.data.label || "Onbekende node"}
+                              </p>
+                              <p className="mt-1 truncate text-xs font-semibold text-neutral-300">
+                                {flag.reason}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!reviewAlertsCollapsed && reviewFlags.length === 0 && (
+                <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
+                  Geen automatische of handmatige markeringen gevonden. De admin kan het boek nog steeds volledig handmatig controleren.
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="min-h-0 flex-1">
           <ReactFlow
             nodes={flowNodes}
@@ -4366,6 +4653,9 @@ ${formatSaveError(error)}`);
             onNodesChange={reviewMode ? undefined : onNodesChange}
             onEdgesChange={reviewMode ? undefined : onEdgesChange}
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            onInit={(instance) => {
+              reviewFlowInstanceRef.current = instance;
+            }}
             onMoveEnd={(_, viewport) => { if (!reviewMode) setFlowViewport(viewport); }}
             nodesConnectable={false}
             nodesDraggable={!reviewMode}
@@ -4390,7 +4680,7 @@ ${formatSaveError(error)}`);
           </div>
         </section>
 
-        <aside className="w-80 overflow-y-auto border-l-4 border-black bg-neutral-950 p-4">
+        <aside ref={reviewInspectionAsideRef} className="w-80 overflow-y-auto border-l-4 border-black bg-neutral-950 p-4">
           <h2 className="mb-4 text-xl font-black">{reviewMode ? "Review inspectie" : "Node instellingen"}</h2>
 
           {reviewMode ? (
@@ -4408,10 +4698,49 @@ ${formatSaveError(error)}`);
                   {selectedReviewFlags.length > 0 ? (
                     <div className="grid gap-2">
                       {selectedReviewFlags.map((flag) => (
-                        <div key={flag.flagId || `${flag.nodeId}-${flag.category}`} className={`rounded-2xl border p-4 ${flag.severity === "high" ? "border-red-400/35 bg-red-500/10" : "border-amber-400/30 bg-amber-400/10"}`}>
-                          <p className="text-xs font-black uppercase tracking-widest text-amber-200">⚠ {flag.category} • {flag.severity}</p>
+                        <div
+                          key={flag.flagId || `${flag.nodeId}-${flag.category}`}
+                          className={`rounded-2xl border p-4 ${
+                            isReviewFlagCleared(flag)
+                              ? "border-emerald-400/30 bg-emerald-500/10"
+                              : flag.severity === "high"
+                                ? "border-red-400/35 bg-red-500/10"
+                                : "border-amber-400/30 bg-amber-400/10"
+                          }`}
+                        >
+                          <p className={`text-xs font-black uppercase tracking-widest ${
+                            isReviewFlagCleared(flag)
+                              ? "text-emerald-200"
+                              : flag.severity === "high"
+                                ? "text-red-200"
+                                : "text-amber-200"
+                          }`}>
+                            {isReviewFlagCleared(flag) ? "✓ Beoordeeld & akkoord" : "⚠"} {flag.category} • {flag.severity}
+                          </p>
                           <p className="mt-2 text-sm font-semibold leading-6 text-neutral-200">{flag.reason}</p>
                           <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">Bron: {flag.source}</p>
+
+                          {isReviewFlagCleared(flag) ? (
+                            <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-xs font-semibold text-emerald-100">
+                              Door admin afgehandeld
+                              {flag.reviewNote ? <p className="mt-1 text-emerald-100/75">Motivatie: {flag.reviewNote}</p> : null}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={reviewActionBusy}
+                              onClick={() => void handleClearReviewFlag(flag)}
+                              className={`mt-3 w-full rounded-xl px-4 py-3 text-xs font-black disabled:cursor-wait disabled:opacity-50 ${
+                                flag.severity === "high"
+                                  ? "bg-red-500 text-white hover:bg-red-400"
+                                  : "bg-emerald-500 text-black hover:bg-emerald-400"
+                              }`}
+                            >
+                              {flag.severity === "high"
+                                ? "✓ Akkoord ondanks ernstige melding + motivatie"
+                                : "✓ Beoordeeld & akkoord"}
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
