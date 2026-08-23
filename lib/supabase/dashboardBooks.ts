@@ -96,6 +96,9 @@ function mapRowToDashboardBook(row: any) {
     removedFromLibraryAt: row.removed_from_library_at ?? undefined,
     seriesId: row.series_id ?? null,
     seriesOrder: row.series_order ?? null,
+    moderationStatus: row.moderation_status ?? "draft",
+    moderationFeedback: row.moderation_feedback ?? null,
+    moderationUpdatedAt: row.moderation_updated_at ?? undefined,
     projectData: row.project_data ?? undefined,
     projectVersion: row.project_version ?? undefined,
     projectUpdatedAt: row.project_updated_at ?? undefined,
@@ -330,6 +333,26 @@ export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: Das
   const existingBookId = input.id || null;
   const slug = existingBookId ? undefined : await getUniqueSlug(user.id, input.title, existingBookId);
 
+  if (existingBookId) {
+    const { data: existingBook, error: existingBookError } = await supabase
+      .from("books")
+      .select("id, owner_id, published, moderation_status")
+      .eq("id", existingBookId)
+      .maybeSingle();
+
+    if (existingBookError) throwSupabaseError(existingBookError);
+    if (!existingBook) throw new Error("Dashboardboek niet gevonden of geen toegang.");
+    if (existingBook.owner_id !== user.id && user.role !== "admin") {
+      throw new Error("Je kunt alleen je eigen dashboardboek wijzigen.");
+    }
+    if (existingBook.moderation_status === "pending" && user.role !== "admin") {
+      throw new Error("Dit boek is in beoordeling en is tijdelijk vergrendeld. Wacht op de beslissing van een admin.");
+    }
+    if (existingBook.published) {
+      throw new Error("Dit boek staat live. Haal het eerst uit de Library voordat je metadata wijzigt.");
+    }
+  }
+
   const bookPayload: Record<string, any> = {
     owner_id: user.id,
     title: input.title,
@@ -402,6 +425,20 @@ export async function updateDashboardBookMediaInSupabase(
   }
 
   const supabase = createSupabaseBrowserClient();
+
+  const { data: currentBook, error: currentBookError } = await supabase
+    .from("books")
+    .select("id, owner_id, published, moderation_status")
+    .eq("id", bookId)
+    .maybeSingle();
+
+  if (currentBookError) throwSupabaseError(currentBookError);
+  if (!currentBook) throw new Error("Dashboardboek niet gevonden of geen toegang.");
+  if (currentBook.owner_id !== user.id && user.role !== "admin") throw new Error("Geen toegang tot dit boek.");
+  if (currentBook.moderation_status === "pending" && user.role !== "admin") {
+    throw new Error("Dit boek is in beoordeling. Cover en banner zijn tijdelijk vergrendeld.");
+  }
+  if (currentBook.published) throw new Error("Live boeken zijn vergrendeld. Haal het boek eerst uit de Library.");
 
   const { data, error } = await supabase
     .from("books")
@@ -494,6 +531,9 @@ export async function removeDashboardBookFromLibraryInSupabase(bookId: string) {
     .update({
       published: false,
       status: "Concept",
+      moderation_status: "draft",
+      moderation_feedback: null,
+      moderation_updated_at: new Date().toISOString(),
       removed_from_library_at: new Date().toISOString(),
     })
     .eq("id", bookId);
@@ -504,8 +544,20 @@ export async function removeDashboardBookFromLibraryInSupabase(bookId: string) {
 export async function deleteDashboardBookFromSupabase(bookId: string) {
   const supabase = createSupabaseBrowserClient();
 
+  const { data: currentBook, error: currentBookError } = await supabase
+    .from("books")
+    .select("id, moderation_status")
+    .eq("id", bookId)
+    .maybeSingle();
+
+  if (currentBookError) throwSupabaseError(currentBookError);
+  if (!currentBook) return;
+  if (currentBook.moderation_status === "pending") {
+    throw new Error("Een boek dat in beoordeling staat kan niet worden verwijderd.");
+  }
+
   const { error } = await supabase.from("books").delete().eq("id", bookId);
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
 }
 
 
@@ -523,7 +575,7 @@ export async function updateDashboardBookProjectInSupabase(
 
   const { data: book, error: bookError } = await supabase
     .from("books")
-    .select("id, owner_id, published")
+    .select("id, owner_id, published, moderation_status")
     .eq("id", bookId)
     .maybeSingle();
 
@@ -531,6 +583,9 @@ export async function updateDashboardBookProjectInSupabase(
   if (!book) throw new Error("Dashboardboek niet gevonden of geen toegang.");
   if (book.published) {
     throw new Error("Dit boek staat live. Haal het eerst uit de Library voordat je het concept overschrijft.");
+  }
+  if (book.moderation_status === "pending" && user.role !== "admin") {
+    throw new Error("Dit boek staat in beoordeling. Het concept is tijdelijk vergrendeld totdat een admin beslist.");
   }
 
   const projectPayload = {

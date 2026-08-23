@@ -1,52 +1,52 @@
-DiBooks Patch - Variable Effects
-================================
+DiBooks Patch - Moderation Core v1
+===================================
 
-NIEUW IN AUTEUR STUDIO
-- Elke keuze A/B/C kan nu 0 t/m 4 Variable Effects uitvoeren.
-- Minigames hebben aparte Success Effects en Fail Effects.
-- Ondersteunde effects:
-  * Flag aanzetten
-  * Flag uitzetten
-  * Getal verhogen
-  * Getal verlagen
-  * Getal instellen
-  * Tekst instellen
-- Effects gebruiken dezelfde centrale Flags & Variabelen als Function en IF.
-- Als een variabele wordt hernoemd, van type verandert of wordt verwijderd,
-  worden koppelingen in keuze/minigame-effects ook meegenomen.
-- De Studio-preview voert deze effects ook uit.
+DIT ZIT ERIN
+- Dashboard: 'Publiceer naar Library' is vervangen door 'Indienen voor beoordeling'.
+- Bij indienen wordt in Supabase een IMMUTABLE snapshot van metadata + volledige projectdata gemaakt.
+- Boek wordt tijdens 'In beoordeling' vergrendeld voor de auteur.
+- Alle accounts met role=admin krijgen via het bestaande Meldingen-systeem een nieuwe melding.
+- Instellingen/gear-menu krijgt voor admins: 'Boekmoderatie'.
+- Nieuwe adminpagina: /admin/moderation met wachtrij + geschiedenis.
+- Admin opent een inzending in /editor?review=<id>.
+- Auteur Studio wordt dan een speciale alleen-lezen reviewmodus:
+  * nodes kunnen niet worden verplaatst/gewijzigd;
+  * rechterpaneel is een review-inspector;
+  * hele boek kan via Preview worden afgespeeld;
+  * gemarkeerde nodes tonen een ⚠ boven de node;
+  * flagredenen verschijnen in de review-inspector.
+- Admin kan Goedkeuren & publiceren of Afwijzen + verplichte feedback.
+- Goedkeuren publiceert EXACT de bevroren review-snapshot.
+- Databasebeveiliging blokkeert ook een rechtstreekse author-update naar published=true; review kan dus niet alleen via de UI worden omzeild.
+- Afwijzen ontgrendelt het boek en feedback verschijnt in Dashboard + Meldingen.
+- Goedgekeurde live versie blijft vergrendeld. Uit Library halen zet hem terug naar draft; daarna moet een nieuwe versie opnieuw worden beoordeeld.
 
-NIEUW IN DE PUBLIEKE READER
-- Een keuze-effect wordt opgeslagen VOORDAT de doel-node wordt geopend.
-- Minigame Success/Fail-effects worden opgeslagen VOORDAT de route wordt geopend.
-- De story_state in Supabase blijft dus leidend.
-- Dubbelklik-beveiliging voorkomt dat bijvoorbeeld +1 twee keer wordt toegepast.
-- Daarna kan een IF-node direct op het effect reageren.
-
-VOORBEELD
-Keuze: "Vertrouw Xander"
-  Effect: xander_trust +1
-  Route: volgende scène
-
-Later:
-IF xander_trust >= 3
-  TRUE -> Xander helpt de crew
-  ELSE -> Xander blijft terughoudend
+BELANGRIJK OVER AUTOMATISCHE AI-SCAN
+Deze patch bouwt de moderation_flags-tabel en de ⚠ UI al in, maar de automatische AI-node scanner zelf zit bewust nog NIET in v1. Dat is de volgende patch. De menselijke reviewflow werkt dus eerst zelfstandig en veilig.
 
 INSTALLEREN
-1. Pak de ZIP uit.
-2. Sleep de map app over dibooks_author_studio.
-3. Kies Bestanden vervangen.
-4. Herstart lokaal of commit/push naar GitHub/Vercel.
+1. Supabase -> SQL Editor -> New query.
+2. Plak ALLES uit MODERATION_CORE_SUPABASE.sql en klik Run.
+3. Pak de ZIP uit.
+4. Sleep deze mappen over dibooks_author_studio:
+   - app
+   - components
+   - lib
+   - supabase
+5. Kies 'Bestanden vervangen'.
+6. npm run build (aanrader) of npm run dev.
+7. Commit/push naar GitHub/Vercel.
 
-GEEN NIEUWE SQL NODIG.
-Deze patch gebruikt de story_state JSON-kolom die al door Reader Story State is toegevoegd.
+TESTFLOW
+A. Log in als Author Pro.
+B. Dashboard -> kies een geldig concept -> 'Indienen voor beoordeling'.
+C. Controleer dat kaart 'In beoordeling' toont en niet meer bewerkbaar is.
+D. Log in als admin.
+E. Bel-icoon/Meldingen moet 'Nieuw boek ter beoordeling' tonen.
+F. Gear -> Boekmoderatie -> Open in reviewmodus.
+G. Controleer dat nodes niet te wijzigen zijn en Preview wel werkt.
+H. Wijs een testboek af met feedback -> auteur krijgt melding + feedback en kan weer aanpassen.
+I. Dien opnieuw in en keur goed -> exact die snapshot wordt live gepubliceerd.
 
-TEST
-1. Maak een getalvariabele test_score met startwaarde 0.
-2. Maak een keuze-node.
-3. Voeg bij Keuze A een effect toe: Getal verhogen -> test_score -> 1.
-4. Laat Keuze A naar een IF-node gaan.
-5. IF: test_score >= 1.
-6. TRUE naar een tekstnode "Effect werkt"; ELSE naar "Effect werkt niet".
-7. Test eerst in Studio Preview en daarna in de publieke Reader.
+ADMIN TESTACCOUNT
+Je bestaande profiel moet in Supabase role='admin' hebben. De UI leest die rol al uit profiles.

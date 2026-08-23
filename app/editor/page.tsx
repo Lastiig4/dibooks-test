@@ -42,6 +42,12 @@ import {
   resolveDiBooksMediaUrl,
   uploadCutsceneVideoToStorage,
 } from "@/lib/supabase/mediaStorage";
+import {
+  fetchAdminModerationSubmission,
+  reviewModerationSubmission,
+  type ModerationFlag,
+  type ModerationSubmissionDetail,
+} from "@/lib/supabase/moderation";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -206,6 +212,8 @@ type DiNodeData = {
   conditionValue?: StoryVariableValue;
   conditionTrueTargetNodeId?: string;
   conditionFalseTargetNodeId?: string;
+  reviewFlagCount?: number;
+  reviewFlagSeverity?: string;
 };
 
 const MANUAL_PAGE_BREAK_MARKER = "[[NIEUWE_PAGINA]]";
@@ -649,6 +657,36 @@ function BulletNode({ data }: NodeProps<Node<DiNodeData>>) {
         transform: "translate(-50%, -50%)",
       }}
     >
+      {(data.reviewFlagCount ?? 0) > 0 && (
+        <div
+          title={`${data.reviewFlagCount} moderatiemarkering${data.reviewFlagCount === 1 ? "" : "en"}`}
+          style={{
+            position: "absolute",
+            top: data.isStart ? -88 : -60,
+            left: "50%",
+            transform: "translateX(-50%)",
+            minWidth: 38,
+            height: 38,
+            borderRadius: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+            padding: "0 10px",
+            background: data.reviewFlagSeverity === "high" ? "#dc2626" : "#f59e0b",
+            color: "white",
+            border: "3px solid #111827",
+            fontSize: 18,
+            fontWeight: 900,
+            zIndex: 5,
+            boxShadow: "0 8px 24px rgba(0,0,0,.35)",
+            pointerEvents: "none",
+          }}
+        >
+          ⚠ {data.reviewFlagCount}
+        </div>
+      )}
+
       <div
         style={{
           position: "absolute",
@@ -2225,6 +2263,10 @@ export default function Home() {
   const [sharedEditBookId, setSharedEditBookId] = useState<string | null>(null);
   const [sharedEditOwnerName, setSharedEditOwnerName] = useState<string>("");
   const [sharedEditPermission, setSharedEditPermission] = useState<string>("");
+  const [reviewSubmissionId, setReviewSubmissionId] = useState<string | null>(null);
+  const [reviewSubmission, setReviewSubmission] = useState<ModerationSubmissionDetail | null>(null);
+  const [reviewFlags, setReviewFlags] = useState<ModerationFlag[]>([]);
+  const [reviewActionBusy, setReviewActionBusy] = useState(false);
   const [dashboardSaveForm, setDashboardSaveForm] = useState<DashboardSaveForm>(defaultDashboardSaveForm);
   const [startNodeId, setStartNodeId] = useState<string>("node_1");
   const [editingTextNodeId, setEditingTextNodeId] = useState<string | null>(
@@ -2252,6 +2294,7 @@ export default function Home() {
   const [storyVariables, setStoryVariables] = useState<StoryVariable[]>([]);
   const [variablesOpen, setVariablesOpen] = useState(false);
   const [previewVariableValues, setPreviewVariableValues] = useState<Record<string, StoryVariableValue>>({});
+  const reviewMode = Boolean(reviewSubmissionId);
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
@@ -2304,8 +2347,79 @@ export default function Home() {
 
     async function openDashboardBook() {
       const params = new URLSearchParams(window.location.search);
+      const reviewId = params.get("review");
       const sharedBookId = params.get("shared");
       const bookId = params.get("book");
+
+      if (reviewId) {
+        setReviewSubmissionId(reviewId);
+
+        if (!user) {
+          autosaveReadyRef.current = false;
+          setAutosaveStatus("Reviewmodus wacht op adminlogin...");
+          return;
+        }
+
+        if (role !== "admin") {
+          alert("Alleen DiBooks admins kunnen een boek in reviewmodus openen.");
+          window.location.href = "/";
+          return;
+        }
+
+        try {
+          const submission = await fetchAdminModerationSubmission(user, reviewId);
+          if (cancelled || !submission) {
+            if (!submission) alert("Deze moderatie-inzending bestaat niet meer.");
+            return;
+          }
+
+          const snapshot = submission.snapshot ?? {};
+          const snapshotBook = snapshot.book ?? {};
+          const projectData = await resolveProjectCutsceneUrls(snapshot.projectData ?? {});
+          const projectNodes = Array.isArray(projectData?.nodes) ? projectData.nodes : [];
+          const safeStartNodeId = getSafeStartNodeId(projectNodes, projectData?.startNodeId ?? projectNodes?.[0]?.id ?? "");
+
+          setReviewSubmission(submission);
+          setReviewFlags(submission.flags ?? []);
+          setHelpOpen(false);
+          setDashboardBookId(null);
+          setSharedEditBookId(null);
+          setSharedEditOwnerName("");
+          setSharedEditPermission("");
+          setDashboardSaveForm({
+            title: snapshotBook.title ?? submission.bookTitle ?? "",
+            author: snapshotBook.author ?? submission.bookAuthor ?? "",
+            subtitle: snapshotBook.subtitle ?? "",
+            description: snapshotBook.description ?? "",
+            genres: Array.isArray(snapshotBook.genres) && snapshotBook.genres.length > 0 ? snapshotBook.genres : ["Interactief"],
+            genreInput: "",
+            primaryGenre: snapshotBook.primary_genre ?? snapshotBook.primaryGenre ?? snapshotBook.genres?.[0] ?? "Interactief",
+            status: (snapshotBook.status as any) ?? "Concept",
+            ageRating: snapshotBook.age_rating ?? snapshotBook.ageRating ?? "12+",
+            readTime: snapshotBook.read_time ?? snapshotBook.readTime ?? "Concept",
+            colorTheme: snapshotBook.color_theme ?? snapshotBook.colorTheme ?? "blue",
+            accessType: snapshotBook.access_type === "premium" ? "premium" : "free",
+            seriesId: snapshotBook.series_id ?? "",
+            seriesOrder: snapshotBook.series_order ? String(snapshotBook.series_order) : "1",
+          });
+          setNodes(projectNodes);
+          setEdges(projectData?.edges ?? []);
+          setStartNodeId(safeStartNodeId);
+          setSelectedNodeId((safeStartNodeId || projectNodes?.[0]?.id) ?? null);
+          setStoryVariables(Array.isArray(projectData?.variables) ? projectData.variables : []);
+          autosaveReadyRef.current = false;
+          setAutosaveStatus("🔒 Reviewmodus • geen wijzigingen opgeslagen");
+          return;
+        } catch (reviewError) {
+          console.error("Kon reviewversie niet openen", reviewError);
+          alert(reviewError instanceof Error ? `Review openen mislukt: ${reviewError.message}` : "Review openen mislukt.");
+          return;
+        }
+      }
+
+      setReviewSubmissionId(null);
+      setReviewSubmission(null);
+      setReviewFlags([]);
 
       if (!bookId && !sharedBookId) {
         restoreEditorAutosaveDraftIfNeeded();
@@ -2392,9 +2506,10 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [setEdges, setNodes, user]);
+  }, [role, setEdges, setNodes, user]);
 
   useEffect(() => {
+    if (reviewMode) return;
     if (!autosaveReadyRef.current) return;
 
     const timeout = window.setTimeout(() => {
@@ -2402,10 +2517,11 @@ export default function Home() {
     }, 900);
 
     return () => window.clearTimeout(timeout);
-  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport, storyVariables]);
+  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport, storyVariables, reviewMode]);
 
   useEffect(() => {
     function saveBeforeLeaving() {
+      if (reviewMode) return;
       if (autosaveReadyRef.current) writeEditorAutosaveDraft();
     }
 
@@ -2422,7 +2538,7 @@ export default function Home() {
       window.removeEventListener("pagehide", saveBeforeLeaving);
       document.removeEventListener("visibilitychange", saveWhenHidden);
     };
-  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport, storyVariables]);
+  }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport, storyVariables, reviewMode]);
 
   const previewNode = nodes.find((node) => node.id === previewNodeId);
 
@@ -2468,15 +2584,27 @@ export default function Home() {
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const editingTextNode = nodes.find((node) => node.id === editingTextNodeId);
+  const selectedReviewFlags = selectedNode ? reviewFlags.filter((flag) => flag.nodeId === selectedNode.id) : [];
 
-  const flowNodes = nodes.map((node) => ({
-    ...node,
-    draggable: true,
-    data: {
-      ...node.data,
-      isStart: node.id === startNodeId,
-    },
-  }));
+  const flowNodes = nodes.map((node) => {
+    const nodeFlags = reviewFlags.filter((flag) => flag.nodeId === node.id);
+    const severity = nodeFlags.some((flag) => flag.severity === "high")
+      ? "high"
+      : nodeFlags.some((flag) => flag.severity === "medium")
+        ? "medium"
+        : nodeFlags[0]?.severity;
+
+    return {
+      ...node,
+      draggable: !reviewMode,
+      data: {
+        ...node.data,
+        isStart: node.id === startNodeId,
+        reviewFlagCount: nodeFlags.length,
+        reviewFlagSeverity: severity,
+      },
+    };
+  });
 
   const selectedNodePaths = selectedNode && !isScratchpadNode(selectedNode)
     ? getStoryEdges(edges, nodes).filter((edge) => edge.source === selectedNode.id)
@@ -2801,6 +2929,11 @@ export default function Home() {
   }
 
   async function saveCurrentBookToDashboard() {
+    if (reviewMode) {
+      alert("Reviewmodus is alleen-lezen. De bevroren inzending kan niet worden gewijzigd.");
+      return;
+    }
+
     if (!user) {
       alert("Login nodig om op te slaan of een voorstel terug te sturen.");
       setAuthModalMode("login");
@@ -3938,6 +4071,43 @@ ${formatSaveError(error)}`);
     };
   }
 
+  async function handleReviewDecision(decision: "approved" | "rejected") {
+    if (!user || user.role !== "admin" || !reviewSubmission) return;
+    if (reviewSubmission.status !== "pending") {
+      alert("Deze inzending is al verwerkt.");
+      return;
+    }
+
+    let feedback = "";
+    if (decision === "rejected") {
+      feedback = window.prompt(
+        "Waarom wijs je dit boek af? Deze feedback wordt naar de auteur gestuurd:",
+        "",
+      )?.trim() ?? "";
+      if (!feedback) {
+        alert("Feedback is verplicht bij afwijzen.");
+        return;
+      }
+    } else {
+      const confirmed = window.confirm(
+        `"${reviewSubmission.bookTitle}" goedkeuren? Exact deze bevroren reviewversie wordt live gepubliceerd.`,
+      );
+      if (!confirmed) return;
+    }
+
+    setReviewActionBusy(true);
+    try {
+      await reviewModerationSubmission(user, reviewSubmission.submissionId, decision, feedback);
+      alert(decision === "approved" ? "Boek goedgekeurd en gepubliceerd." : "Boek afgewezen. De auteur heeft je feedback ontvangen.");
+      window.location.href = "/admin/moderation";
+    } catch (reviewError) {
+      console.error(reviewError);
+      alert(reviewError instanceof Error ? reviewError.message : "Moderatiebeslissing kon niet worden opgeslagen.");
+    } finally {
+      setReviewActionBusy(false);
+    }
+  }
+
   function downloadReaderStoryFile() {
     const storyData = getReaderStoryData();
     const json = JSON.stringify(storyData, null, 2);
@@ -3960,7 +4130,12 @@ ${formatSaveError(error)}`);
   return (
     <main className="h-screen w-screen overflow-hidden bg-neutral-950 text-white">
       <div className="flex h-full">
-        <aside className="flex w-24 flex-col items-center border-r-4 border-black bg-neutral-950 p-3">
+        <aside className="relative flex w-24 flex-col items-center border-r-4 border-black bg-neutral-950 p-3">
+          {reviewMode && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-neutral-950/70 backdrop-blur-[1px]" title="Reviewmodus is alleen-lezen">
+              <div className="-rotate-90 whitespace-nowrap rounded-full border border-purple-400/30 bg-purple-500/15 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-purple-200">🔒 Alleen lezen</div>
+            </div>
+          )}
           <button
             onClick={() => {
               const confirmed = window.confirm(
@@ -4121,7 +4296,7 @@ ${formatSaveError(error)}`);
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs font-black">
               <span className={`rounded-full px-3 py-1 ${isLoggedIn ? "bg-emerald-500/15 text-emerald-300" : "bg-yellow-500/15 text-yellow-300"}`}>
-                {sharedEditBookId ? "Voorstelmodus • origineel blijft veilig" : isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
+                {reviewMode ? "🔒 Admin review • bevroren snapshot" : sharedEditBookId ? "Voorstelmodus • origineel blijft veilig" : isLoggedIn ? "Ingelogd • dashboard opslag" : "Gast • lokaal opslaan"}
               </span>
               <span
                 title="Automatische sessie-opslag. Wordt direct hersteld zolang deze browsersessie open blijft."
@@ -4171,16 +4346,29 @@ ${formatSaveError(error)}`);
               )}
             </div>
           </div>
+          {reviewMode && reviewSubmission && (
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-purple-400/20 bg-purple-500/10 px-5 py-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-200">🛡️ Reviewmodus • alleen lezen</p>
+                <p className="mt-1 text-xs font-semibold text-neutral-300">Ingediend door {reviewSubmission.ownerName} • {reviewSubmission.flagCount} gemarkeerde node{reviewSubmission.flagCount === 1 ? "" : "s"}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={openPreview} className="rounded-xl border border-blue-400/30 bg-blue-500/15 px-4 py-2 text-xs font-black text-blue-100 hover:bg-blue-500/25">▶ Hele boek previewen</button>
+                <button disabled={reviewActionBusy || reviewSubmission.status !== "pending"} onClick={() => handleReviewDecision("rejected")} className="rounded-xl border border-red-400/30 bg-red-500/15 px-4 py-2 text-xs font-black text-red-100 hover:bg-red-500/25 disabled:opacity-40">✕ Afwijzen + feedback</button>
+                <button disabled={reviewActionBusy || reviewSubmission.status !== "pending"} onClick={() => handleReviewDecision("approved")} className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-black hover:bg-emerald-400 disabled:opacity-40">✓ Goedkeuren & publiceren</button>
+              </div>
+            </div>
+          )}
           <div className="min-h-0 flex-1">
           <ReactFlow
             nodes={flowNodes}
             edges={getValidatedEdges(edges, nodes)}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={reviewMode ? undefined : onNodesChange}
+            onEdgesChange={reviewMode ? undefined : onEdgesChange}
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-            onMoveEnd={(_, viewport) => setFlowViewport(viewport)}
+            onMoveEnd={(_, viewport) => { if (!reviewMode) setFlowViewport(viewport); }}
             nodesConnectable={false}
-            nodesDraggable={true}
+            nodesDraggable={!reviewMode}
             elementsSelectable={true}
             defaultViewport={{ x: 0, y: 0, zoom: 1 }}
             minZoom={0.4}
@@ -4203,8 +4391,74 @@ ${formatSaveError(error)}`);
         </section>
 
         <aside className="w-80 overflow-y-auto border-l-4 border-black bg-neutral-950 p-4">
-          <h2 className="mb-4 text-xl font-black">Node instellingen</h2>
+          <h2 className="mb-4 text-xl font-black">{reviewMode ? "Review inspectie" : "Node instellingen"}</h2>
 
+          {reviewMode ? (
+            <div className="grid gap-4">
+              {!selectedNode ? (
+                <p className="text-neutral-400">Klik op een node om de bevroren inhoud te bekijken.</p>
+              ) : (
+                <>
+                  <div className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-purple-300">Alleen lezen</p>
+                    <h3 className="mt-2 text-xl font-black">{selectedNode.data.label}</h3>
+                    <p className="mt-1 text-xs font-bold text-neutral-400">{nodeLabels[selectedNode.data.type]} • node {selectedNode.id}</p>
+                  </div>
+
+                  {selectedReviewFlags.length > 0 ? (
+                    <div className="grid gap-2">
+                      {selectedReviewFlags.map((flag) => (
+                        <div key={flag.flagId || `${flag.nodeId}-${flag.category}`} className={`rounded-2xl border p-4 ${flag.severity === "high" ? "border-red-400/35 bg-red-500/10" : "border-amber-400/30 bg-amber-400/10"}`}>
+                          <p className="text-xs font-black uppercase tracking-widest text-amber-200">⚠ {flag.category} • {flag.severity}</p>
+                          <p className="mt-2 text-sm font-semibold leading-6 text-neutral-200">{flag.reason}</p>
+                          <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">Bron: {flag.source}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-100">Geen automatische of handmatige markering op deze node.</div>
+                  )}
+
+                  {(selectedNode.data.type === "text" || selectedNode.data.type === "special" || selectedNode.data.type === "scratchpad") && (
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+                      <p className="mb-3 text-xs font-black uppercase tracking-widest text-neutral-500">Inhoud</p>
+                      <div className="prose prose-invert max-w-none text-sm leading-7" dangerouslySetInnerHTML={{ __html: selectedNode.data.textHtml || selectedNode.data.text || "<p>Lege node.</p>" }} />
+                    </div>
+                  )}
+
+                  {selectedNode.data.type === "choice" && (
+                    <div className="rounded-2xl border border-orange-400/20 bg-orange-500/10 p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-orange-200">Keuzes</p>
+                      <div className="mt-3 grid gap-2">{(selectedNode.data.choices ?? []).map((choice, index) => <div key={`${index}-${choice.label}`} className="rounded-xl bg-black/25 p-3 text-sm font-bold">{String.fromCharCode(65 + index)}. {choice.label || "Lege keuze"}</div>)}</div>
+                    </div>
+                  )}
+
+                  {selectedNode.data.type === "cutscene" && (
+                    <div className="rounded-2xl border border-green-400/20 bg-green-500/10 p-4 text-sm font-semibold text-green-100">Cutscene: {selectedNode.data.videoFileName || (selectedNode.data.videoUrl ? "Video gekoppeld" : "Geen video")} • {Number(selectedNode.data.videoDuration || 0).toFixed(1)} sec. Gebruik de boekpreview om af te spelen.</div>
+                  )}
+
+                  {selectedNode.data.type === "minigame" && (
+                    <div className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4 text-sm font-semibold text-purple-100">Minigame • {selectedNode.data.miniGameDifficulty || "normal"} • success/fail-routes. Gebruik de boekpreview om de interactie te testen.</div>
+                  )}
+
+                  {selectedNode.data.type === "function" && (
+                    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-cyan-200">Functie-acties</p>
+                      <pre className="mt-3 whitespace-pre-wrap text-xs text-cyan-50/80">{JSON.stringify(selectedNode.data.functionActions ?? [], null, 2)}</pre>
+                    </div>
+                  )}
+
+                  {selectedNode.data.type === "condition" && (
+                    <div className="rounded-2xl border border-teal-400/20 bg-teal-500/10 p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-teal-200">Voorwaarde / IF</p>
+                      <pre className="mt-3 whitespace-pre-wrap text-xs text-teal-50/80">{JSON.stringify({ variable: selectedNode.data.conditionKey, operator: selectedNode.data.conditionOperator, value: selectedNode.data.conditionValue, trueTarget: selectedNode.data.conditionTrueTargetNodeId, elseTarget: selectedNode.data.conditionFalseTargetNodeId }, null, 2)}</pre>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <>
           {!selectedNode && (
             <p className="text-neutral-400">
               Klik op een node om deze te bewerken.
@@ -5020,6 +5274,8 @@ ${formatSaveError(error)}`);
               )}
             </div>
           )}
+            </>
+          )}
         </aside>
       </div>
 
@@ -5107,7 +5363,7 @@ ${formatSaveError(error)}`);
         </div>
       )}
 
-      {variablesOpen && (
+      {!reviewMode && variablesOpen && (
         <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 p-4 backdrop-blur-sm sm:p-6">
           <div className="mx-auto max-w-5xl rounded-3xl border border-indigo-400/20 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
@@ -5311,7 +5567,7 @@ ${formatSaveError(error)}`);
         </div>
       )}
 
-      {editingTextNode &&
+      {!reviewMode && editingTextNode &&
         (editingTextNode.data.type === "text" ||
           editingTextNode.data.type === "special" ||
           editingTextNode.data.type === "scratchpad") && (
@@ -5330,7 +5586,7 @@ ${formatSaveError(error)}`);
             onClose={() => setEditingTextNodeId(null)}
           />
         )}
-      {saveDashboardOpen && (
+      {!reviewMode && saveDashboardOpen && (
         <SaveToDashboardModal
           form={dashboardSaveForm}
           setForm={setDashboardSaveForm}
@@ -5344,7 +5600,7 @@ ${formatSaveError(error)}`);
           onDownloadReaderStory={downloadReaderStoryFile}
         />
       )}
-      {seriesManagerOpen && user && (
+      {!reviewMode && seriesManagerOpen && user && (
         <BookSeriesManagerModal
           user={user}
           series={dashboardSeries}

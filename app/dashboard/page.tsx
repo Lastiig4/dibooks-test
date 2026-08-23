@@ -24,13 +24,13 @@ import {
   deleteDashboardBookFromSupabase,
   fetchBookSeriesFromSupabase,
   fetchDashboardBooksFromSupabase,
-  publishDashboardBookInSupabase,
   removeDashboardBookFromLibraryInSupabase,
   saveDashboardBookToSupabase,
   updateDashboardBookMediaInSupabase,
   type BookSeries,
 } from "@/lib/supabase/dashboardBooks";
 import BookSeriesManagerModal from "@/components/BookSeriesManagerModal";
+import { submitBookForModeration } from "@/lib/supabase/moderation";
 import {
   fetchBookFeedbackForUser,
   fetchBookRevisionsForUser,
@@ -63,6 +63,9 @@ type DashboardBook = DiBook & {
   accessType?: "free" | "premium";
   seriesId?: string | null;
   seriesOrder?: number | null;
+  moderationStatus?: "draft" | "pending" | "approved" | "rejected" | string;
+  moderationFeedback?: string | null;
+  moderationUpdatedAt?: string;
 };
 
 type NewBookForm = {
@@ -561,6 +564,8 @@ function DiBooksLogo() {
 }
 
 function statusClass(book: DashboardBook) {
+  if (book.moderationStatus === "pending") return "border-amber-400/45 bg-amber-400/10 text-amber-100";
+  if (book.moderationStatus === "rejected") return "border-red-400/45 bg-red-500/10 text-red-100";
   if (book.published) return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
   if (book.status === "Concept") return "border-yellow-500/40 bg-yellow-500/10 text-yellow-200";
   if (book.status === "Binnenkort") return "border-purple-500/40 bg-purple-500/10 text-purple-200";
@@ -590,7 +595,13 @@ function BookMediaPreview({ book }: { book: DashboardBook }) {
       <div className="absolute bottom-4 left-4 right-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-widest ${statusClass(book)}`}>
-            {book.published ? "Live / vergrendeld" : book.status}
+            {book.moderationStatus === "pending"
+              ? "In beoordeling / vergrendeld"
+              : book.moderationStatus === "rejected"
+                ? "Afgewezen / aanpassen"
+                : book.published
+                  ? "Live / vergrendeld"
+                  : book.status}
           </span>
           <span className="rounded-full bg-black/55 px-3 py-1 text-xs font-black uppercase tracking-widest text-white/85">
             {book.primaryGenre}
@@ -624,7 +635,9 @@ function BookDashboardCard({
   onShare: (book: DashboardBook) => void;
 }) {
   const isPublished = !!book.published;
-  const canEdit = !isPublished;
+  const isReviewPending = book.moderationStatus === "pending";
+  const isRejected = book.moderationStatus === "rejected";
+  const canEdit = !isPublished && !isReviewPending;
   const isDashboardBook = book.source === "dashboard";
   const canShowBookPage = book.source !== "dashboard" || book.published || book.status === "Binnenkort";
   const detailHref = book.source === "dashboard" ? `/books/${book.id}` : getBookDetailPath(book);
@@ -648,7 +661,7 @@ function BookDashboardCard({
         <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
           <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Status</p>
-            <p className="mt-1 font-black text-white">{isPublished ? "Live" : book.status}</p>
+            <p className="mt-1 font-black text-white">{isReviewPending ? "In beoordeling" : isRejected ? "Afgewezen" : isPublished ? "Live" : book.status}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Bewerken</p>
@@ -686,13 +699,22 @@ function BookDashboardCard({
           ))}
         </div>
 
-        {isPublished ? (
+        {isReviewPending ? (
+          <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-50">
+            <strong>In beoordeling.</strong> DiBooks heeft een bevroren reviewversie opgeslagen. Je concept is tijdelijk vergrendeld totdat een admin het boek goedkeurt of afwijst.
+          </div>
+        ) : isRejected ? (
+          <div className="rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100">
+            <strong>Afgewezen met feedback.</strong> Pas het boek aan en dien daarna een nieuwe versie in.
+            {book.moderationFeedback && <p className="mt-2 font-bold text-white">Feedback: {book.moderationFeedback}</p>}
+          </div>
+        ) : isPublished ? (
           <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
-            <strong>Live in de Library = vergrendeld.</strong> Media aanpassen is daarom ook vergrendeld. Haal het boek eerst uit de Library als je cover of banner wilt wijzigen.
+            <strong>Live in de Library = vergrendeld.</strong> Haal het boek eerst uit de Library als je een nieuwe versie wilt maken. Die nieuwe versie moet daarna opnieuw door beoordeling.
           </div>
         ) : (
           <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
-            <strong>Concept / testfase.</strong> Je mag tekst, routes, cover en banner vrij aanpassen totdat je publiceert.
+            <strong>Concept / testfase.</strong> Je mag tekst, routes, cover en banner vrij aanpassen. Klaar? Dien een bevroren versie in voor beoordeling.
           </div>
         )}
 
@@ -754,7 +776,11 @@ function BookDashboardCard({
             </Link>
           )}
 
-          {canEdit && isDashboardBook && (
+          {isReviewPending && isDashboardBook ? (
+            <button disabled className="cursor-not-allowed rounded-2xl border border-amber-400/25 bg-amber-400/10 px-5 py-3 text-sm font-black text-amber-100">
+              ⏳ In beoordeling
+            </button>
+          ) : canEdit && isDashboardBook ? (
             <button
               onClick={() => onPublish(book.id)}
               className={`rounded-2xl border px-5 py-3 text-sm font-black ${
@@ -762,11 +788,11 @@ function BookDashboardCard({
                   ? "border-emerald-500/35 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
                   : "border-neutral-600/50 bg-neutral-800/60 text-neutral-400 hover:bg-neutral-800"
               }`}
-              title={canPublish ? "Publiceer naar Library" : "Alleen Author Pro accounts kunnen publiceren"}
+              title={canPublish ? "Dien een bevroren versie in voor adminbeoordeling" : "Alleen Author Pro accounts kunnen indienen voor publicatie"}
             >
-              {canPublish ? "Publiceer naar Library" : "Author Pro nodig"}
+              {canPublish ? "Indienen voor beoordeling" : "Author Pro nodig"}
             </button>
-          )}
+          ) : null}
 
           {canEdit && isDashboardBook && (
             <button onClick={() => onDeleteDraft(book.id)} className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-sm font-black text-red-100 hover:bg-red-500/20">
@@ -1801,6 +1827,10 @@ export default function DashboardPage() {
 
 
   function openBookDetails(book: DashboardBook) {
+    if (book.moderationStatus === "pending") {
+      alert("Dit boek staat in beoordeling en is tijdelijk vergrendeld.");
+      return;
+    }
     if (book.published) {
       alert("Live boeken zijn vergrendeld. Haal het boek eerst uit de Library als je metadata wilt wijzigen.");
       return;
@@ -1877,16 +1907,24 @@ export default function DashboardPage() {
     }
   }
 
-  async function publishBookToLibrary(bookId: string) {
+  async function submitBookForReview(bookId: string) {
     const targetBook = draftDashboardBooks.find((book) => book.id === bookId);
     if (!targetBook) return;
+    if (!user) {
+      alert("Login nodig om een boek in te dienen.");
+      return;
+    }
     if (!canAccessOwnedResource(user, targetBook.ownerId)) {
       alert("Je kunt alleen je eigen dashboardboeken beheren.");
       return;
     }
+    if (targetBook.moderationStatus === "pending") {
+      alert("Dit boek staat al in beoordeling.");
+      return;
+    }
 
     if (!permissions.canPublishBook) {
-      alert("Publiceren is alleen beschikbaar voor Author Pro accounts. Gratis en Reader Plus accounts kunnen wel lezen; gratis auteurs kunnen bouwen, testen en lokaal exporteren.");
+      alert("Indienen voor publicatie is alleen beschikbaar voor Author Pro accounts.");
       return;
     }
 
@@ -1901,17 +1939,18 @@ export default function DashboardPage() {
       : "";
 
     const confirmed = window.confirm(
-      `Weet je zeker dat je "${targetBook.title}" naar de Library wilt publiceren?\n\nNa publicatie wordt dit boek vergrendeld. Je kunt het dan niet meer aanpassen zolang het live staat.${warningText}`,
+      `Wil je "${targetBook.title}" indienen voor publicatiebeoordeling?\n\nDiBooks maakt nu een bevroren snapshot. Zolang de beoordeling loopt kun je dit boek niet wijzigen. Een admin bekijkt exact deze versie.${warningText}`,
     );
 
     if (!confirmed) return;
 
     try {
-      await publishDashboardBookInSupabase(bookId);
+      await submitBookForModeration(user, bookId);
       await refreshDashboardBooks();
+      alert("Boek ingediend. Een DiBooks-admin heeft een melding gekregen en kan de bevroren versie nu beoordelen.");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? `Publiceren mislukt: ${error.message}` : "Publiceren mislukt.");
+      alert(error instanceof Error ? `Indienen mislukt: ${error.message}` : "Indienen mislukt.");
     }
   }
 
@@ -1945,6 +1984,11 @@ export default function DashboardPage() {
 
     if (!canAccessOwnedResource(user, targetBook.ownerId)) {
       alert("Je kunt alleen je eigen dashboardboeken beheren.");
+      return;
+    }
+
+    if (targetBook.moderationStatus === "pending") {
+      alert("Een boek dat in beoordeling staat kun je niet verwijderen.");
       return;
     }
 
@@ -2132,7 +2176,7 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
               key={`${book.source}-${book.id}`}
               book={book}
               seriesTitle={bookSeries.find((series) => series.id === book.seriesId)?.title}
-              onPublish={publishBookToLibrary}
+              onPublish={submitBookForReview}
               canPublish={permissions.canPublishBook}
               onRemoveFromLibrary={removeBookFromLibrary}
               onDeleteDraft={deleteDraftBook}
