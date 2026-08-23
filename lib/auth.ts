@@ -380,10 +380,37 @@ function bootAuthOnce() {
     supabase.auth.onAuthStateChange((_event, session) => {
       if (logoutInProgress && session) return;
 
-      if (!session) logoutInProgress = false;
-      void refreshProfileFromSupabase(
-        mapSupabaseUser(session?.user ?? null),
-      );
+      if (!session) {
+        logoutInProgress = false;
+        emitAuthSnapshot({
+          user: null,
+          loading: false,
+          initialized: true,
+        });
+        broadcastAuthChange();
+        return;
+      }
+
+      const mappedUser = mapSupabaseUser(session.user);
+      if (!mappedUser) return;
+
+      // BELANGRIJK:
+      // Geen Supabase databasecalls starten terwijl onAuthStateChange nog loopt.
+      // Supabase houdt tijdens auth-events intern een auth-lock vast. Een profiel-
+      // query vanuit deze callback kan daardoor de signIn promise tot een timeout
+      // blokkeren. We werken de UI direct bij en stellen de profielquery uit tot
+      // de callback volledig is afgerond.
+      emitAuthSnapshot({
+        user: mappedUser,
+        loading: false,
+        initialized: true,
+      });
+      broadcastAuthChange();
+
+      window.setTimeout(() => {
+        if (logoutInProgress || authSnapshot.user?.id !== mappedUser.id) return;
+        void refreshProfileFromSupabase(mappedUser);
+      }, 0);
     });
   })();
 
@@ -563,11 +590,24 @@ export function useDemoAuth() {
       };
     }
 
+    const loginStartedAt =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+
     const { data, error } =
       await supabase.auth.signInWithPassword({
         email,
         password: credentials.password,
       });
+
+    const loginFinishedAt =
+      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const loginDurationMs = Math.round(loginFinishedAt - loginStartedAt);
+
+    if (loginDurationMs > 1500) {
+      console.info(
+        `[DiBooks Auth] Supabase signInWithPassword duurde ${loginDurationMs} ms.`,
+      );
+    }
 
     if (error) {
       return {
@@ -578,9 +618,25 @@ export function useDemoAuth() {
 
     const mappedUser = mapSupabaseUser(data.user);
 
-    // NIET awaiten: zodra Supabase de login bevestigt, mag de modal dicht.
-    // Role/plan uit profiles worden daarna op de achtergrond bijgewerkt.
-    void refreshProfileFromSupabase(mappedUser);
+    // De auth-listener heeft de UI normaal al bijgewerkt. Dit is een veilige
+    // fallback voor browsers waarin dat event net later arriveert.
+    if (mappedUser && authSnapshot.user?.id !== mappedUser.id) {
+      emitAuthSnapshot({
+        user: mappedUser,
+        loading: false,
+        initialized: true,
+      });
+      broadcastAuthChange();
+    }
+
+    // Profielverrijking pas in een volgende event-loop tick. Zo kan de auth-lock
+    // van signInWithPassword eerst volledig worden vrijgegeven.
+    if (mappedUser) {
+      window.setTimeout(() => {
+        if (logoutInProgress || authSnapshot.user?.id !== mappedUser.id) return;
+        void refreshProfileFromSupabase(mappedUser);
+      }, 0);
+    }
 
     return { ok: true };
   }
@@ -641,7 +697,22 @@ export function useDemoAuth() {
     }
 
     const mappedUser = mapSupabaseUser(data.user);
-    void refreshProfileFromSupabase(mappedUser);
+
+    if (mappedUser && authSnapshot.user?.id !== mappedUser.id) {
+      emitAuthSnapshot({
+        user: mappedUser,
+        loading: false,
+        initialized: true,
+      });
+      broadcastAuthChange();
+    }
+
+    if (mappedUser) {
+      window.setTimeout(() => {
+        if (logoutInProgress || authSnapshot.user?.id !== mappedUser.id) return;
+        void refreshProfileFromSupabase(mappedUser);
+      }, 0);
+    }
 
     return {
       ok: true,

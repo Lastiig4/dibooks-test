@@ -1,23 +1,39 @@
-DiBooks Instant Auth - V2 TypeScript Fix
-=========================================
+DiBooks Instant Auth - V3 Auth Lock Fix
+=====================================
 
-Fix voor Vercel:
-lib/auth.ts: Binding element 'data' implicitly has an 'any' type.
+Waarschijnlijke oorzaak van ~60 sec login:
+Supabase onAuthStateChange startte meteen opnieuw Supabase databasecalls
+(profiles upsert/select) terwijl de auth-event callback nog actief was.
 
-Wat is aangepast:
-- De gedeelde Supabase browserclient heeft nu expliciet type SupabaseClient.
-- getSession gebruikt een async IIFE met een getypeerd resultaat i.p.v.
-  destructuring direct in .then(...).
-- signOut gebruikt dezelfde veilige async-stijl.
-- De Instant Auth-logica zelf blijft hetzelfde.
+Supabase auth gebruikt intern een lock. Nieuwe Supabase-calls vanuit de
+auth-callback kunnen daardoor signInWithPassword laten wachten tot een timeout.
+
+Fix:
+- onAuthStateChange doet nu GEEN databasecall meer.
+- UI wordt direct ingelogd zodra het auth-event binnenkomt.
+- Profile role/plan lookup wordt via setTimeout(..., 0) pas gestart nadat
+  de auth callback klaar is en de lock kan zijn vrijgegeven.
+- loginWithCredentials doet hetzelfde.
+- Registratie gebruikt dezelfde lock-veilige flow.
+- Console timing toegevoegd als signInWithPassword langer dan 1,5 sec duurt.
 
 Installeren:
 1. ZIP uitpakken.
-2. Sleep de map 'lib' over dibooks_author_studio.
-3. Kies Bestanden vervangen.
+2. Sleep map 'lib' over dibooks_author_studio.
+3. Bestanden vervangen.
 4. Geen SQL nodig.
-5. Commit/push naar GitHub/Vercel.
+5. npm run build
+6. Commit/push.
 
-Deze mini-patch vervangt alleen:
-- lib/auth.ts
-- lib/supabase/client.ts
+Test:
+Open DevTools -> Console en log in.
+
+Normaal:
+- modal verdwijnt vrijwel direct na de echte Supabase login.
+- geen melding of slechts een kleine timingmelding.
+
+Als het nog steeds heel lang duurt, zoek dan in Console naar:
+[DiBooks Auth] Supabase signInWithPassword duurde XXXXX ms.
+
+Als daar bijvoorbeeld 50000-60000 ms staat, weten we dat de vertraging niet
+meer in DiBooks zit maar in de daadwerkelijke Supabase Auth request.
