@@ -130,7 +130,7 @@ function ArtworkPanel({ book }: { book: DetailBook }) {
     <div className={`relative isolate overflow-hidden rounded-[2rem] border ${book.accentClass || FALLBACK_ACCENT_CLASS} bg-gradient-to-br ${coverClass} shadow-2xl`}>
       {image && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt={`Cover van ${book.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover" />
+        <img src={image} alt={`Cover van ${book.title}`} className="absolute inset-0 -z-10 h-full w-full object-contain bg-black" />
       )}
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.16),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.16))]" />
       {!image && (

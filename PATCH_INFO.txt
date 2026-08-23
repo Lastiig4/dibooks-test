@@ -1,19 +1,16 @@
-DiBooks Patch - Schone cover op boekpagina
+DiBooks Patch - Volledige cover zichtbaar
 =========================================
 
-Wat verandert:
-- Titel-overlay onderaan de cover verwijderd.
-- 'Interactive story' op de cover verwijderd.
-- Grote boektitel links blijft staan.
-- Genre/status badges bovenaan de cover blijven staan.
-- Donkere cover-overlay is subtieler gemaakt zodat artwork beter zichtbaar blijft.
-- Overige boekpagina-functionaliteit is ongemoeid gelaten.
+Wijziging:
+- De cover gebruikt nu object-contain in plaats van object-cover.
+- Hierdoor wordt de volledige geselecteerde cover altijd zichtbaar.
+- De afbeelding wordt niet meer afgesneden om het covervak te vullen.
+- Eventuele lege ruimte rond een afwijkende beeldverhouding krijgt een zwarte achtergrond.
+- Titel-overlay blijft verwijderd.
+- Genre/status badges blijven behouden.
 
 Installeren:
 1. Pak de ZIP uit.
-2. Sleep de map 'app' over de hoofdmap van dibooks_author_studio.
-3. Kies 'Bestanden vervangen' als Windows daarom vraagt.
-4. Start/herstart met: npm run dev
-
-Verwacht pad:
-app/books/[bookId]/page.tsx
+2. Sleep de map 'app' over dibooks_author_studio.
+3. Kies 'Bestanden vervangen'.
+4. Herstart indien nodig met: npm run dev
