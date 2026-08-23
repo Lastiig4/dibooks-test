@@ -1,95 +1,24 @@
-DiBooks Patch - Moderation Incremental V5
-=========================================
+DiBooks Moderation Incremental V5.1 - TypeScript Fix
+===================================================
 
-Deze patch bouwt voort op de huidige werkende V4 reviewmodal.
+Fix voor Vercel build:
+app/api/moderation/scan-submission/route.ts
+Parameter 'node' implicitly has an 'any' type.
 
-FIX VOOR JOUW HUIDIGE BUG
-Een opnieuw ingediend boek kan NOOIT meer oude flags uit een eerdere
-submission gebruiken om de publicatieknop te blokkeren.
+Wat is aangepast:
+- Supabase JSON node-arrays zijn expliciet any[] getypeerd.
+- currentNodes is expliciet ScannableNode[].
+- map callbacks hebben expliciete ScannableNode/any types.
+- previousRawNodes en previousFlags zijn expliciet getypeerd.
+- Geen wijziging aan de incremental moderatielogica.
+- Geen wijziging aan DeepSeek.
+- Geen nieuwe Supabase SQL nodig.
 
-- Iedere flag bevat nu expliciet submission_id.
-- De revieweditor telt alleen flags van de ACTIEVE submission.
-- Bij het openen van een nieuwe review wordt lokale reviewstate eerst leeggemaakt.
-- De reviewlink vanuit Boekmoderatie doet bewust een volledige page-load.
-- Als de nieuwe inzending niet door AI is gescand, zie je niet meer
-  "nog 13 meldingen", maar:
-  "AI-scan ontbreekt" / "AI-scan mislukt".
-- Goedkeuren blijft dan geblokkeerd totdat de scan succesvol is afgerond.
-- Supabase controleert dit ook server-side.
+Installeren:
+1. ZIP uitpakken.
+2. Sleep alleen de map 'app' over dibooks_author_studio.
+3. Kies Bestanden vervangen.
+4. Commit/push.
+5. Vercel opnieuw builden.
 
-INCREMENTAL MODERATION / KOSTENBESPARING
-
-Eerste inzending:
-  alle relevante nodes -> DeepSeek
-
-Nieuwe versie na afwijzing:
-  elke node krijgt intern een SHA-256 hash van:
-  - moderatie-policyversie
-  - leeftijdsclassificatie
-  - echte lezersinhoud
-
-Daarna:
-  hash hetzelfde als vorige completed submission
-      -> GEEN DeepSeek-call
-      -> eerdere AI-uitkomst wordt hergebruikt
-
-  hash veranderd / nieuwe node
-      -> alleen die node opnieuw naar DeepSeek
-
-Voorbeeld:
-  100 nodes in boek
-  auteur wijzigt 4 nodes
-  nieuwe submission:
-    96 nodes hergebruikt
-    4 nodes betaald opnieuw gescand
-
-BELANGRIJK
-- Ongewijzigde oude waarschuwingen worden wel opnieuw als OPEN melding
-  op de nieuwe submission gezet. De admin moet ze dus opnieuw beoordelen.
-- Gewijzigde nodes krijgen verse DeepSeek-beoordeling.
-- Verwijderde nodes verdwijnen vanzelf uit de nieuwe review.
-- Verandert leeftijdsclassificatie? Dan veranderen alle hashes en wordt
-  bewust het hele boek opnieuw beoordeeld.
-
-ROBUSTERE AUTOMATISCHE SCAN
-Voorheen werd de automatische scan fire-and-forget gestart.
-Een browseractie/navigatie kon die scan in theorie verliezen.
-
-Nu:
-- submitBookForModeration wacht totdat de scan afgerond of mislukt is;
-- een scannerfout annuleert de submission niet;
-- de status wordt opgeslagen als failed;
-- de admin ziet dit meteen en kan "AI opnieuw scannen" gebruiken.
-
-ADMIN BOEKMODERATIE
-Pending cards tonen nu:
-- AI scan ontbreekt
-- AI scan bezig
-- AI scan mislukt
-- AI ✓ X gescand • Y hergebruikt
-
-Na een scan krijg je bijvoorbeeld:
-"2 markeringen • 4 nieuw/gewijzigd gescand • 96 hergebruikt."
-
-INSTALLATIE
-1. Supabase -> SQL Editor -> New query.
-2. Voer MODERATION_INCREMENTAL_V5_SUPABASE.sql volledig uit.
-3. Pak ZIP uit.
-4. Sleep over dibooks_author_studio:
-   - app
-   - lib
-   - supabase
-5. Kies Bestanden vervangen.
-6. npm run build
-7. Commit/push / Vercel deploy.
-
-Geen wijziging nodig aan DEEPSEEK_API_KEY.
-
-JOUW HUIDIGE OPNIEUW INGEDIENDE BOEK
-Na installatie zal die pending submission waarschijnlijk "AI scan ontbreekt"
-tonen. Klik één keer op "AI opnieuw scannen".
-
-Als de vorige rejected submission de 13 DeepSeek-flags bevatte:
-- ongewijzigde nodes worden gratis hergebruikt;
-- gewijzigde nodes worden opnieuw gescand;
-- alleen flags die bij deze NIEUWE submission horen tellen daarna mee.
+De V5 SQL die je al hebt uitgevoerd hoef je NIET opnieuw uit te voeren.

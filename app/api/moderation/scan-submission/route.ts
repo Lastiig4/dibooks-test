@@ -166,7 +166,7 @@ function normalizeDeepSeekFlags(
   payload: DeepSeekPayload,
   batch: ScannableNode[],
 ): AutoFlag[] {
-  const allowedNodeIds = new Set(batch.map((node) => node.nodeId));
+  const allowedNodeIds = new Set(batch.map((node: ScannableNode) => node.nodeId));
   const flags: AutoFlag[] = [];
 
   for (const result of Array.isArray(payload?.results) ? payload.results : []) {
@@ -258,7 +258,7 @@ async function callDeepSeek(
 ) {
   const userPayload = {
     age_rating: ageRating || "Onbekend",
-    nodes: batch.map((node) => ({
+    nodes: batch.map((node: ScannableNode) => ({
       node_id: node.nodeId,
       text: node.text,
     })),
@@ -411,7 +411,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rawNodes = Array.isArray(submission.snapshot?.projectData?.nodes)
+    const rawNodes: any[] = Array.isArray(submission.snapshot?.projectData?.nodes)
       ? submission.snapshot.projectData.nodes
       : [];
 
@@ -421,10 +421,10 @@ export async function POST(request: NextRequest) {
         "Onbekend",
     );
 
-    const currentNodes = rawNodes
-      .map(extractNodeText)
+    const currentNodes: ScannableNode[] = rawNodes
+      .map((rawNode: any) => extractNodeText(rawNode))
       .filter((node: ScannableNode | null): node is ScannableNode => !!node)
-      .map((node) => withContentHash(node, ageRating));
+      .map((node: ScannableNode) => withContentHash(node, ageRating));
 
     const { data: previousContext, error: contextError } = await supabase.rpc(
       "get_previous_completed_moderation_context",
@@ -433,7 +433,7 @@ export async function POST(request: NextRequest) {
     if (contextError) throw contextError;
 
     const previousSnapshot = previousContext?.previous_snapshot ?? null;
-    const previousFlags = Array.isArray(previousContext?.previous_flags)
+    const previousFlags: any[] = Array.isArray(previousContext?.previous_flags)
       ? previousContext.previous_flags
       : [];
 
@@ -443,7 +443,7 @@ export async function POST(request: NextRequest) {
         "Onbekend",
     );
 
-    const previousRawNodes = Array.isArray(previousSnapshot?.projectData?.nodes)
+    const previousRawNodes: any[] = Array.isArray(previousSnapshot?.projectData?.nodes)
       ? previousSnapshot.projectData.nodes
       : [];
 
