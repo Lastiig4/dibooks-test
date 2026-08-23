@@ -1,12 +1,9 @@
-# DiBooks auth modal portal fix v4
+# DiBooks editor dropdown portal fix v5
 
 Vervang:
-- components/AuthModal.tsx
 - components/AppNav.tsx
 
 Fix:
-- AuthModal wordt via React portal direct aan document.body gehangen
-- Login/register staat altijd midden in viewport
-- Niet meer verstopt achter Library/header
-- Klik op donkere achtergrond sluit modal
-- Dropdown layering blijft behouden
+- Dropdown menus worden nu via een portal direct op `document.body` gerenderd.
+- Daardoor liggen ze boven React Flow / de editor grid.
+- Opties in het menu zijn weer klikbaar in de editor.

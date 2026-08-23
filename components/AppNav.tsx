@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import AuthModal from "@/components/AuthModal";
 import NotificationBell from "@/components/NotificationBell";
 import { useDemoAuth } from "@/lib/auth";
@@ -22,15 +23,31 @@ function DiBooksMiniLogo() {
   );
 }
 
-function MenuPanel({ children, align = "right" }: { children: ReactNode; align?: "left" | "right" }) {
-  return (
+type MenuPosition = {
+  top: number;
+  left: number;
+};
+
+function MenuPanel({
+  children,
+  position,
+  panelRef,
+}: {
+  children: ReactNode;
+  position: MenuPosition | null;
+  panelRef: Ref<HTMLDivElement>;
+}) {
+  if (typeof document === "undefined" || !position) return null;
+
+  return createPortal(
     <div
-      className={`absolute top-full z-[6000] mt-3 min-w-72 rounded-3xl border border-white/10 bg-[#080b12]/95 p-3 shadow-2xl backdrop-blur-xl ${
-        align === "right" ? "right-0" : "left-0"
-      }`}
+      ref={panelRef}
+      style={{ top: position.top, left: position.left }}
+      className="fixed z-[2147483000] w-[min(22rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-[#080b12]/95 p-3 shadow-2xl shadow-black/70 backdrop-blur-xl"
     >
       {children}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -56,15 +73,18 @@ function IconButton({
   title,
   active = false,
   onClick,
+  buttonRef,
 }: {
   children: ReactNode;
   title: string;
   active?: boolean;
   onClick?: () => void;
+  buttonRef?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button
       type="button"
+      ref={buttonRef}
       onClick={onClick}
       title={title}
       aria-label={title}
@@ -119,12 +139,41 @@ function GuestAuthButtons({
 export function AppNavActions({ compact = false }: { compact?: boolean }) {
   const { isLoggedIn, permissions, user, loginWithCredentials, registerWithCredentials, logout } = useDemoAuth();
   const [openMenu, setOpenMenu] = useState<"reader" | "settings" | null>(null);
+  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const readerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  function getMenuPosition(button: HTMLButtonElement | null): MenuPosition | null {
+    if (!button || typeof window === "undefined") return null;
+    const rect = button.getBoundingClientRect();
+    const menuWidth = Math.min(352, window.innerWidth - 32);
+    const left = Math.min(
+      window.innerWidth - menuWidth - 16,
+      Math.max(16, rect.left + rect.width / 2 - menuWidth / 2),
+    );
+    return {
+      top: rect.bottom + 12,
+      left,
+    };
+  }
+
+  function toggleMenu(menu: "reader" | "settings", button: HTMLButtonElement | null) {
+    if (openMenu === menu) {
+      setOpenMenu(null);
+      return;
+    }
+    setMenuPosition(getMenuPosition(button));
+    setOpenMenu(menu);
+  }
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpenMenu(null);
+      const target = event.target as Node;
+      if (wrapRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpenMenu(null);
     }
 
     function handleKey(event: KeyboardEvent) {
@@ -138,6 +187,23 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
       window.removeEventListener("keydown", handleKey);
     };
   }, []);
+
+  useEffect(() => {
+    if (!openMenu) return;
+
+    function updateFloatingMenuPosition() {
+      const button = openMenu === "reader" ? readerButtonRef.current : settingsButtonRef.current;
+      setMenuPosition(getMenuPosition(button));
+    }
+
+    updateFloatingMenuPosition();
+    window.addEventListener("resize", updateFloatingMenuPosition);
+    window.addEventListener("scroll", updateFloatingMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateFloatingMenuPosition);
+      window.removeEventListener("scroll", updateFloatingMenuPosition, true);
+    };
+  }, [openMenu]);
 
   return (
     <>
@@ -156,11 +222,16 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
             <NotificationBell variant="inline" />
 
             <div className="relative">
-              <IconButton title="Menu" active={openMenu === "reader"} onClick={() => setOpenMenu(openMenu === "reader" ? null : "reader")}>
+              <IconButton
+                title="Menu"
+                active={openMenu === "reader"}
+                buttonRef={readerButtonRef}
+                onClick={() => toggleMenu("reader", readerButtonRef.current)}
+              >
                 👤
               </IconButton>
               {openMenu === "reader" && (
-                <MenuPanel>
+                <MenuPanel position={menuPosition} panelRef={menuRef}>
                   <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.32em] text-neutral-500">
                     Menu
                   </p>
@@ -173,11 +244,16 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
             </div>
 
             <div className="relative">
-              <IconButton title="Account en instellingen" active={openMenu === "settings"} onClick={() => setOpenMenu(openMenu === "settings" ? null : "settings")}>
+              <IconButton
+                title="Account en instellingen"
+                active={openMenu === "settings"}
+                buttonRef={settingsButtonRef}
+                onClick={() => toggleMenu("settings", settingsButtonRef.current)}
+              >
                 ⚙️
               </IconButton>
               {openMenu === "settings" && (
-                <MenuPanel>
+                <MenuPanel position={menuPosition} panelRef={menuRef}>
                   <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.32em] text-neutral-500">
                     Account
                   </p>
