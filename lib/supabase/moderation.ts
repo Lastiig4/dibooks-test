@@ -8,6 +8,7 @@ export type ModerationDecision = "approved" | "rejected";
 
 export type ModerationFlag = {
   flagId: string;
+  submissionId?: string;
   nodeId: string;
   category: string;
   severity: "low" | "medium" | "high" | string;
@@ -30,6 +31,16 @@ export type ModerationQueueItem = {
   reviewFeedback?: string;
   reviewerName?: string;
   reviewerEmail?: string;
+  aiScanStatus?: "not_started" | "running" | "completed" | "failed" | string;
+  aiScanProvider?: string;
+  aiScanModel?: string;
+  aiScanStartedAt?: string;
+  aiScannedAt?: string;
+  aiScanError?: string;
+  aiScannedNodeCount?: number;
+  aiReusedNodeCount?: number;
+  aiChangedNodeCount?: number;
+  aiTotalNodeCount?: number;
   bookTitle: string;
   bookAuthor: string;
   ownerName: string;
@@ -93,6 +104,9 @@ export async function triggerAutomaticModerationScan(
     ok: true,
     flagCount: Number(payload?.flagCount ?? 0),
     scannedNodeCount: Number(payload?.scannedNodeCount ?? 0),
+    reusedNodeCount: Number(payload?.reusedNodeCount ?? 0),
+    changedNodeCount: Number(payload?.changedNodeCount ?? payload?.scannedNodeCount ?? 0),
+    totalNodeCount: Number(payload?.totalNodeCount ?? 0),
   };
 }
 
@@ -106,12 +120,15 @@ export async function submitBookForModeration(user: DemoAuthUser, bookId: string
 
   const submissionId = String(data ?? "");
 
-  // De reviewinzending is leidend. De AI-scan is adviserend en mag indienen
-  // nooit blokkeren als de externe scanner tijdelijk niet beschikbaar is.
+  // We wachten de eerste scan bewust af. Zo kan een browsernavigatie de
+  // automatische scan niet stilletjes afbreken. Een scannerfout blokkeert de
+  // inzending zelf niet; de admin ziet dan "AI-scan mislukt" en kan opnieuw scannen.
   if (submissionId) {
-    void triggerAutomaticModerationScan(user, submissionId).catch((scanError) => {
+    try {
+      await triggerAutomaticModerationScan(user, submissionId);
+    } catch (scanError) {
       console.warn("Automatische node-moderatiescan kon niet worden afgerond.", scanError);
-    });
+    }
   }
 
   return submissionId;
@@ -133,6 +150,16 @@ export async function fetchAdminModerationQueue(user: DemoAuthUser) {
     reviewFeedback: row.review_feedback ?? undefined,
     reviewerName: row.reviewer_name ?? undefined,
     reviewerEmail: row.reviewer_email ?? undefined,
+    aiScanStatus: row.ai_scan_status ?? "not_started",
+    aiScanProvider: row.ai_scan_provider ?? undefined,
+    aiScanModel: row.ai_scan_model ?? undefined,
+    aiScanStartedAt: row.ai_scan_started_at ?? undefined,
+    aiScannedAt: row.ai_scanned_at ?? undefined,
+    aiScanError: row.ai_scan_error ?? undefined,
+    aiScannedNodeCount: Number(row.ai_scanned_node_count ?? 0),
+    aiReusedNodeCount: Number(row.ai_reused_node_count ?? 0),
+    aiChangedNodeCount: Number(row.ai_changed_node_count ?? 0),
+    aiTotalNodeCount: Number(row.ai_total_node_count ?? 0),
     bookTitle: row.book_title ?? "Ongetiteld boek",
     bookAuthor: row.book_author ?? "Auteur",
     ownerName: row.owner_name ?? "Auteur",
@@ -168,6 +195,16 @@ export async function fetchAdminModerationSubmission(user: DemoAuthUser, submiss
     reviewFeedback: row.review_feedback ?? undefined,
     reviewerName: row.reviewer_name ?? undefined,
     reviewerEmail: row.reviewer_email ?? undefined,
+    aiScanStatus: row.ai_scan_status ?? "not_started",
+    aiScanProvider: row.ai_scan_provider ?? undefined,
+    aiScanModel: row.ai_scan_model ?? undefined,
+    aiScanStartedAt: row.ai_scan_started_at ?? undefined,
+    aiScannedAt: row.ai_scanned_at ?? undefined,
+    aiScanError: row.ai_scan_error ?? undefined,
+    aiScannedNodeCount: Number(row.ai_scanned_node_count ?? 0),
+    aiReusedNodeCount: Number(row.ai_reused_node_count ?? 0),
+    aiChangedNodeCount: Number(row.ai_changed_node_count ?? 0),
+    aiTotalNodeCount: Number(row.ai_total_node_count ?? 0),
     bookTitle: row.book_title ?? "Ongetiteld boek",
     bookAuthor: row.book_author ?? "Auteur",
     ownerName: row.owner_name ?? "Auteur",
@@ -178,6 +215,7 @@ export async function fetchAdminModerationSubmission(user: DemoAuthUser, submiss
     snapshot: row.snapshot ?? {},
     flags: rawFlags.map((flag: any): ModerationFlag => ({
       flagId: flag.flag_id ?? flag.id ?? "",
+      submissionId: flag.submission_id ?? row.submission_id ?? undefined,
       nodeId: flag.node_id ?? "",
       category: flag.category ?? "Controle",
       severity: flag.severity ?? "medium",

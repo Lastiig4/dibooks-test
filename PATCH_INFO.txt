@@ -1,35 +1,79 @@
-DiBooks Patch - Moderation Review Modal V4
-==========================================
+DiBooks Patch - Moderation Incremental V5
+=========================================
 
-GEBRUIK DEZE V4 IN PLAATS VAN V3.
-Je gaf aan dat je V3 nog niet had geïnstalleerd. V4 bevat daarom OOK alle V3-
-wijzigingen (snelle akkoordknoppen + één algemene motivatie bij high flags).
+Deze patch bouwt voort op de huidige werkende V4 reviewmodal.
 
-NIEUW: GROTE CENTRALE REVIEWINSPECTIE
-- Klik in reviewmodus op een node -> grote popup midden in beeld.
-- Klik op een rode/oranje melding -> kaart centreert op de node EN popup opent.
-- Links in popup: alle meldingen van die node.
-- Rechts: volledige node-inhoud.
-- Lange teksten krijgen veel meer leesruimte dan in de smalle rechterbalk.
-- Oranje en rode waarschuwingen blijven met één klik afhandelbaar.
-- Afgehandelde flags kunnen worden heropend.
-- 'Volgende open melding' zit ook in de popup.
-- De oude rechterbalk is nu alleen een compacte samenvatting + knop om de grote
-  inspectie te openen.
+FIX VOOR JOUW HUIDIGE BUG
+Een opnieuw ingediend boek kan NOOIT meer oude flags uit een eerdere
+submission gebruiken om de publicatieknop te blokkeren.
 
-NIEUW: ADMINNAAM IN BOEKMODERATIE
-Onder Recent beoordeeld staat voortaan bijvoorbeeld:
-  Goedgekeurd door Jan
-of:
-  Afgewezen door Sarah
+- Iedere flag bevat nu expliciet submission_id.
+- De revieweditor telt alleen flags van de ACTIEVE submission.
+- Bij het openen van een nieuwe review wordt lokale reviewstate eerst leeggemaakt.
+- De reviewlink vanuit Boekmoderatie doet bewust een volledige page-load.
+- Als de nieuwe inzending niet door AI is gescand, zie je niet meer
+  "nog 13 meldingen", maar:
+  "AI-scan ontbreekt" / "AI-scan mislukt".
+- Goedkeuren blijft dan geblokkeerd totdat de scan succesvol is afgerond.
+- Supabase controleert dit ook server-side.
 
-De naam komt uit reviewed_by -> profiles en wordt dus niet los of handmatig
-opgeslagen.
+INCREMENTAL MODERATION / KOSTENBESPARING
 
-INSTALLEREN
+Eerste inzending:
+  alle relevante nodes -> DeepSeek
+
+Nieuwe versie na afwijzing:
+  elke node krijgt intern een SHA-256 hash van:
+  - moderatie-policyversie
+  - leeftijdsclassificatie
+  - echte lezersinhoud
+
+Daarna:
+  hash hetzelfde als vorige completed submission
+      -> GEEN DeepSeek-call
+      -> eerdere AI-uitkomst wordt hergebruikt
+
+  hash veranderd / nieuwe node
+      -> alleen die node opnieuw naar DeepSeek
+
+Voorbeeld:
+  100 nodes in boek
+  auteur wijzigt 4 nodes
+  nieuwe submission:
+    96 nodes hergebruikt
+    4 nodes betaald opnieuw gescand
+
+BELANGRIJK
+- Ongewijzigde oude waarschuwingen worden wel opnieuw als OPEN melding
+  op de nieuwe submission gezet. De admin moet ze dus opnieuw beoordelen.
+- Gewijzigde nodes krijgen verse DeepSeek-beoordeling.
+- Verwijderde nodes verdwijnen vanzelf uit de nieuwe review.
+- Verandert leeftijdsclassificatie? Dan veranderen alle hashes en wordt
+  bewust het hele boek opnieuw beoordeeld.
+
+ROBUSTERE AUTOMATISCHE SCAN
+Voorheen werd de automatische scan fire-and-forget gestart.
+Een browseractie/navigatie kon die scan in theorie verliezen.
+
+Nu:
+- submitBookForModeration wacht totdat de scan afgerond of mislukt is;
+- een scannerfout annuleert de submission niet;
+- de status wordt opgeslagen als failed;
+- de admin ziet dit meteen en kan "AI opnieuw scannen" gebruiken.
+
+ADMIN BOEKMODERATIE
+Pending cards tonen nu:
+- AI scan ontbreekt
+- AI scan bezig
+- AI scan mislukt
+- AI ✓ X gescand • Y hergebruikt
+
+Na een scan krijg je bijvoorbeeld:
+"2 markeringen • 4 nieuw/gewijzigd gescand • 96 hergebruikt."
+
+INSTALLATIE
 1. Supabase -> SQL Editor -> New query.
-2. Voer MODERATION_REVIEW_MODAL_V4_SUPABASE.sql uit.
-   Deze bevat de benodigde V3 + V4 SQL.
+2. Voer MODERATION_INCREMENTAL_V5_SUPABASE.sql volledig uit.
 3. Pak ZIP uit.
 4. Sleep over dibooks_author_studio:
    - app
@@ -37,6 +81,15 @@ INSTALLEREN
    - supabase
 5. Kies Bestanden vervangen.
 6. npm run build
-7. Commit/push.
+7. Commit/push / Vercel deploy.
 
 Geen wijziging nodig aan DEEPSEEK_API_KEY.
+
+JOUW HUIDIGE OPNIEUW INGEDIENDE BOEK
+Na installatie zal die pending submission waarschijnlijk "AI scan ontbreekt"
+tonen. Klik één keer op "AI opnieuw scannen".
+
+Als de vorige rejected submission de 13 DeepSeek-flags bevatte:
+- ongewijzigde nodes worden gratis hergebruikt;
+- gewijzigde nodes worden opnieuw gescand;
+- alleen flags die bij deze NIEUWE submission horen tellen daarna mee.

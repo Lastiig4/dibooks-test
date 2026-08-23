@@ -67,9 +67,7 @@ export default function AdminModerationPage() {
       setItems(queue);
 
       alert(
-        result.flagCount > 0
-          ? `AI-scan klaar: ${result.flagCount} markering${result.flagCount === 1 ? "" : "en"} gevonden.`
-          : "AI-scan klaar: geen automatische markeringen gevonden.",
+        `DeepSeek-scan klaar. ${result.flagCount} markering${result.flagCount === 1 ? "" : "en"} • ${result.changedNodeCount} nieuw/gewijzigd gescand • ${result.reusedNodeCount} ongewijzigde nodes hergebruikt.`,
       );
     } catch (scanError: any) {
       alert(`AI-scan mislukt: ${scanError?.message ?? "onbekende fout"}`);
@@ -148,14 +146,36 @@ export default function AdminModerationPage() {
                             <div className="flex flex-wrap gap-2">
                               <span className="rounded-full bg-amber-400 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black">In afwachting</span>
                               {item.flagCount > 0 && <span className="rounded-full bg-red-500 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">⚠ {item.flagCount} gemarkeerd</span>}
+                              {item.aiScanStatus === "completed" ? (
+                                <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-cyan-100">
+                                  ✨ AI ✓ {item.aiChangedNodeCount ?? 0} gescand • {item.aiReusedNodeCount ?? 0} hergebruikt
+                                </span>
+                              ) : item.aiScanStatus === "running" ? (
+                                <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-100">
+                                  ✨ AI scan bezig
+                                </span>
+                              ) : item.aiScanStatus === "failed" ? (
+                                <span className="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-100">
+                                  ⚠ AI scan mislukt
+                                </span>
+                              ) : (
+                                <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-100">
+                                  ⚠ AI scan ontbreekt
+                                </span>
+                              )}
                             </div>
                             <h3 className="mt-3 truncate text-2xl font-black">{item.bookTitle}</h3>
                             <p className="mt-1 text-sm font-bold text-purple-200">{item.bookAuthor}</p>
                             <p className="mt-3 text-xs font-semibold leading-5 text-neutral-400">Ingediend door {item.ownerName}{item.ownerEmail ? ` • ${item.ownerEmail}` : ""}<br />{formatDate(item.submittedAt)} • {item.nodeCount} nodes</p>
+                            {item.aiScanStatus === "failed" && item.aiScanError && (
+                              <p className="mt-2 line-clamp-2 text-xs font-semibold text-red-300">
+                                Scan-fout: {item.aiScanError}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="mt-5 flex flex-wrap gap-3">
-                          <Link href={`/editor?review=${item.submissionId}`} className="rounded-2xl bg-purple-500 px-5 py-3 text-sm font-black text-white hover:bg-purple-400">🛡️ Open in reviewmodus</Link>
+                          <a href={`/editor?review=${item.submissionId}`} className="rounded-2xl bg-purple-500 px-5 py-3 text-sm font-black text-white hover:bg-purple-400">🛡️ Open in reviewmodus</a>
                           <button
                             type="button"
                             onClick={() => void rescanSubmission(item.submissionId)}

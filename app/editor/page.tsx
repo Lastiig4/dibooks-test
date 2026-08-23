@@ -2359,6 +2359,13 @@ export default function Home() {
 
       if (reviewId) {
         setReviewSubmissionId(reviewId);
+        // Nieuwe review = altijd eerst schone lokale reviewstate.
+        // Zo kunnen flags van een eerder geopende/rejected submission nooit
+        // de goedkeuringsknop van deze submission blokkeren.
+        setReviewSubmission(null);
+        setReviewFlags([]);
+        setSelectedNodeId(null);
+        setReviewInspectorOpen(false);
 
         if (!user) {
           autosaveReadyRef.current = false;
@@ -2592,7 +2599,20 @@ export default function Home() {
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const editingTextNode = nodes.find((node) => node.id === editingTextNodeId);
-  const selectedReviewFlags = selectedNode ? reviewFlags.filter((flag) => flag.nodeId === selectedNode.id) : [];
+
+  // Alleen flags van de ACTIEVE submission mogen ooit tellen. Oudere
+  // reviewmeldingen zijn historisch en horen niet bij een nieuwe inzending.
+  const activeReviewFlags = reviewSubmission
+    ? reviewFlags.filter(
+        (flag) => !flag.submissionId || flag.submissionId === reviewSubmission.submissionId,
+      )
+    : [];
+
+  const selectedReviewFlags = selectedNode
+    ? activeReviewFlags.filter((flag) => flag.nodeId === selectedNode.id)
+    : [];
+
+  const reviewScanComplete = reviewSubmission?.aiScanStatus === "completed";
 
   function getReviewFlagKey(flag: ModerationFlag) {
     return flag.flagId || `${flag.nodeId}-${flag.category}-${flag.reason}`;
@@ -2601,10 +2621,10 @@ export default function Home() {
   const isReviewFlagCleared = (flag: ModerationFlag) =>
     String(flag.resolution ?? "pending").toLowerCase() === "cleared";
 
-  const severeReviewFlags = reviewFlags.filter(
+  const severeReviewFlags = activeReviewFlags.filter(
     (flag) => String(flag.severity ?? "").toLowerCase() === "high",
   );
-  const attentionReviewFlags = reviewFlags.filter(
+  const attentionReviewFlags = activeReviewFlags.filter(
     (flag) => String(flag.severity ?? "").toLowerCase() !== "high",
   );
   const orderedReviewFlags = [...severeReviewFlags, ...attentionReviewFlags];
@@ -2612,10 +2632,10 @@ export default function Home() {
     (flag) => !isReviewFlagCleared(flag),
   );
   const unresolvedReviewFlagCount = unresolvedReviewFlags.length;
-  const clearedReviewFlagCount = reviewFlags.length - unresolvedReviewFlagCount;
+  const clearedReviewFlagCount = activeReviewFlags.length - unresolvedReviewFlagCount;
 
   const flowNodes = nodes.map((node) => {
-    const nodeFlags = reviewFlags.filter((flag) => flag.nodeId === node.id);
+    const nodeFlags = activeReviewFlags.filter((flag) => flag.nodeId === node.id);
     const severity = nodeFlags.some((flag) => flag.severity === "high")
       ? "high"
       : nodeFlags.some((flag) => flag.severity === "medium")
@@ -4208,6 +4228,15 @@ ${formatSaveError(error)}`);
       return;
     }
 
+    if (decision === "approved" && !reviewScanComplete) {
+      alert(
+        reviewSubmission.aiScanStatus === "failed"
+          ? "De AI-scan van deze inzending is mislukt. Ga terug naar Boekmoderatie en klik op AI opnieuw scannen."
+          : "Deze inzending heeft nog geen afgeronde AI-scan. Rond de DeepSeek-scan eerst af.",
+      );
+      return;
+    }
+
     if (decision === "approved" && unresolvedReviewFlagCount > 0) {
       alert(
         `Je kunt dit boek nog niet goedkeuren. Handel eerst alle ${unresolvedReviewFlagCount} openstaande moderatiemelding${unresolvedReviewFlagCount === 1 ? "" : "en"} af.`,
@@ -4498,20 +4527,48 @@ ${formatSaveError(error)}`);
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-purple-400/20 bg-purple-500/10 px-5 py-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-200">🛡️ Reviewmodus • alleen lezen</p>
-                <p className="mt-1 text-xs font-semibold text-neutral-300">Ingediend door {reviewSubmission.ownerName} • {reviewSubmission.flagCount} gemarkeerde node{reviewSubmission.flagCount === 1 ? "" : "s"}</p>
+                <p className="mt-1 text-xs font-semibold text-neutral-300">Ingediend door {reviewSubmission.ownerName} • {activeReviewFlags.length} actuele melding{activeReviewFlags.length === 1 ? "" : "en"}</p>
+                <p className={`mt-1 text-[11px] font-black ${
+                  reviewSubmission.aiScanStatus === "completed"
+                    ? "text-cyan-300"
+                    : reviewSubmission.aiScanStatus === "failed"
+                      ? "text-red-300"
+                      : "text-amber-300"
+                }`}>
+                  {reviewSubmission.aiScanStatus === "completed"
+                    ? `✨ DeepSeek-scan afgerond • ${reviewSubmission.aiChangedNodeCount ?? 0} nieuw/gewijzigd • ${reviewSubmission.aiReusedNodeCount ?? 0} hergebruikt`
+                    : reviewSubmission.aiScanStatus === "running"
+                      ? "✨ DeepSeek-scan bezig..."
+                      : reviewSubmission.aiScanStatus === "failed"
+                        ? "⚠ DeepSeek-scan mislukt — opnieuw scannen via Boekmoderatie"
+                        : "⚠ DeepSeek-scan ontbreekt — eerst scannen via Boekmoderatie"}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button onClick={openPreview} className="rounded-xl border border-blue-400/30 bg-blue-500/15 px-4 py-2 text-xs font-black text-blue-100 hover:bg-blue-500/25">▶ Hele boek previewen</button>
                 <button disabled={reviewActionBusy || reviewSubmission.status !== "pending"} onClick={() => handleReviewDecision("rejected")} className="rounded-xl border border-red-400/30 bg-red-500/15 px-4 py-2 text-xs font-black text-red-100 hover:bg-red-500/25 disabled:opacity-40">✕ Afwijzen + feedback</button>
                 <button
-                  disabled={reviewActionBusy || reviewSubmission.status !== "pending" || unresolvedReviewFlagCount > 0}
+                  disabled={
+                    reviewActionBusy ||
+                    reviewSubmission.status !== "pending" ||
+                    !reviewScanComplete ||
+                    unresolvedReviewFlagCount > 0
+                  }
                   onClick={() => handleReviewDecision("approved")}
-                  title={unresolvedReviewFlagCount > 0 ? `Nog ${unresolvedReviewFlagCount} moderatiemelding${unresolvedReviewFlagCount === 1 ? "" : "en"} afhandelen` : "Goedkeuren en publiceren"}
+                  title={
+                    !reviewScanComplete
+                      ? "De AI-scan van deze submission moet eerst succesvol zijn afgerond"
+                      : unresolvedReviewFlagCount > 0
+                        ? `Nog ${unresolvedReviewFlagCount} moderatiemelding${unresolvedReviewFlagCount === 1 ? "" : "en"} afhandelen`
+                        : "Goedkeuren en publiceren"
+                  }
                   className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-black hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {unresolvedReviewFlagCount > 0
-                    ? `🔒 Eerst ${unresolvedReviewFlagCount} melding${unresolvedReviewFlagCount === 1 ? "" : "en"} afhandelen`
-                    : "✓ Goedkeuren & publiceren"}
+                  {!reviewScanComplete
+                    ? "🔒 Eerst AI-scan afronden"
+                    : unresolvedReviewFlagCount > 0
+                      ? `🔒 Eerst ${unresolvedReviewFlagCount} melding${unresolvedReviewFlagCount === 1 ? "" : "en"} afhandelen`
+                      : "✓ Goedkeuren & publiceren"}
                 </button>
               </div>
             </div>
@@ -4526,9 +4583,9 @@ ${formatSaveError(error)}`);
                       Moderatiemeldingen
                     </p>
                     <p className="mt-1 text-sm font-black">
-                      {reviewFlags.length === 0
-                        ? "Geen AI-markeringen"
-                        : `${clearedReviewFlagCount}/${reviewFlags.length} afgehandeld`}
+                      {activeReviewFlags.length === 0
+                        ? "Geen actuele AI-markeringen"
+                        : `${clearedReviewFlagCount}/${activeReviewFlags.length} afgehandeld`}
                     </p>
                   </div>
 
@@ -4546,7 +4603,7 @@ ${formatSaveError(error)}`);
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {reviewFlags.length > 0 && (
+                  {activeReviewFlags.length > 0 && (
                     <button
                       type="button"
                       onClick={jumpToNextReviewFlag}
@@ -4568,7 +4625,7 @@ ${formatSaveError(error)}`);
                 </div>
               </div>
 
-              {!reviewAlertsCollapsed && reviewFlags.length > 0 && (
+              {!reviewAlertsCollapsed && activeReviewFlags.length > 0 && (
                 <div className="mt-3 grid gap-3">
                   {severeReviewFlags.length > 0 && (
                     <div className="flex min-w-0 items-start gap-3">
@@ -4664,7 +4721,7 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
-              {!reviewAlertsCollapsed && reviewFlags.length === 0 && (
+              {!reviewAlertsCollapsed && activeReviewFlags.length === 0 && (
                 <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
                   Geen automatische of handmatige markeringen gevonden. De admin kan het boek nog steeds volledig handmatig controleren.
                 </div>
