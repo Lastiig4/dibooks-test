@@ -95,9 +95,18 @@ const FontSize = Extension.create({
   },
 });
 
-type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "scratchpad";
+type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "function" | "scratchpad";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
+
+type FunctionActionType = "set_flag" | "clear_flag" | "increment" | "decrement" | "set_number";
+
+type FunctionAction = {
+  id: string;
+  type: FunctionActionType;
+  key: string;
+  amount?: number;
+};
 
 type DiNodeData = {
   label: string;
@@ -120,6 +129,7 @@ type DiNodeData = {
   miniGameAllowRetry?: boolean;
   miniGameSuccessTargetNodeId?: string;
   miniGameFailTargetNodeId?: string;
+  functionActions?: FunctionAction[];
 };
 
 const MANUAL_PAGE_BREAK_MARKER = "[[NIEUWE_PAGINA]]";
@@ -144,6 +154,7 @@ const nodeColors: Record<DiNodeType, string> = {
   cutscene: "#16a34a",
   choice: "#f97316",
   minigame: "#9333ea",
+  function: "#06b6d4",
   scratchpad: "#f8fafc",
 };
 
@@ -153,6 +164,7 @@ const nodeLabels: Record<DiNodeType, string> = {
   cutscene: "Cutscene",
   choice: "Keuze",
   minigame: "Mini game",
+  function: "Functie",
   scratchpad: "Kladblok",
 };
 
@@ -255,6 +267,14 @@ function JoystickIcon() {
       <circle cx="16.5" cy="14" r="0.7" />
       <circle cx="18.5" cy="16" r="0.7" />
     </svg>
+  );
+}
+
+function FunctionIcon() {
+  return (
+    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-black tracking-tight">
+      Fx
+    </div>
   );
 }
 
@@ -520,6 +540,10 @@ function isNodeComplete(node: Node<DiNodeData> | undefined) {
       node.data.miniGameType.trim().length > 0 &&
       (node.data.miniGameDuration ?? 5) > 0
     );
+  }
+
+  if (node.data.type === "function") {
+    return true;
   }
 
   if (node.data.type === "scratchpad") {
@@ -1466,7 +1490,7 @@ const dashboardColorThemes: Record<
 
 const defaultDashboardSaveForm: DashboardSaveForm = {
   title: "",
-  author: "Author name",
+  author: "Giovanni",
   subtitle: "",
   description: "",
   genres: ["Interactief"],
@@ -1646,7 +1670,7 @@ function SaveToDashboardModal({
               <input
                 value={form.title}
                 onChange={(event) => updateField("title", event.target.value)}
-                placeholder="Boektitel"
+                placeholder="Bijv. The Sovereign"
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
               />
             </div>
@@ -1898,8 +1922,10 @@ export default function Home() {
   const [flowViewport, setFlowViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const nodeTypes = useMemo(() => ({ bullet: BulletNode }), []);
   const maxNodesForCurrentUser = getMaxNodesForUser(user);
-  const storyNodeCount = getStoryNodes(nodes).length;
-  const scratchpadNodeCount = nodes.length - storyNodeCount;
+  const runtimeNodeCount = getStoryNodes(nodes).length;
+  const functionNodeCount = nodes.filter((node) => node.data.type === "function").length;
+  const storyNodeCount = runtimeNodeCount - functionNodeCount;
+  const scratchpadNodeCount = nodes.length - runtimeNodeCount;
   const nodeLimitReached = maxNodesForCurrentUser !== null && storyNodeCount >= maxNodesForCurrentUser;
   const autosaveReadyRef = useRef(false);
   const lastAutosavePayloadRef = useRef<string>("");
@@ -1967,7 +1993,7 @@ export default function Home() {
 
         setDashboardSaveForm({
           title: dashboardBook.title ?? "",
-          author: dashboardBook.author ?? user.name ?? "Auteur",
+          author: dashboardBook.author ?? user.name ?? "Giovanni",
           subtitle: dashboardBook.subtitle ?? "",
           description: "description" in dashboardBook ? (dashboardBook.description ?? "") : "",
           genres: Array.isArray(dashboardBook.genres) && dashboardBook.genres.length > 0 ? dashboardBook.genres : ["Interactief"],
@@ -2607,9 +2633,9 @@ ${formatSaveError(error)}`);
 
   function createNode(type: DiNodeType) {
     const maxNodes = getMaxNodesForUser(user);
-    const isScratchpad = type === "scratchpad";
-    if (!isScratchpad && maxNodes !== null && storyNodeCount >= maxNodes) {
-      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes gebruiken. Kladblok-nodes tellen niet mee. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
+    const isUtilityNode = type === "scratchpad" || type === "function";
+    if (!isUtilityNode && maxNodes !== null && storyNodeCount >= maxNodes) {
+      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes gebruiken. Kladblok- en functie-nodes tellen niet mee. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
@@ -2664,6 +2690,10 @@ ${formatSaveError(error)}`);
         miniGameAllowRetry: type === "minigame" ? true : undefined,
         miniGameSuccessTargetNodeId: type === "minigame" ? "" : undefined,
         miniGameFailTargetNodeId: type === "minigame" ? "" : undefined,
+        functionActions:
+          type === "function"
+            ? [{ id: `function_action_${Date.now()}`, type: "set_flag", key: "", amount: 1 }]
+            : undefined,
       },
     };
 
@@ -2850,8 +2880,10 @@ ${formatSaveError(error)}`);
       (edge) => edge.source === selectedNodeId,
     );
 
-    if (existingOutgoingEdges.length >= 10) {
-      alert("Deze node heeft al het maximale aantal van 10 paths.");
+    const maxOutgoingPaths = sourceNode?.data.type === "function" ? 1 : 10;
+
+    if (existingOutgoingEdges.length >= maxOutgoingPaths) {
+      alert(sourceNode?.data.type === "function" ? "Een functie-node gebruikt één vervolgpath. Verwijder eerst de bestaande path." : "Deze node heeft al het maximale aantal van 10 paths.");
       return;
     }
 
@@ -3099,6 +3131,76 @@ ${formatSaveError(error)}`);
     });
   }
 
+
+  function updateSelectedFunctionAction(actionId: string, updates: Partial<FunctionAction>) {
+    if (!selectedNodeId) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        if (node.id !== selectedNodeId) return node;
+
+        const nextActions = (node.data.functionActions ?? []).map((action) =>
+          action.id === actionId ? { ...action, ...updates } : action,
+        );
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            functionActions: nextActions,
+          },
+        };
+      }),
+    );
+  }
+
+  function addSelectedFunctionAction() {
+    if (!selectedNodeId) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        if (node.id !== selectedNodeId) return node;
+
+        const currentActions = node.data.functionActions ?? [];
+        if (currentActions.length >= 8) return node;
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            functionActions: [
+              ...currentActions,
+              {
+                id: `function_action_${Date.now()}`,
+                type: "set_flag",
+                key: "",
+                amount: 1,
+              },
+            ],
+          },
+        };
+      }),
+    );
+  }
+
+  function deleteSelectedFunctionAction(actionId: string) {
+    if (!selectedNodeId) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        if (node.id !== selectedNodeId) return node;
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            functionActions: (node.data.functionActions ?? []).filter((action) => action.id !== actionId),
+          },
+        };
+      }),
+    );
+  }
+
   function getReaderStoryData() {
     const storyNodes = getStoryNodes(nodes);
     const storyNodeIds = new Set(storyNodes.map((node) => node.id));
@@ -3126,6 +3228,7 @@ ${formatSaveError(error)}`);
           miniGameDifficulty: node.data.miniGameDifficulty ?? "",
           miniGameSuccessTargetNodeId: node.data.miniGameSuccessTargetNodeId ?? "",
           miniGameFailTargetNodeId: node.data.miniGameFailTargetNodeId ?? "",
+          functionActions: node.data.functionActions ?? [],
           specialSubtype: node.data.specialSubtype ?? "",
         },
       })),
@@ -3217,6 +3320,13 @@ ${formatSaveError(error)}`);
               label="Mini game"
               className="bg-purple-600 text-white hover:bg-purple-500"
               icon={<JoystickIcon />}
+            />
+
+            <SidebarButton
+              onClick={() => createNode("function")}
+              label="Functie / flags"
+              className="bg-cyan-500 text-slate-950 hover:bg-cyan-300"
+              icon={<FunctionIcon />}
             />
 
             <SidebarButton
@@ -3319,6 +3429,11 @@ ${formatSaveError(error)}`);
               <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-300" : "bg-black/10 text-neutral-700"}`}>
                 {getStoryEdges(edges, nodes).length} paths
               </span>
+              {functionNodeCount > 0 && (
+                <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-cyan-500/15 text-cyan-200" : "bg-cyan-600/10 text-cyan-700"}`}>
+                  {functionNodeCount} functie
+                </span>
+              )}
               {scratchpadNodeCount > 0 && (
                 <span className={`rounded-full px-3 py-1 ${editorDarkMode ? "bg-white/10 text-neutral-200" : "bg-black/10 text-neutral-700"}`}>
                   {scratchpadNodeCount} kladblok
@@ -3480,13 +3595,19 @@ ${formatSaveError(error)}`);
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="font-black">Paths</h3>
                   <span className="text-sm text-neutral-400">
-                    {selectedNodePaths.length}/10
+                    {selectedNodePaths.length}/{selectedNode.data.type === "function" ? 1 : 10}
                   </span>
                 </div>
 
                 <label className="mb-2 block text-sm font-bold">
                   Add path naar node
                 </label>
+
+                {selectedNode.data.type === "function" && (
+                  <p className="mb-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs font-bold leading-5 text-cyan-100/80">
+                    Functie-nodes zijn onzichtbaar voor lezers. Zodra de reader deze node bereikt, worden de acties uitgevoerd en gaat het verhaal automatisch door via de eerste path.
+                  </p>
+                )}
 
                 <select
                   defaultValue=""
@@ -3761,6 +3882,90 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
+              {selectedNode.data.type === "function" && (
+                <div className="rounded-xl border border-cyan-500/25 bg-cyan-950/30 p-4">
+                  <div className="mb-4">
+                    <h3 className="font-black text-cyan-200">Functie / flags</h3>
+                    <p className="mt-1 text-sm leading-6 text-neutral-400">
+                      Deze node is onzichtbaar voor lezers. Hij voert acties uit, bijvoorbeeld een vlag aanzetten of een teller verhogen, en stuurt daarna automatisch door via zijn path.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3">
+                    {(selectedNode.data.functionActions ?? []).map((action, actionIndex) => (
+                      <div key={action.id} className="rounded-xl border border-cyan-500/20 bg-neutral-950 p-3">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <span className="text-xs font-black uppercase tracking-widest text-cyan-300">Actie {actionIndex + 1}</span>
+                          <button
+                            onClick={() => deleteSelectedFunctionAction(action.id)}
+                            className="rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-500"
+                          >
+                            Verwijder
+                          </button>
+                        </div>
+
+                        <label className="mb-2 block text-sm font-black">Wat moet er gebeuren?</label>
+                        <select
+                          value={action.type}
+                          onChange={(event) =>
+                            updateSelectedFunctionAction(action.id, {
+                              type: event.target.value as FunctionActionType,
+                            })
+                          }
+                          className="mb-3 w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-cyan-400"
+                        >
+                          <option value="set_flag">Flag aanzetten</option>
+                          <option value="clear_flag">Flag uitzetten</option>
+                          <option value="increment">Getal verhogen</option>
+                          <option value="decrement">Getal verlagen</option>
+                          <option value="set_number">Getal instellen</option>
+                        </select>
+
+                        <label className="mb-2 block text-sm font-black">Naam van flag / teller</label>
+                        <input
+                          value={action.key}
+                          onChange={(event) => updateSelectedFunctionAction(action.id, { key: event.target.value })}
+                          placeholder="bijv. told_michael, xander_trust, kael_suspicion"
+                          className="mb-3 w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-cyan-400"
+                        />
+
+                        {(action.type === "increment" || action.type === "decrement" || action.type === "set_number") && (
+                          <div>
+                            <label className="mb-2 block text-sm font-black">
+                              {action.type === "set_number" ? "Waarde" : "Aantal"}
+                            </label>
+                            <input
+                              type="number"
+                              value={action.amount ?? 1}
+                              onChange={(event) =>
+                                updateSelectedFunctionAction(action.id, {
+                                  amount: Number(event.target.value) || 0,
+                                })
+                              }
+                              className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {(selectedNode.data.functionActions ?? []).length === 0 && (
+                      <p className="rounded-xl bg-neutral-950 p-3 text-sm text-neutral-400">
+                        Nog geen acties. Voeg een actie toe om een flag of teller te wijzigen.
+                      </p>
+                    )}
+
+                    <button
+                      onClick={addSelectedFunctionAction}
+                      disabled={(selectedNode.data.functionActions ?? []).length >= 8}
+                      className="rounded-xl bg-cyan-500 px-4 py-3 font-black text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      + Actie toevoegen
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {selectedNode.data.type === "minigame" && (
                 <div className="rounded-xl bg-neutral-900 p-3">
                   <div className="mb-4">
@@ -3946,6 +4151,7 @@ ${formatSaveError(error)}`);
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-600"><VideoIcon /></span><span><strong className="text-white">Cutscene</strong><br />Kort videofragment van maximaal 12 seconden.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-[11px] font-black">ABC</span><span><strong className="text-white">Keuze menu</strong><br />Lezer kiest uit maximaal drie routes.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600"><JoystickIcon /></span><span><strong className="text-white">Mini game</strong><br />Interactief moment met success/fail route.</span></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-slate-950"><FunctionIcon /></span><span><strong className="text-white">Functie / flags</strong><br />Onzichtbare node die flags/tellers aanpast en automatisch doorgaat.</span></div>
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-950"><ScratchpadIcon /></span><span><strong className="text-white">Kladblok</strong><br />Notities, lore en ideeën. Geen paths en niet zichtbaar voor lezers.</span></div>
                   </div>
                 </section>
@@ -4160,6 +4366,39 @@ ${formatSaveError(error)}`);
                       </p>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {previewNode.data.type === "function" && (
+              <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 p-6">
+                <div className="rounded-2xl border border-cyan-500/25 bg-cyan-950/30 p-8">
+                  <p className="text-sm font-bold uppercase tracking-widest text-cyan-300">Functie-node</p>
+                  <h1 className="mt-2 text-3xl font-black">{previewNode.data.label}</h1>
+                  <p className="mt-4 text-sm leading-6 text-cyan-100/80">
+                    In de echte reader wordt deze node onzichtbaar uitgevoerd. Voor de preview zie je hem hier zodat je kunt controleren welke acties actief zijn.
+                  </p>
+                  <div className="mt-5 grid gap-2">
+                    {(previewNode.data.functionActions ?? []).map((action) => (
+                      <div key={action.id} className="rounded-xl bg-black/25 p-3 text-sm font-bold text-cyan-50">
+                        {action.type} → {action.key || "geen naam"}{" "}
+                        {(action.type === "increment" || action.type === "decrement" || action.type === "set_number") ? `(${action.amount ?? 1})` : ""}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const targetId = edges.find((edge) => edge.source === previewNode.id)?.target;
+                      if (!targetId) {
+                        alert("Deze functie-node heeft nog geen vervolgpath.");
+                        return;
+                      }
+                      goToPreviewNode(targetId);
+                    }}
+                    className="mt-6 rounded-xl bg-cyan-500 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300"
+                  >
+                    Functie uitvoeren en doorgaan
+                  </button>
                 </div>
               </div>
             )}

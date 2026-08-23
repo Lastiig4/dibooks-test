@@ -253,19 +253,26 @@ function isCompletePublishNode(node: any) {
     return Boolean(getMiniGameTarget(node, "success") && getMiniGameTarget(node, "fail"));
   }
 
+  if (nodeType === "function") {
+    return true;
+  }
+
   return false;
 }
 
 function getPublishNodeStats(projectData: any) {
   const nodes = getPublishableNodes(projectData);
-  const completeNodes = nodes.filter(isCompletePublishNode);
+  const storyContentNodes = nodes.filter((node: any) => getNodeType(node) !== "function");
+  const completeNodes = storyContentNodes.filter(isCompletePublishNode);
   const scratchpadNodes = getScratchpadNodeCount(projectData);
+  const functionNodes = nodes.filter((node: any) => getNodeType(node) === "function").length;
 
   return {
-    totalNodes: nodes.length,
+    totalNodes: storyContentNodes.length,
     completeNodes: completeNodes.length,
     scratchpadNodes,
-    isFullBook: nodes.length >= FULL_BOOK_NODE_BADGE_THRESHOLD,
+    functionNodes,
+    isFullBook: storyContentNodes.length >= FULL_BOOK_NODE_BADGE_THRESHOLD,
   };
 }
 
@@ -305,9 +312,9 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
     );
   }
 
-  if (nodes.length < FULL_BOOK_NODE_BADGE_THRESHOLD) {
+  if (publishStats.totalNodes < FULL_BOOK_NODE_BADGE_THRESHOLD) {
     warnings.push(
-      `Dit boek heeft ${nodes.length} node(s). Vanaf ${FULL_BOOK_NODE_BADGE_THRESHOLD} nodes krijgt het later de status/badge 'volledig interactief boek'.`,
+      `Dit boek heeft ${publishStats.totalNodes} verhaalnode(s). Vanaf ${FULL_BOOK_NODE_BADGE_THRESHOLD} verhaalnodes krijgt het later de status/badge 'volledig interactief boek'. Functie-nodes tellen hier niet in mee.`,
     );
   }
 
@@ -385,6 +392,22 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
         errors.push(`Mini game '${title}' mist een fail-route.`);
       } else if (!nodeIds.has(failTarget)) {
         errors.push(`Mini game '${title}' heeft een fail-route naar een node die niet bestaat.`);
+      }
+    }
+
+    if (nodeType === "function") {
+      const outgoingFunctionEdges = edges.filter((edge: any) => edge?.source === node?.id && nodeIds.has(edge?.target));
+      const actions = node?.data?.functionActions ?? node?.content?.functionActions ?? [];
+      const validActions = Array.isArray(actions)
+        ? actions.filter((action: any) => String(action?.key ?? "").trim().length > 0)
+        : [];
+
+      if (outgoingFunctionEdges.length === 0) {
+        errors.push(`Functie-node '${title}' heeft een vervolgpath nodig.`);
+      }
+
+      if (validActions.length === 0) {
+        warnings.push(`Functie-node '${title}' heeft nog geen ingevulde flag/teller actie.`);
       }
     }
   });
@@ -584,7 +607,7 @@ function BookDashboardCard({
         {book.projectData && (
           <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-neutral-300">
             Project: {getPublishNodeStats(book.projectData).totalNodes} verhaalnodes • {getPublishNodeStats(book.projectData).completeNodes} compleet
-            {getPublishNodeStats(book.projectData).scratchpadNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).scratchpadNodes} kladblok` : ""}
+            {getPublishNodeStats(book.projectData).scratchpadNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).scratchpadNodes} kladblok` : ""}{getPublishNodeStats(book.projectData).functionNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).functionNodes} functie` : ""}
             {getPublishNodeStats(book.projectData).isFullBook ? " • Volledig interactief" : ""}
           </div>
         )}
@@ -725,7 +748,7 @@ function SharedBookCard({
         </span>
       </div>
       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-cyan-50/80">
-        {nodeCount} verhaalnodes{scratchpadCount > 0 ? ` • ${scratchpadCount} kladblok` : ""} • origineel blijft van {book.ownerName || "de eigenaar"}
+        {nodeCount} verhaalnodes{scratchpadCount > 0 ? ` • ${scratchpadCount} kladblok` : ""}{getPublishNodeStats(book.projectData).functionNodes > 0 ? ` • ${getPublishNodeStats(book.projectData).functionNodes} functie` : ""} • origineel blijft van {book.ownerName || "de eigenaar"}
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
         <Link href={`/books/${book.id}/read`} className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-black text-white hover:bg-white/10">

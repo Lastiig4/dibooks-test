@@ -12,12 +12,23 @@ import { getReadingProgress, resetReadingProgress, upsertReadingProgress } from 
 import { resolveDiBooksMediaUrl } from "@/lib/supabase/mediaStorage";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
-type ReaderNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "scratchpad";
+type ReaderNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "function" | "scratchpad";
 
 type ReaderChoice = {
   label: string;
   targetNodeId?: string;
 };
+
+type ReaderFunctionActionType = "set_flag" | "clear_flag" | "increment" | "decrement" | "set_number";
+
+type ReaderFunctionAction = {
+  id?: string;
+  type: ReaderFunctionActionType;
+  key: string;
+  amount?: number;
+};
+
+type ReaderFlags = Record<string, boolean | number | string>;
 
 type ReaderNode = {
   id: string;
@@ -37,6 +48,7 @@ type ReaderNode = {
   miniGameAllowRetry?: boolean;
   miniGameSuccessTargetNodeId?: string;
   miniGameFailTargetNodeId?: string;
+  functionActions?: ReaderFunctionAction[];
 };
 
 type ReaderEdge = {
@@ -143,6 +155,7 @@ function normalizeNode(rawNode: any): ReaderNode {
       data.miniGameSuccessTargetNodeId ?? content.miniGameSuccessTargetNodeId ?? rawNode?.miniGameSuccessTargetNodeId ?? "",
     miniGameFailTargetNodeId:
       data.miniGameFailTargetNodeId ?? content.miniGameFailTargetNodeId ?? rawNode?.miniGameFailTargetNodeId ?? "",
+    functionActions: data.functionActions ?? content.functionActions ?? rawNode?.functionActions ?? [],
   };
 }
 
@@ -247,6 +260,55 @@ async function loadSupabaseBook(bookId: string) {
 function clampProgressPercent(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+
+function getReaderFlagsStorageKey(bookId: string) {
+  return `dibooks-reader-flags:${bookId}`;
+}
+
+function loadReaderFlags(bookId: string): ReaderFlags {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(getReaderFlagsStorageKey(bookId));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReaderFlags(bookId: string, flags: ReaderFlags) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(getReaderFlagsStorageKey(bookId), JSON.stringify(flags));
+}
+
+function clearReaderFlags(bookId: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(getReaderFlagsStorageKey(bookId));
+}
+
+function applyReaderFunctionActions(currentFlags: ReaderFlags, actions: ReaderFunctionAction[] = []) {
+  const nextFlags: ReaderFlags = { ...currentFlags };
+
+  actions.forEach((action) => {
+    const key = String(action?.key ?? "").trim();
+    if (!key) return;
+
+    const amount = Number(action.amount ?? 1) || 0;
+    const currentValue = nextFlags[key];
+    const currentNumber = typeof currentValue === "number" ? currentValue : Number(currentValue) || 0;
+
+    if (action.type === "set_flag") nextFlags[key] = true;
+    if (action.type === "clear_flag") nextFlags[key] = false;
+    if (action.type === "increment") nextFlags[key] = currentNumber + amount;
+    if (action.type === "decrement") nextFlags[key] = currentNumber - amount;
+    if (action.type === "set_number") nextFlags[key] = amount;
+  });
+
+  return nextFlags;
 }
 
 function calculateBookProgressPercent(book: ReaderBook, currentNodeId: string, pageIndex: number, pageCount: number) {
@@ -983,6 +1045,8 @@ export default function ReadBookPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cutsceneFading, setCutsceneFading] = useState(false);
   const [resetProgressBusy, setResetProgressBusy] = useState(false);
+  const [readerFlags, setReaderFlags] = useState<ReaderFlags>({});
+  const lastExecutedFunctionNodeRef = useRef<string | null>(null);
   const cutsceneShellRef = useRef<HTMLDivElement | null>(null);
   const { user, loading: authLoading } = useDemoAuth();
 
@@ -1062,6 +1126,14 @@ export default function ReadBookPage() {
     window.localStorage.setItem("dibooks-reader-theme", theme);
   }, [theme]);
 
+
+  useEffect(() => {
+    if (loadState.status !== "ready") return;
+    setReaderFlags(loadReaderFlags(loadState.book.id));
+    lastExecutedFunctionNodeRef.current = null;
+  }, [loadState]);
+
+
   useEffect(() => {
     if (loadState.status !== "ready" || !user || !currentNodeId) return;
 
@@ -1129,6 +1201,30 @@ export default function ReadBookPage() {
 
 
 
+
+  useEffect(() => {
+    if (!reader || reader.node.type !== "function" || loadState.status !== "ready") return;
+    if (lastExecutedFunctionNodeRef.current === reader.node.id) return;
+
+    lastExecutedFunctionNodeRef.current = reader.node.id;
+
+    const nextFlags = applyReaderFunctionActions(readerFlags, reader.node.functionActions ?? []);
+    setReaderFlags(nextFlags);
+    saveReaderFlags(reader.book.id, nextFlags);
+
+    const nextTargetId = reader.outgoingPaths[0]?.target;
+    if (!nextTargetId) return;
+
+    const timeout = window.setTimeout(() => {
+      lastExecutedFunctionNodeRef.current = null;
+      setCurrentNodeId(nextTargetId);
+      setPageIndex(0);
+    }, 80);
+
+    return () => window.clearTimeout(timeout);
+  }, [reader, readerFlags, loadState]);
+
+
   function goToFirstOutgoingNode() {
     if (!reader?.outgoingPaths.length) return;
     goToNode(reader.outgoingPaths[0].target);
@@ -1174,6 +1270,7 @@ export default function ReadBookPage() {
       return;
     }
 
+    lastExecutedFunctionNodeRef.current = null;
     setCurrentNodeId(nodeId);
     setPageIndex(0);
   }
@@ -1191,6 +1288,9 @@ export default function ReadBookPage() {
 
     try {
       await resetReadingProgress(user, loadState.book.id);
+      clearReaderFlags(loadState.book.id);
+      setReaderFlags({});
+      lastExecutedFunctionNodeRef.current = null;
       setCurrentNodeId(loadState.book.startNodeId);
       setPageIndex(0);
       setReaderPageCount(1);
@@ -1366,6 +1466,18 @@ export default function ReadBookPage() {
             ) : (
               <div className="rounded-3xl border border-red-500/25 bg-red-500/10 p-6 text-red-100">Deze cutscene heeft nog geen video.</div>
             )}
+          </div>
+        )}
+
+        {node.type === "function" && (
+          <div className="flex h-full items-center justify-center p-6">
+            <div className="max-w-xl rounded-3xl border border-cyan-500/20 bg-cyan-500/10 p-8 text-center text-cyan-100 shadow-2xl">
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">DiBooks functie</p>
+              <h1 className="mt-3 text-3xl font-black">Verhaalstatus bijwerken...</h1>
+              <p className="mt-3 text-sm font-semibold leading-6 text-cyan-100/70">
+                Deze node is normaal onzichtbaar en stuurt automatisch door.
+              </p>
+            </div>
           </div>
         )}
 
