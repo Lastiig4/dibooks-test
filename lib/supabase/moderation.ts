@@ -51,6 +51,45 @@ function assertAdmin(user: DemoAuthUser | null | undefined) {
   }
 }
 
+export async function triggerAutomaticModerationScan(
+  user: DemoAuthUser,
+  submissionId: string,
+) {
+  if (!user || !submissionId) throw new Error("Reviewinzending ontbreekt.");
+
+  const supabase = createSupabaseBrowserClient();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError) throw new Error(formatSupabaseError(sessionError));
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error("Geen actieve DiBooks sessie gevonden voor de moderatiescan.");
+
+  const response = await fetch("/api/moderation/scan-submission", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ submissionId }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.message ||
+        payload?.error ||
+        `Automatische moderatiescan mislukt (${response.status}).`,
+    );
+  }
+
+  return {
+    ok: true,
+    flagCount: Number(payload?.flagCount ?? 0),
+    scannedNodeCount: Number(payload?.scannedNodeCount ?? 0),
+  };
+}
+
 export async function submitBookForModeration(user: DemoAuthUser, bookId: string) {
   if (!user || !bookId) throw new Error("Boek of gebruiker ontbreekt.");
   const supabase = createSupabaseBrowserClient();
@@ -58,7 +97,18 @@ export async function submitBookForModeration(user: DemoAuthUser, bookId: string
     input_book_id: bookId,
   });
   if (error) throw new Error(formatSupabaseError(error));
-  return String(data ?? "");
+
+  const submissionId = String(data ?? "");
+
+  // De reviewinzending is leidend. De AI-scan is adviserend en mag indienen
+  // nooit blokkeren als de externe scanner tijdelijk niet beschikbaar is.
+  if (submissionId) {
+    void triggerAutomaticModerationScan(user, submissionId).catch((scanError) => {
+      console.warn("Automatische node-moderatiescan kon niet worden afgerond.", scanError);
+    });
+  }
+
+  return submissionId;
 }
 
 export async function fetchAdminModerationQueue(user: DemoAuthUser) {

@@ -6,6 +6,7 @@ import AppNav from "@/components/AppNav";
 import { useDemoAuth } from "@/lib/auth";
 import {
   fetchAdminModerationQueue,
+  triggerAutomaticModerationScan,
   type ModerationQueueItem,
 } from "@/lib/supabase/moderation";
 
@@ -29,6 +30,7 @@ export default function AdminModerationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
+  const [scanningSubmissionId, setScanningSubmissionId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -53,6 +55,28 @@ export default function AdminModerationPage() {
     void loadQueue();
     return () => { cancelled = true; };
   }, [authLoading, user]);
+
+  async function rescanSubmission(submissionId: string) {
+    if (!user || user.role !== "admin" || scanningSubmissionId) return;
+
+    setScanningSubmissionId(submissionId);
+
+    try {
+      const result = await triggerAutomaticModerationScan(user, submissionId);
+      const queue = await fetchAdminModerationQueue(user);
+      setItems(queue);
+
+      alert(
+        result.flagCount > 0
+          ? `AI-scan klaar: ${result.flagCount} markering${result.flagCount === 1 ? "" : "en"} gevonden.`
+          : "AI-scan klaar: geen automatische markeringen gevonden.",
+      );
+    } catch (scanError: any) {
+      alert(`AI-scan mislukt: ${scanError?.message ?? "onbekende fout"}`);
+    } finally {
+      setScanningSubmissionId(null);
+    }
+  }
 
   const pendingItems = useMemo(() => items.filter((item) => item.status === "pending"), [items]);
   const completedItems = useMemo(() => items.filter((item) => item.status !== "pending"), [items]);
@@ -132,6 +156,14 @@ export default function AdminModerationPage() {
                         </div>
                         <div className="mt-5 flex flex-wrap gap-3">
                           <Link href={`/editor?review=${item.submissionId}`} className="rounded-2xl bg-purple-500 px-5 py-3 text-sm font-black text-white hover:bg-purple-400">🛡️ Open in reviewmodus</Link>
+                          <button
+                            type="button"
+                            onClick={() => void rescanSubmission(item.submissionId)}
+                            disabled={scanningSubmissionId !== null}
+                            className="rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-3 text-sm font-black text-cyan-100 hover:bg-cyan-500/20 disabled:cursor-wait disabled:opacity-50"
+                          >
+                            {scanningSubmissionId === item.submissionId ? "AI-scan bezig..." : "✨ AI opnieuw scannen"}
+                          </button>
                         </div>
                       </article>
                     );

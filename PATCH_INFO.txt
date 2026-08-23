@@ -1,40 +1,102 @@
-DiBooks Instant Auth V4 - No getSession race
-=============================================
+DiBooks Patch - AI Node Moderation
+===================================
 
-Deze patch is gebaseerd op de auth.ts die je zelf zojuist hebt gestuurd.
+DIT BOUWT VERDER OP MODERATION CORE v1.
 
-Belangrijkste fix:
-- bootAuthOnce doet NIET langer getSession() en onAuthStateChange tegelijk.
-- Supabase onAuthStateChange levert zelf INITIAL_SESSION.
-- In de auth callback worden alleen lokale React/DiBooks states aangepast.
-- Profile queries starten pas NA de callback.
-- TOKEN_REFRESHED veroorzaakt geen onnodige profile upsert/select.
-- loginWithCredentials start niet langer zelf óók een profile refresh.
-- registerWithCredentials idem.
+FLOW
 
-Waarom:
-Supabase gebruikt navigator Web Locks rond auth-operaties. Er zijn bekende
-deadlock/race-problemen wanneer auth-initialisatie/getSession en listeners
-tegelijk lopen. Het symptoom kan zijn dat signInWithPassword tientallen
-seconden wacht.
+Auteur:
+  Indienen voor beoordeling
+      ↓
+  immutable review snapshot
+      ↓
+  automatische OpenAI moderation scan
+      ↓
+  verdachte nodes krijgen moderation_flags
+      ↓
+Admin:
+  Meldingen -> Boekmoderatie
+      ↓
+  Open in reviewmodus
+      ↓
+  ⚠ verschijnt boven gemarkeerde nodes
+      ↓
+  Admin beslist ZELF goedkeuren / afwijzen
 
-Installeren:
-1. ZIP uitpakken.
-2. Sleep map 'lib' over dibooks_author_studio.
-3. Bestanden vervangen.
-4. Geen SQL nodig.
-5. npm run build
-6. Commit/push.
+BELANGRIJK
+De AI wijst NOOIT zelfstandig een boek af.
+Flags zijn alleen signalen voor menselijke controle.
 
-Test:
-- Sluit voor de eerste test liefst andere DiBooks-tabs.
-- Refresh de site.
-- Log uit.
-- Log opnieuw in.
+WAT WORDT GESCAND
+- Tekstnodes
+- Speciale tekstpagina's
+- Keuzeteksten
+- Titels / lezerscontent van overige relevante nodes
 
-De bestaande consolemeting blijft aanwezig:
-[DiBooks Auth] Supabase signInWithPassword duurde XXXXX ms.
+Utility-nodes zoals Function, IF/Condition en Kladblok worden overgeslagen.
 
-Als V4 nog steeds ~60 seconden geeft EN die consolemelding zelf ~60000 ms
-aangeeft, dan zit de vertraging daadwerkelijk binnen de Supabase auth-call /
-browser Web Lock en gaan we als volgende stap de client-lock zelf aanpakken.
+Categorieën kunnen o.a. zijn:
+- geweld / grafisch geweld
+- seksuele inhoud
+- seksuele inhoud met minderjarigen
+- haat / bedreigende haat
+- intimidatie
+- zelfbeschadiging
+- illegale of gevaarlijke instructies
+
+INSTALLATIE
+
+1. Supabase -> SQL Editor.
+2. Voer AI_NODE_MODERATION_SUPABASE.sql uit.
+
+3. Pak deze ZIP uit.
+4. Sleep 'app', 'lib' en 'supabase' over dibooks_author_studio.
+5. Kies Bestanden vervangen.
+
+6. Voeg SERVER-SIDE deze environment variable toe:
+
+   OPENAI_API_KEY=...
+
+   BELANGRIJK:
+   - NOOIT NEXT_PUBLIC_OPENAI_API_KEY gebruiken.
+   - De sleutel hoort nooit in frontendcode.
+   - Plak je API key niet in chat.
+
+Lokaal:
+  zet OPENAI_API_KEY in .env.local
+
+Vercel:
+  Project -> Settings -> Environment Variables
+  Name: OPENAI_API_KEY
+  Value: jouw project API key
+  Daarna opnieuw deployen.
+
+7. Test:
+   npm run build
+
+8. Commit/push.
+
+TESTFLOW
+
+A. Maak een klein testboek met bijvoorbeeld:
+   - één normale onschuldige tekstnode
+   - één duidelijk gewelddadige testpassage
+
+B. Dien het boek in voor beoordeling.
+
+C. Wacht enkele seconden en open als admin:
+   Instellingen -> Boekmoderatie.
+
+D. Gebruik eventueel:
+   '✨ AI opnieuw scannen'
+
+E. Open daarna de reviewmodus.
+   Gemarkeerde nodes moeten een ⚠ tonen.
+
+FAIL-SAFE
+Als OPENAI_API_KEY ontbreekt of OpenAI tijdelijk niet bereikbaar is:
+- het boek blijft gewoon 'In afwachting';
+- de menselijke reviewflow blijft werken;
+- de admin kan later opnieuw scannen.
+
+De scanner gebruikt OpenAI omni-moderation-latest.
