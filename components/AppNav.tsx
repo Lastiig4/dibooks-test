@@ -25,7 +25,7 @@ function DiBooksMiniLogo() {
 function MenuPanel({ children, align = "right" }: { children: ReactNode; align?: "left" | "right" }) {
   return (
     <div
-      className={`absolute top-full z-[95] mt-3 min-w-72 rounded-3xl border border-white/10 bg-[#080b12]/95 p-3 shadow-2xl backdrop-blur-xl ${
+      className={`absolute top-full z-[6000] mt-3 min-w-72 rounded-3xl border border-white/10 bg-[#080b12]/95 p-3 shadow-2xl backdrop-blur-xl ${
         align === "right" ? "right-0" : "left-0"
       }`}
     >
@@ -221,7 +221,7 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
 
 export default function AppNav({ title, subtitle, compact = false }: { title?: string; subtitle?: string; compact?: boolean }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-white/5 bg-[#05070d]/90 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-[5000] border-b border-white/5 bg-[#05070d]/90 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
       <div className="flex w-full items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
           <DiBooksMiniLogo />
