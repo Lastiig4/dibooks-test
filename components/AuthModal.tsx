@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { AuthActionResult, LoginCredentials, RegisterCredentials } from "@/lib/auth";
 
 type AuthMode = "login" | "register";
@@ -27,6 +28,7 @@ export default function AuthModal({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const isRegister = mode === "register";
 
@@ -38,6 +40,10 @@ export default function AuthModal({
         : "Log in om je dashboard, concepten en publicatie-flow te openen.",
     [isRegister],
   );
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setMessage(null);
@@ -70,10 +76,18 @@ export default function AuthModal({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[9999] overflow-y-auto bg-black/80 px-4 py-4 text-white backdrop-blur-md">
-      <div className="flex min-h-full items-center justify-center">
-      <div className="relative grid max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-white/10 bg-[#070a12] shadow-2xl lg:grid-cols-[0.92fr_1.08fr]">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[2147483647] flex items-center justify-center overflow-y-auto bg-black/85 px-4 py-8 text-white backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="relative grid max-h-[calc(100dvh-4rem)] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-white/10 bg-[#070a12] shadow-2xl lg:grid-cols-[0.92fr_1.08fr]">
         <div className="relative hidden min-h-[560px] overflow-hidden bg-gradient-to-br from-blue-950 via-slate-950 to-purple-950 p-8 lg:block">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.2),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(34,211,238,0.15),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.85))]" />
           <div className="relative flex h-full flex-col justify-between">
@@ -230,7 +244,7 @@ export default function AuthModal({
           </div>
         </div>
       </div>
-    </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

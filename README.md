@@ -1,7 +1,12 @@
-DiBooks nav modal + editor dropdown fix v3
+# DiBooks auth modal portal fix v4
 
-Plaats/vervang:
-- components/AppNav.tsx
+Vervang:
 - components/AuthModal.tsx
+- components/AppNav.tsx
 
-Geen SQL nodig.
+Fix:
+- AuthModal wordt via React portal direct aan document.body gehangen
+- Login/register staat altijd midden in viewport
+- Niet meer verstopt achter Library/header
+- Klik op donkere achtergrond sluit modal
+- Dropdown layering blijft behouden
