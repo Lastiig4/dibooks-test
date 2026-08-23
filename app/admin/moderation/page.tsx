@@ -181,7 +181,14 @@ export default function AdminModerationPage() {
                     <div key={item.submissionId} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
                       <div>
                         <p className="font-black">{item.bookTitle}</p>
-                        <p className="mt-1 text-xs font-bold text-neutral-500">{statusLabel(item.status)} • {formatDate(item.reviewedAt ?? item.submittedAt)}</p>
+                        <p className="mt-1 text-xs font-bold text-neutral-500">
+                          {statusLabel(item.status)} • {formatDate(item.reviewedAt ?? item.submittedAt)}
+                        </p>
+                        {item.reviewerName && (
+                          <p className="mt-1 text-xs font-bold text-purple-300/80">
+                            {item.status === "approved" ? "Goedgekeurd" : "Afgewezen"} door {item.reviewerName}
+                          </p>
+                        )}
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-black ${item.status === "approved" ? "bg-emerald-500/15 text-emerald-200" : "bg-red-500/15 text-red-200"}`}>{statusLabel(item.status)}</span>
                     </div>

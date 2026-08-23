@@ -45,6 +45,7 @@ import {
 import {
   fetchAdminModerationSubmission,
   clearModerationFlag,
+  reopenModerationFlag,
   reviewModerationSubmission,
   type ModerationFlag,
   type ModerationSubmissionDetail,
@@ -2268,6 +2269,7 @@ export default function Home() {
   const [reviewSubmission, setReviewSubmission] = useState<ModerationSubmissionDetail | null>(null);
   const [reviewFlags, setReviewFlags] = useState<ModerationFlag[]>([]);
   const [reviewAlertsCollapsed, setReviewAlertsCollapsed] = useState(false);
+  const [reviewInspectorOpen, setReviewInspectorOpen] = useState(false);
   const [reviewActionBusy, setReviewActionBusy] = useState(false);
   const [dashboardSaveForm, setDashboardSaveForm] = useState<DashboardSaveForm>(defaultDashboardSaveForm);
   const [startNodeId, setStartNodeId] = useState<string>("node_1");
@@ -2386,6 +2388,7 @@ export default function Home() {
           setReviewSubmission(submission);
           setReviewFlags(submission.flags ?? []);
           setReviewAlertsCollapsed(false);
+          setReviewInspectorOpen(false);
           setHelpOpen(false);
           setDashboardBookId(null);
           setSharedEditBookId(null);
@@ -4105,6 +4108,7 @@ ${formatSaveError(error)}`);
     }
 
     setSelectedNodeId(targetNode.id);
+    setReviewInspectorOpen(true);
 
     window.requestAnimationFrame(() => {
       const instance = reviewFlowInstanceRef.current;
@@ -4135,31 +4139,10 @@ ${formatSaveError(error)}`);
     if (!user || user.role !== "admin" || !flag.flagId || reviewActionBusy) return;
     if (isReviewFlagCleared(flag)) return;
 
-    const isHigh = String(flag.severity ?? "").toLowerCase() === "high";
-    let note = "";
-
-    if (isHigh) {
-      const entered = window.prompt(
-        "Deze melding is als ERNSTIG gemarkeerd. Waarom mag deze passage volgens jou toch worden toegestaan? Deze motivatie wordt opgeslagen in het reviewlog.",
-      );
-      if (entered === null) return;
-      note = entered.trim();
-
-      if (!note) {
-        alert("Bij een ernstige melding is een korte motivatie verplicht.");
-        return;
-      }
-    } else {
-      const confirmed = window.confirm(
-        "Markeer deze waarschuwing als door jou beoordeeld en akkoord?",
-      );
-      if (!confirmed) return;
-    }
-
     setReviewActionBusy(true);
 
     try {
-      await clearModerationFlag(user, flag.flagId, note);
+      await clearModerationFlag(user, flag.flagId);
       setReviewFlags((current) =>
         current.map((item) =>
           item.flagId === flag.flagId
@@ -4168,7 +4151,7 @@ ${formatSaveError(error)}`);
                 resolution: "cleared",
                 reviewedBy: user.id,
                 reviewedAt: new Date().toISOString(),
-                reviewNote: note || item.reviewNote,
+                reviewNote: "",
               }
             : item,
         ),
@@ -4178,6 +4161,39 @@ ${formatSaveError(error)}`);
       alert(
         `Melding afhandelen mislukt: ${
           clearError instanceof Error ? clearError.message : "onbekende fout"
+        }`,
+      );
+    } finally {
+      setReviewActionBusy(false);
+    }
+  }
+
+  async function handleReopenReviewFlag(flag: ModerationFlag) {
+    if (!user || user.role !== "admin" || !flag.flagId || reviewActionBusy) return;
+    if (!isReviewFlagCleared(flag)) return;
+
+    setReviewActionBusy(true);
+
+    try {
+      await reopenModerationFlag(user, flag.flagId);
+      setReviewFlags((current) =>
+        current.map((item) =>
+          item.flagId === flag.flagId
+            ? {
+                ...item,
+                resolution: "pending",
+                reviewedBy: undefined,
+                reviewedAt: undefined,
+                reviewNote: "",
+              }
+            : item,
+        ),
+      );
+    } catch (reopenError) {
+      console.error(reopenError);
+      alert(
+        `Melding heropenen mislukt: ${
+          reopenError instanceof Error ? reopenError.message : "onbekende fout"
         }`,
       );
     } finally {
@@ -4208,6 +4224,16 @@ ${formatSaveError(error)}`);
       )?.trim() ?? "";
       if (!feedback) {
         alert("Feedback is verplicht bij afwijzen.");
+        return;
+      }
+    } else if (severeReviewFlags.length > 0) {
+      feedback = window.prompt(
+        `Dit boek bevat ${severeReviewFlags.length} ernstige moderatiemelding${severeReviewFlags.length === 1 ? "" : "en"} die je hebt beoordeeld en toegestaan. Geef één korte algemene motivatie waarom het boek toch gepubliceerd mag worden:`,
+        "",
+      )?.trim() ?? "";
+
+      if (!feedback) {
+        alert("Bij een boek met ernstige meldingen is één algemene motivatie verplicht.");
         return;
       }
     } else {
@@ -4652,7 +4678,10 @@ ${formatSaveError(error)}`);
             edges={getValidatedEdges(edges, nodes)}
             onNodesChange={reviewMode ? undefined : onNodesChange}
             onEdgesChange={reviewMode ? undefined : onEdgesChange}
-            onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            onNodeClick={(_, node) => {
+              setSelectedNodeId(node.id);
+              if (reviewMode) setReviewInspectorOpen(true);
+            }}
             onInit={(instance) => {
               reviewFlowInstanceRef.current = instance;
             }}
@@ -4686,102 +4715,49 @@ ${formatSaveError(error)}`);
           {reviewMode ? (
             <div className="grid gap-4">
               {!selectedNode ? (
-                <p className="text-neutral-400">Klik op een node om de bevroren inhoud te bekijken.</p>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-sm font-semibold leading-6 text-neutral-400">
+                  Klik op een node of op een moderatiemelding. De volledige review opent centraal in beeld.
+                </div>
               ) : (
                 <>
                   <div className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-purple-300">Alleen lezen</p>
-                    <h3 className="mt-2 text-xl font-black">{selectedNode.data.label}</h3>
-                    <p className="mt-1 text-xs font-bold text-neutral-400">{nodeLabels[selectedNode.data.type]} • node {selectedNode.id}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-purple-300">Geselecteerde node</p>
+                    <h3 className="mt-2 text-lg font-black">{selectedNode.data.label}</h3>
+                    <p className="mt-1 break-all text-[10px] font-bold text-neutral-500">
+                      {nodeLabels[selectedNode.data.type]} • {selectedNode.id}
+                    </p>
                   </div>
 
-                  {selectedReviewFlags.length > 0 ? (
-                    <div className="grid gap-2">
-                      {selectedReviewFlags.map((flag) => (
-                        <div
-                          key={flag.flagId || `${flag.nodeId}-${flag.category}`}
-                          className={`rounded-2xl border p-4 ${
-                            isReviewFlagCleared(flag)
-                              ? "border-emerald-400/30 bg-emerald-500/10"
-                              : flag.severity === "high"
-                                ? "border-red-400/35 bg-red-500/10"
-                                : "border-amber-400/30 bg-amber-400/10"
-                          }`}
-                        >
-                          <p className={`text-xs font-black uppercase tracking-widest ${
-                            isReviewFlagCleared(flag)
-                              ? "text-emerald-200"
-                              : flag.severity === "high"
-                                ? "text-red-200"
-                                : "text-amber-200"
-                          }`}>
-                            {isReviewFlagCleared(flag) ? "✓ Beoordeeld & akkoord" : "⚠"} {flag.category} • {flag.severity}
-                          </p>
-                          <p className="mt-2 text-sm font-semibold leading-6 text-neutral-200">{flag.reason}</p>
-                          <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">Bron: {flag.source}</p>
+                  <div className={`rounded-2xl border p-4 ${
+                    selectedReviewFlags.some((flag) => !isReviewFlagCleared(flag))
+                      ? selectedReviewFlags.some((flag) => flag.severity === "high" && !isReviewFlagCleared(flag))
+                        ? "border-red-400/30 bg-red-500/10"
+                        : "border-amber-400/30 bg-amber-500/10"
+                      : "border-emerald-400/20 bg-emerald-500/10"
+                  }`}>
+                    <p className="text-xs font-black uppercase tracking-widest text-neutral-300">
+                      {selectedReviewFlags.length === 0
+                        ? "Geen waarschuwingen"
+                        : `${selectedReviewFlags.filter((flag) => !isReviewFlagCleared(flag)).length} open • ${selectedReviewFlags.length} totaal`}
+                    </p>
+                  </div>
 
-                          {isReviewFlagCleared(flag) ? (
-                            <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-xs font-semibold text-emerald-100">
-                              Door admin afgehandeld
-                              {flag.reviewNote ? <p className="mt-1 text-emerald-100/75">Motivatie: {flag.reviewNote}</p> : null}
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={reviewActionBusy}
-                              onClick={() => void handleClearReviewFlag(flag)}
-                              className={`mt-3 w-full rounded-xl px-4 py-3 text-xs font-black disabled:cursor-wait disabled:opacity-50 ${
-                                flag.severity === "high"
-                                  ? "bg-red-500 text-white hover:bg-red-400"
-                                  : "bg-emerald-500 text-black hover:bg-emerald-400"
-                              }`}
-                            >
-                              {flag.severity === "high"
-                                ? "✓ Akkoord ondanks ernstige melding + motivatie"
-                                : "✓ Beoordeeld & akkoord"}
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-100">Geen automatische of handmatige markering op deze node.</div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setReviewInspectorOpen(true)}
+                    className="rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-white hover:bg-purple-400"
+                  >
+                    🔎 Open grote reviewinspectie
+                  </button>
 
-                  {(selectedNode.data.type === "text" || selectedNode.data.type === "special" || selectedNode.data.type === "scratchpad") && (
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
-                      <p className="mb-3 text-xs font-black uppercase tracking-widest text-neutral-500">Inhoud</p>
-                      <div className="prose prose-invert max-w-none text-sm leading-7" dangerouslySetInnerHTML={{ __html: selectedNode.data.textHtml || selectedNode.data.text || "<p>Lege node.</p>" }} />
-                    </div>
-                  )}
-
-                  {selectedNode.data.type === "choice" && (
-                    <div className="rounded-2xl border border-orange-400/20 bg-orange-500/10 p-4">
-                      <p className="text-xs font-black uppercase tracking-widest text-orange-200">Keuzes</p>
-                      <div className="mt-3 grid gap-2">{(selectedNode.data.choices ?? []).map((choice, index) => <div key={`${index}-${choice.label}`} className="rounded-xl bg-black/25 p-3 text-sm font-bold">{String.fromCharCode(65 + index)}. {choice.label || "Lege keuze"}</div>)}</div>
-                    </div>
-                  )}
-
-                  {selectedNode.data.type === "cutscene" && (
-                    <div className="rounded-2xl border border-green-400/20 bg-green-500/10 p-4 text-sm font-semibold text-green-100">Cutscene: {selectedNode.data.videoFileName || (selectedNode.data.videoUrl ? "Video gekoppeld" : "Geen video")} • {Number(selectedNode.data.videoDuration || 0).toFixed(1)} sec. Gebruik de boekpreview om af te spelen.</div>
-                  )}
-
-                  {selectedNode.data.type === "minigame" && (
-                    <div className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4 text-sm font-semibold text-purple-100">Minigame • {selectedNode.data.miniGameDifficulty || "normal"} • success/fail-routes. Gebruik de boekpreview om de interactie te testen.</div>
-                  )}
-
-                  {selectedNode.data.type === "function" && (
-                    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
-                      <p className="text-xs font-black uppercase tracking-widest text-cyan-200">Functie-acties</p>
-                      <pre className="mt-3 whitespace-pre-wrap text-xs text-cyan-50/80">{JSON.stringify(selectedNode.data.functionActions ?? [], null, 2)}</pre>
-                    </div>
-                  )}
-
-                  {selectedNode.data.type === "condition" && (
-                    <div className="rounded-2xl border border-teal-400/20 bg-teal-500/10 p-4">
-                      <p className="text-xs font-black uppercase tracking-widest text-teal-200">Voorwaarde / IF</p>
-                      <pre className="mt-3 whitespace-pre-wrap text-xs text-teal-50/80">{JSON.stringify({ variable: selectedNode.data.conditionKey, operator: selectedNode.data.conditionOperator, value: selectedNode.data.conditionValue, trueTarget: selectedNode.data.conditionTrueTargetNodeId, elseTarget: selectedNode.data.conditionFalseTargetNodeId }, null, 2)}</pre>
-                    </div>
+                  {unresolvedReviewFlagCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={jumpToNextReviewFlag}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black text-neutral-200 hover:bg-white/10"
+                    >
+                      Volgende open melding ({unresolvedReviewFlagCount})
+                    </button>
                   )}
                 </>
               )}
@@ -5954,6 +5930,252 @@ ${formatSaveError(error)}`);
           }}
         />
       )}
+      {reviewMode && reviewInspectorOpen && selectedNode && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm sm:p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setReviewInspectorOpen(false);
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-white/15 bg-[#0b0d13] text-white shadow-2xl">
+            <div className="flex shrink-0 flex-wrap items-start justify-between gap-4 border-b border-white/10 px-6 py-5 sm:px-7">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.32em] text-purple-300">
+                  Review inspectie • alleen lezen
+                </p>
+                <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                  {selectedNode.data.label}
+                </h2>
+                <p className="mt-1 break-all text-xs font-bold text-neutral-500">
+                  {nodeLabels[selectedNode.data.type]} • node {selectedNode.id}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedReviewFlags.length > 0 && (
+                  <span className={`rounded-full px-3 py-2 text-xs font-black ${
+                    selectedReviewFlags.some((flag) => flag.severity === "high" && !isReviewFlagCleared(flag))
+                      ? "bg-red-500/15 text-red-200"
+                      : selectedReviewFlags.some((flag) => !isReviewFlagCleared(flag))
+                        ? "bg-amber-500/15 text-amber-100"
+                        : "bg-emerald-500/15 text-emerald-100"
+                  }`}>
+                    {selectedReviewFlags.filter((flag) => !isReviewFlagCleared(flag)).length} open • {selectedReviewFlags.length} totaal
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setReviewInspectorOpen(false)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-white hover:bg-white/10"
+                >
+                  ✕ Sluiten
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="grid min-h-full gap-0 lg:grid-cols-[390px_minmax(0,1fr)]">
+                <section className="border-b border-white/10 bg-black/20 p-5 sm:p-6 lg:border-b-0 lg:border-r">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-neutral-500">
+                        Moderatiemeldingen
+                      </p>
+                      <h3 className="mt-1 text-xl font-black">
+                        {selectedReviewFlags.length || "Geen"} waarschuwing{selectedReviewFlags.length === 1 ? "" : "en"}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {selectedReviewFlags.length > 0 ? (
+                    <div className="mt-4 grid gap-3">
+                      {[...selectedReviewFlags]
+                        .sort((a, b) => {
+                          const rank = (flag: ModerationFlag) =>
+                            flag.severity === "high" ? 0 : flag.severity === "medium" ? 1 : 2;
+                          return rank(a) - rank(b);
+                        })
+                        .map((flag) => (
+                          <div
+                            key={flag.flagId || `${flag.nodeId}-${flag.category}`}
+                            className={`rounded-2xl border p-4 ${
+                              isReviewFlagCleared(flag)
+                                ? "border-emerald-400/30 bg-emerald-500/10"
+                                : flag.severity === "high"
+                                  ? "border-red-400/40 bg-red-500/10"
+                                  : "border-amber-400/35 bg-amber-500/10"
+                            }`}
+                          >
+                            <p className={`text-[11px] font-black uppercase tracking-widest ${
+                              isReviewFlagCleared(flag)
+                                ? "text-emerald-200"
+                                : flag.severity === "high"
+                                  ? "text-red-200"
+                                  : "text-amber-200"
+                            }`}>
+                              {isReviewFlagCleared(flag)
+                                ? "✓ Beoordeeld & akkoord"
+                                : flag.severity === "high"
+                                  ? "🔴 Ernstig"
+                                  : "🟠 Controle"}{" "}
+                              • {flag.category}
+                            </p>
+
+                            <p className="mt-3 text-sm font-semibold leading-6 text-neutral-200">
+                              {flag.reason}
+                            </p>
+                            <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                              Bron: {flag.source}
+                            </p>
+
+                            {isReviewFlagCleared(flag) ? (
+                              <button
+                                type="button"
+                                disabled={reviewActionBusy}
+                                onClick={() => void handleReopenReviewFlag(flag)}
+                                className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-neutral-300 hover:bg-white/10 disabled:opacity-50"
+                              >
+                                ↶ Heropen melding
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={reviewActionBusy}
+                                onClick={() => void handleClearReviewFlag(flag)}
+                                className={`mt-3 w-full rounded-xl px-4 py-3 text-xs font-black disabled:cursor-wait disabled:opacity-50 ${
+                                  flag.severity === "high"
+                                    ? "bg-red-500 text-white hover:bg-red-400"
+                                    : "bg-emerald-500 text-black hover:bg-emerald-400"
+                                }`}
+                              >
+                                ✓ Beoordeeld & akkoord
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm font-semibold leading-6 text-emerald-100">
+                      Deze node heeft geen automatische of handmatige waarschuwingen.
+                    </div>
+                  )}
+
+                  {unresolvedReviewFlagCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={jumpToNextReviewFlag}
+                      className="mt-4 w-full rounded-xl border border-purple-400/30 bg-purple-500/15 px-4 py-3 text-sm font-black text-purple-100 hover:bg-purple-500/25"
+                    >
+                      Volgende open melding ({unresolvedReviewFlagCount})
+                    </button>
+                  )}
+                </section>
+
+                <section className="min-w-0 p-5 sm:p-7">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-neutral-500">
+                    Volledige node-inhoud
+                  </p>
+
+                  {(selectedNode.data.type === "text" ||
+                    selectedNode.data.type === "special" ||
+                    selectedNode.data.type === "scratchpad") && (
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-5 sm:p-6">
+                      <div
+                        className="prose prose-invert max-w-none text-base leading-8 sm:text-lg sm:leading-9"
+                        dangerouslySetInnerHTML={{
+                          __html:
+                            selectedNode.data.textHtml ||
+                            selectedNode.data.text ||
+                            "<p>Lege node.</p>",
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {selectedNode.data.type === "choice" && (
+                    <div className="mt-4 rounded-2xl border border-orange-400/20 bg-orange-500/10 p-5">
+                      <p className="text-xs font-black uppercase tracking-widest text-orange-200">
+                        Keuzes
+                      </p>
+                      <div className="mt-4 grid gap-3">
+                        {(selectedNode.data.choices ?? []).map((choice, index) => (
+                          <div
+                            key={`${index}-${choice.label}`}
+                            className="rounded-xl border border-white/10 bg-black/25 p-4 text-base font-bold leading-7"
+                          >
+                            {String.fromCharCode(65 + index)}. {choice.label || "Lege keuze"}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedNode.data.type === "cutscene" && (
+                    <div className="mt-4 rounded-2xl border border-green-400/20 bg-green-500/10 p-5 text-base font-semibold leading-7 text-green-100">
+                      <p className="font-black">Cutscene</p>
+                      <p className="mt-2">
+                        {selectedNode.data.videoFileName ||
+                          (selectedNode.data.videoUrl ? "Video gekoppeld" : "Geen video")}
+                        {" • "}
+                        {Number(selectedNode.data.videoDuration || 0).toFixed(1)} sec.
+                      </p>
+                      <p className="mt-2 text-sm text-green-100/70">
+                        Gebruik Hele boek previewen om de video volledig te beoordelen.
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedNode.data.type === "minigame" && (
+                    <div className="mt-4 rounded-2xl border border-purple-400/20 bg-purple-500/10 p-5 text-base font-semibold leading-7 text-purple-100">
+                      <p className="font-black">Minigame</p>
+                      <p className="mt-2">
+                        Moeilijkheid: {selectedNode.data.miniGameDifficulty || "normal"}
+                      </p>
+                      <p className="mt-2 text-sm text-purple-100/70">
+                        Gebruik Hele boek previewen om de interactie te testen.
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedNode.data.type === "function" && (
+                    <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-5">
+                      <p className="text-xs font-black uppercase tracking-widest text-cyan-200">
+                        Functie-acties
+                      </p>
+                      <pre className="mt-4 overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/25 p-4 text-sm text-cyan-50/85">
+                        {JSON.stringify(selectedNode.data.functionActions ?? [], null, 2)}
+                      </pre>
+                    </div>
+                  )}
+
+                  {selectedNode.data.type === "condition" && (
+                    <div className="mt-4 rounded-2xl border border-teal-400/20 bg-teal-500/10 p-5">
+                      <p className="text-xs font-black uppercase tracking-widest text-teal-200">
+                        Voorwaarde / IF
+                      </p>
+                      <pre className="mt-4 overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/25 p-4 text-sm text-teal-50/85">
+                        {JSON.stringify(
+                          {
+                            variable: selectedNode.data.conditionKey,
+                            operator: selectedNode.data.conditionOperator,
+                            value: selectedNode.data.conditionValue,
+                            trueTarget: selectedNode.data.conditionTrueTargetNodeId,
+                            elseTarget: selectedNode.data.conditionFalseTargetNodeId,
+                          },
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {authModalMode && (
         <AuthModal
           mode={authModalMode}

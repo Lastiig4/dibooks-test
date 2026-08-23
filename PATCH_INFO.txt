@@ -1,51 +1,42 @@
-DiBooks Patch - Moderation Alert Navigator V2
-============================================
+DiBooks Patch - Moderation Review Modal V4
+==========================================
 
-GEBRUIK DEZE V2 IN PLAATS VAN DE EERDERE NAVIGATOR-PATCH.
+GEBRUIK DEZE V4 IN PLAATS VAN V3.
+Je gaf aan dat je V3 nog niet had geïnstalleerd. V4 bevat daarom OOK alle V3-
+wijzigingen (snelle akkoordknoppen + één algemene motivatie bij high flags).
 
-Wat de admin in de revieweditor krijgt:
+NIEUW: GROTE CENTRALE REVIEWINSPECTIE
+- Klik in reviewmodus op een node -> grote popup midden in beeld.
+- Klik op een rode/oranje melding -> kaart centreert op de node EN popup opent.
+- Links in popup: alle meldingen van die node.
+- Rechts: volledige node-inhoud.
+- Lange teksten krijgen veel meer leesruimte dan in de smalle rechterbalk.
+- Oranje en rode waarschuwingen blijven met één klik afhandelbaar.
+- Afgehandelde flags kunnen worden heropend.
+- 'Volgende open melding' zit ook in de popup.
+- De oude rechterbalk is nu alleen een compacte samenvatting + knop om de grote
+  inspectie te openen.
 
-ROOD - Ernstige meldingen
-- Staan altijd bovenaan.
-- Klik erop: DiBooks centreert meteen op de betreffende node en selecteert hem.
-- In het rechter inspectiepaneel staat de volledige reden.
-- Een rode/high melding mag door de admin worden toegestaan, maar ALLEEN
-  met een verplichte korte motivatie. Die motivatie wordt opgeslagen.
+NIEUW: ADMINNAAM IN BOEKMODERATIE
+Onder Recent beoordeeld staat voortaan bijvoorbeeld:
+  Goedgekeurd door Jan
+of:
+  Afgewezen door Sarah
 
-ORANJE - Overige waarschuwingen
-- Staan in een tweede rij.
-- Klik erop: springt eveneens direct naar de node.
-- Admin moet expliciet klikken op 'Beoordeeld & akkoord'.
+De naam komt uit reviewed_by -> profiles en wordt dus niet los of handmatig
+opgeslagen.
 
-Afgehandeld:
-- De melding wordt groen: '✓ Akkoord'.
-- Status wordt persistent opgeslagen in Supabase.
-- Refresh / andere admin behoudt dus de reviewstatus.
-- Teller toont bijvoorbeeld 5/8 afgehandeld.
-- 'Volgende open melding' springt naar de eerstvolgende unresolved flag.
-
-Boek goedkeuren:
-- 'Goedkeuren & publiceren' blijft vergrendeld zolang er minimaal één
-  waarschuwing openstaat.
-- Dit wordt OOK database-side gecontroleerd; de frontend kan dit niet omzeilen.
-- Afwijzen mag altijd direct en vereist feedback zoals eerder.
-
-INSTALLATIE
-
+INSTALLEREN
 1. Supabase -> SQL Editor -> New query.
-2. Plak ALLES uit MODERATION_FLAG_RESOLUTION_SUPABASE.sql.
-3. Klik Run.
-
-4. Pak de ZIP uit.
-5. Sleep over dibooks_author_studio:
+2. Voer MODERATION_REVIEW_MODAL_V4_SUPABASE.sql uit.
+   Deze bevat de benodigde V3 + V4 SQL.
+3. Pak ZIP uit.
+4. Sleep over dibooks_author_studio:
    - app
    - lib
    - supabase
-6. Kies Bestanden vervangen.
-
-7. Test:
-   npm run build
-
-8. Commit/push.
+5. Kies Bestanden vervangen.
+6. npm run build
+7. Commit/push.
 
 Geen wijziging nodig aan DEEPSEEK_API_KEY.

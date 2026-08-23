@@ -28,6 +28,8 @@ export type ModerationQueueItem = {
   submittedAt?: string;
   reviewedAt?: string;
   reviewFeedback?: string;
+  reviewerName?: string;
+  reviewerEmail?: string;
   bookTitle: string;
   bookAuthor: string;
   ownerName: string;
@@ -129,6 +131,8 @@ export async function fetchAdminModerationQueue(user: DemoAuthUser) {
     submittedAt: row.submitted_at ?? undefined,
     reviewedAt: row.reviewed_at ?? undefined,
     reviewFeedback: row.review_feedback ?? undefined,
+    reviewerName: row.reviewer_name ?? undefined,
+    reviewerEmail: row.reviewer_email ?? undefined,
     bookTitle: row.book_title ?? "Ongetiteld boek",
     bookAuthor: row.book_author ?? "Auteur",
     ownerName: row.owner_name ?? "Auteur",
@@ -162,6 +166,8 @@ export async function fetchAdminModerationSubmission(user: DemoAuthUser, submiss
     submittedAt: row.submitted_at ?? undefined,
     reviewedAt: row.reviewed_at ?? undefined,
     reviewFeedback: row.review_feedback ?? undefined,
+    reviewerName: row.reviewer_name ?? undefined,
+    reviewerEmail: row.reviewer_email ?? undefined,
     bookTitle: row.book_title ?? "Ongetiteld boek",
     bookAuthor: row.book_author ?? "Auteur",
     ownerName: row.owner_name ?? "Auteur",
@@ -198,6 +204,22 @@ export async function clearModerationFlag(
   const { data, error } = await supabase.rpc("clear_moderation_flag", {
     input_flag_id: flagId,
     input_note: note.trim(),
+  });
+
+  if (error) throw new Error(formatSupabaseError(error));
+  return !!data;
+}
+
+export async function reopenModerationFlag(
+  user: DemoAuthUser,
+  flagId: string,
+) {
+  assertAdmin(user);
+  if (!flagId) throw new Error("Moderatiemelding ontbreekt.");
+
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("reopen_moderation_flag", {
+    input_flag_id: flagId,
   });
 
   if (error) throw new Error(formatSupabaseError(error));

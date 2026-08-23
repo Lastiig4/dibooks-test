@@ -1,16 +1,21 @@
 {
-  "name": "DiBooks Moderation Alert Navigator V2",
+  "name": "DiBooks Moderation Review Modal V4",
   "date": "2026-08-23",
+  "replaces": "Moderation Alert Navigator V3",
   "sql_required": true,
-  "requires": [
-    "Moderation Core",
-    "DeepSeek Node Moderation"
+  "features": [
+    "Central large review modal",
+    "Click flag jumps to node and opens modal",
+    "Compact right review sidebar",
+    "Reviewer/admin name in moderation history",
+    "Includes V3 fast flag approval behavior"
   ],
   "files": [
     "app/editor/page.tsx",
+    "app/admin/moderation/page.tsx",
     "lib/supabase/moderation.ts",
-    "MODERATION_FLAG_RESOLUTION_SUPABASE.sql",
-    "supabase/migrations/20260823_212500_moderation_flag_resolution.sql",
+    "MODERATION_REVIEW_MODAL_V4_SUPABASE.sql",
+    "supabase/migrations/20260823_220000_moderation_review_modal_v4.sql",
     "PATCH_INFO.txt"
   ]
 }
