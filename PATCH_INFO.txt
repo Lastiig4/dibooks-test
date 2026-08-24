@@ -1,88 +1,24 @@
-DiBooks Patch - Reader UX V1
-===========================
+DiBooks Reader UX V1.1 - TypeScript Fix
+======================================
 
-Gebaseerd op de huidige publieke Reader die je hebt aangeleverd.
+Fix voor Vercel TypeScript:
+'reader' is possibly 'null' in handleReaderKeyDown().
 
-NIEUW
+Oorzaak:
+De useEffect controleerde correct of reader bestond, maar TypeScript
+behoudt die narrowing niet betrouwbaar binnen een geneste event callback.
 
-1. Slimmere paginering
-- Eerst alinea's/blokken intact houden.
-- Als een alinea echt niet op één pagina past:
-  eerst op volledige zinnen splitsen.
-- Intl.Segmenter wordt gebruikt waar beschikbaar voor betere Nederlandse
-  zinsherkenning.
-- Alleen een uitzonderlijk lange zin mag uiteindelijk op woorden splitsen.
-- Handmatige [[NIEUWE_PAGINA]] breaks blijven werken.
-- Meting en echte tekstweergave gebruiken voortaan exact dezelfde
-  fontgrootte, regelafstand en font-family.
+Fix:
+- const activeReader = reader; direct na de guard
+- keyboard handler gebruikt activeReader
 
-2. Pijltjestoetsen
-- ← vorige pagina
-- → volgende pagina
-- Op de laatste pagina gaat → door naar de volgende tekst/scène als er
-  exact één logische route is.
-- Bij meerdere keuzes selecteert het toetsenbord nooit automatisch een keuze.
+Geen functionele wijzigingen.
+Alle Reader UX V1-features blijven behouden.
+Geen SQL nodig.
 
-3. Swipe mobiel/tablet
-- Swipe rechts = vorige pagina
-- Swipe links = volgende pagina
-- Op laatste pagina kan swipe links doorgaan als er één route is.
-- Verticale beweging blijft gewone touch/scroll en activeert geen pagina.
-- Minigames/cutscenes/keuzescènes krijgen geen reader-swipe-handler.
-
-4. Fullscreen
-- Nieuwe ⛶ knop in de Reader header.
-- Nogmaals klikken / browser fullscreen verlaten herstelt automatisch state.
-- Cutscene fullscreen blijft daarnaast gewoon bestaan.
-
-5. Voortgangsbalk
-- Dunne blauwe progressbar direct onder de Reader header.
-- Gebruikt dezelfde voortgangsberekening als de bestaande Supabase save.
-
-6. Regelafstand
-Aa -> Regels:
-- Compact
-- Normaal
-- Ruim
-
-7. Lettertype
-Aa -> Letter:
-- Boek (Georgia/serif)
-- Strak (sans-serif)
-
-8. Voorkeuren onthouden
-De Reader onthoudt lokaal:
-- tekstgrootte
-- enkel/dubbel/auto
-- thema
-- regelafstand
-- lettertype
-
-BEHOUDEN
-- Story State
-- Function nodes
-- IF/Condition
-- Choice variable effects
-- Minigame success/fail effects
-- Supabase leesvoortgang
-- Opnieuw lezen
-- speciale pagina's
-- handmatige pagina breaks
-- cutscene flow
-
-INSTALLEREN
+Installeren:
 1. ZIP uitpakken.
-2. Sleep alleen de map 'app' over dibooks_author_studio.
-3. Kies Bestanden vervangen.
-4. Geen SQL nodig.
-5. Test:
-   npm run build
-6. Commit/push naar GitHub/Vercel.
-
-SNELLE TEST
-- Open een langer teksthoofdstuk.
-- Test Aa -> Boek/Strak, regelafstand en tekstgrootte.
-- Gebruik ← en →.
-- Test op telefoon/tablet swipe.
-- Klik ⛶ voor fullscreen.
-- Controleer een lange alinea rond een paginawissel.
+2. Sleep de map 'app' over dibooks_author_studio.
+3. Bestanden vervangen.
+4. Commit/push.
+5. Vercel opnieuw laten bouwen.

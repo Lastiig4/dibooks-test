@@ -1698,6 +1698,10 @@ export default function ReadBookPage() {
       return;
     }
 
+    // TypeScript behoudt narrowing van React-state niet altijd binnen
+    // geneste event callbacks. Deze vaste referentie is hier non-null.
+    const activeReader = reader;
+
     function handleReaderKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const tagName = target?.tagName?.toLowerCase();
@@ -1736,17 +1740,17 @@ export default function ReadBookPage() {
           return;
         }
 
-        if (reader.nextNodeAfterChain) {
+        if (activeReader.nextNodeAfterChain) {
           event.preventDefault();
-          goToNode(reader.nextNodeAfterChain.id);
+          goToNode(activeReader.nextNodeAfterChain.id);
           return;
         }
 
         // Alleen automatisch doorgaan als er exact één route is.
         // Bij echte keuzes beslist de lezer via de knoppen.
-        if (reader.branchPaths.length === 1) {
+        if (activeReader.branchPaths.length === 1) {
           event.preventDefault();
-          goToNode(reader.branchPaths[0].target);
+          goToNode(activeReader.branchPaths[0].target);
         }
       }
     }
