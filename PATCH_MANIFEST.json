@@ -1,24 +1,17 @@
 {
-  "name": "DiBooks Public Studio Trial V1",
+  "name": "DiBooks Editor Demo Polish V1",
   "date": "2026-08-24",
-  "sql_required": true,
-  "sql_file": "PUBLIC_STUDIO_TRIAL_V1_SUPABASE.sql",
+  "sql_required": false,
+  "base": "Public Studio Trial V1",
   "files": [
-    "app/page.tsx",
     "app/editor/page.tsx",
-    "components/AppNav.tsx",
-    "components/AuthModal.tsx",
-    "lib/auth.ts",
-    "lib/plans.ts",
-    "PUBLIC_STUDIO_TRIAL_V1_SUPABASE.sql",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Public/guest Auteur Studio access",
-    "15-node free/reader trial limit",
-    "Local project-file save only for non-authors",
-    "Author-only dashboard/export/publish/storage",
-    "Server-side author write guard",
-    "Name / auteursnaam signup label"
+    "Visible trial node counter",
+    "No near-limit warning",
+    "Author upgrade CTA",
+    "Guest registration opens on author plan",
+    "Existing hard 15-node cap retained"
   ]
 }

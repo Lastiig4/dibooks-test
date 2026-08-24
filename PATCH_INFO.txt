@@ -1,85 +1,59 @@
-DiBooks Patch - Public Studio Trial V1
+DiBooks Patch - Editor Demo Polish V1
 ====================================
 
-DIT IS DE NIEUWE REGEL:
+Deze patch bouwt voort op Public Studio Trial V1.
 
-Iedereen:
-- Gast
-- Gratis account
-- Reader Plus
+WAT VERANDERT
 
-mag de Auteur Studio openen en uitproberen.
+1. Zichtbare proefmodus-teller
+Niet-Auteur gebruikers zien bovenin de Studio een rustige teller:
 
-PROEFMODUS
+  Proefmodus  7/15
+
+Er is GEEN extra melding of waarschuwing wanneer iemand bijna op 15 zit.
+
+Function, IF, Hoofdstuk-marker en Kladblok tellen zoals eerder NIET mee.
+
+2. Auteur worden
+Naast de teller staat:
+
+  Auteur worden
+
+Gast:
+- opent direct Registreren met het Auteur-plan geselecteerd.
+
+Ingelogde Gratis/Reader gebruiker:
+- opent het plan-overzicht in een nieuwe tab;
+- de editor blijft dus open en de sessiesave blijft staan.
+
+3. Limiet
+Bij 15/15 blijft de bestaande harde blokkade werken.
+Pas wanneer iemand daadwerkelijk node 16 probeert toe te voegen krijgt
+hij een korte melding dat het Auteur-plan onbeperkt bouwen mogelijk maakt.
+
+Er bestaat dus GEEN 'je bent bijna vol'-waarschuwing.
+
+4. Bestaande trial-regels blijven intact
+Zonder Auteur-plan:
 - maximaal 15 echte verhaalnodes;
-- Function / IF / Hoofdstuk-marker / Kladblok tellen niet mee;
-- project lokaal laden;
-- project lokaal opslaan als .dibooks-project.json;
-- Preview / Play blijft beschikbaar;
-- externe video-URL kan voor een proefcutscene gebruikt worden.
+- lokaal opslaan/laden blijft mogelijk;
+- Play/Preview blijft mogelijk;
+- geen Dashboard-opslag;
+- geen publicatie/review;
+- geen online author-writes.
 
-NIET BESCHIKBAAR ZONDER AUTHOR PRO
-- Dashboard-opslag;
-- online concept opslaan/bijwerken;
-- gedeeld dashboardconcept bewerken;
-- Reader story export;
-- publiceren / review indienen;
-- seriesbeheer;
-- uploads naar DiBooks Storage;
-- projecten boven 15 verhaalnodes openen/bewerken.
-
-AUTHOR PRO / ADMIN
-- onbeperkte verhaalnodes;
-- volledige Auteur Studio;
+Met Auteur-plan/Admin:
+- onbeperkt;
 - Dashboard;
-- online opslag;
-- Reader export;
-- series;
-- publiceren en reviewflow.
+- publicatieflow;
+- volledige Studio.
 
-REGISTREREN
-'Naam / pseudoniem' is gewijzigd naar:
-'Naam / auteursnaam'
-
-GAST/LIBRARY
-De Auteur Studio is nu ook voor gasten rechtstreeks bereikbaar.
-Marketingtekst en plan-kaarten leggen de proefmodus uit.
-
-SAVE MENU
-Voor Gast/Gratis/Reader verschijnt een vereenvoudigd Save-menu met
-alleen:
-'Download lokaal werkbestand'
-
-Dus geen Dashboard- of reader-exportknoppen.
-
-BESTAANDE AUTEUR DIE STOPT MET BETALEN
-Zijn boeken/publicaties worden NIET verwijderd.
-Ownership blijft bestaan.
-Zonder Author Pro zijn author-writes database-side geblokkeerd.
-Backend/service-role en admins blijven toegestaan.
-
-BELANGRIJK: SQL
-RUN EERST:
-PUBLIC_STUDIO_TRIAL_V1_SUPABASE.sql
-
-Dit voegt geen nieuwe kolommen toe.
-Het maakt alleen database-triggers die author-writes beveiligen.
+GEEN SQL NODIG.
+Public Studio Trial V1 SQL hoeft niet opnieuw uitgevoerd te worden.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. PUBLIC_STUDIO_TRIAL_V1_SUPABASE.sql uitvoeren in Supabase SQL Editor.
-3. Sleep app, components en lib over dibooks_author_studio.
-4. Bestanden vervangen.
-5. npm run build.
-6. Commit/push naar GitHub/Vercel.
-
-TEST
-1. Log uit.
-2. Open /editor.
-3. Maak tot 15 verhaalnodes.
-4. Controleer dat node 16 wordt geweigerd.
-5. Opslaan -> alleen lokaal .dibooks-project.json.
-6. Registreer/login als free of reader_plus -> zelfde proefmodus.
-7. Zet testaccount via trusted SQL op author_pro.
-8. Controleer dat Dashboard + onbeperkt bouwen weer beschikbaar zijn.
-9. Zet plan terug naar free -> role wordt reader en author-writes worden geblokkeerd.
+2. Sleep alleen map 'app' over dibooks_author_studio.
+3. Bestanden vervangen.
+4. npm run build.
+5. Commit/push naar GitHub/Vercel.

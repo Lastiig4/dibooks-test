@@ -25,7 +25,13 @@ import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { Extension } from "@tiptap/core";
 import AuthModal from "@/components/AuthModal";
-import { FREE_NODE_LIMIT, getMaxNodesForUser, canAccessOwnedResource, useDemoAuth } from "@/lib/auth";
+import {
+  FREE_NODE_LIMIT,
+  getMaxNodesForUser,
+  canAccessOwnedResource,
+  useDemoAuth,
+  type PublicSignupPlan,
+} from "@/lib/auth";
 import {
   fetchBookSeriesFromSupabase,
   fetchDashboardBookFromSupabase,
@@ -2485,6 +2491,7 @@ export default function Home() {
   const [editorDarkMode, setEditorDarkMode] = useState(false);
   const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout, user, role } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
+  const [authInitialPlan, setAuthInitialPlan] = useState<PublicSignupPlan>("free");
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false);
   const [dashboardSeries, setDashboardSeries] = useState<BookSeries[]>([]);
   const [seriesManagerOpen, setSeriesManagerOpen] = useState(false);
@@ -2560,6 +2567,10 @@ export default function Home() {
   const [sidebarGroupOpen, setSidebarGroupOpen] = useState<SidebarGroupId | null>(null);
   const [previewVariableValues, setPreviewVariableValues] = useState<Record<string, StoryVariableValue>>({});
   const reviewMode = Boolean(reviewSubmissionId);
+  const isStudioTrial =
+    !reviewMode &&
+    maxNodesForCurrentUser !== null &&
+    !permissions.canSaveToDashboard;
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("dibooks-editor-dark-grid");
@@ -3275,7 +3286,18 @@ export default function Home() {
   }
 
   function handleDemoLogin() {
+    setAuthInitialPlan("free");
     setAuthModalMode("login");
+  }
+
+  function openAuthorUpgrade() {
+    if (isLoggedIn) {
+      window.open("/#plannen", "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setAuthInitialPlan("author_pro");
+    setAuthModalMode("register");
   }
 
   function handleDemoLogout() {
@@ -3606,7 +3628,7 @@ ${formatSaveError(error)}`);
       type === "condition" ||
       type === "chapter";
     if (!isUtilityNode && maxNodes !== null && storyNodeCount >= maxNodes) {
-      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes gebruiken. Kladblok-, functie-, voorwaarde- en hoofdstuk-markers tellen niet mee. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
+      alert(`De proefmodus ondersteunt maximaal ${FREE_NODE_LIMIT} verhaalnodes. Kladblok-, functie-, voorwaarde- en hoofdstuk-markers tellen niet mee. Met het Auteur-plan kun je onbeperkt verder bouwen.`);
       return;
     }
 
@@ -4981,6 +5003,29 @@ ${formatSaveError(error)}`);
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {isStudioTrial && (
+                <>
+                  <div
+                    className="flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-black text-cyan-100"
+                    title="Gratis proefmodus: maximaal 15 echte verhaalnodes. Function, IF, hoofdstuk-markers en kladblokken tellen niet mee."
+                  >
+                    <span className="text-cyan-300">Proefmodus</span>
+                    <span className="tabular-nums text-white">
+                      {storyNodeCount}/{FREE_NODE_LIMIT}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={openAuthorUpgrade}
+                    className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-violet-950/25 transition hover:-translate-y-0.5 hover:bg-violet-500"
+                    title="Auteur-plan: onbeperkt bouwen, Dashboard-opslag en publiceren"
+                  >
+                    Auteur worden
+                  </button>
+                </>
+              )}
+
               <EditorTopMenu label="Opslag" icon="💾">
                 <div className="grid gap-1">
                   <TopMenuRow
@@ -5037,7 +5082,11 @@ ${formatSaveError(error)}`);
                         ? `${storyNodeCount} / ${maxNodesForCurrentUser}`
                         : storyNodeCount
                     }
-                    valueClassName={nodeLimitReached ? "text-red-300" : "text-white"}
+                    valueClassName={
+                      maxNodesForCurrentUser !== null
+                        ? "text-cyan-200"
+                        : "text-white"
+                    }
                   />
                   <TopMenuRow label="Paths" value={getStoryEdges(edges, nodes).length} />
                   <TopMenuRow label="Variabelen" value={storyVariables.length} valueClassName="text-indigo-200" />
@@ -7382,8 +7431,12 @@ ${formatSaveError(error)}`);
       {authModalMode && (
         <AuthModal
           mode={authModalMode}
+          initialPlan={authInitialPlan}
           onModeChange={setAuthModalMode}
-          onClose={() => setAuthModalMode(null)}
+          onClose={() => {
+            setAuthModalMode(null);
+            setAuthInitialPlan("free");
+          }}
           onLogin={loginWithCredentials}
           onRegister={registerWithCredentials}
         />
