@@ -2400,6 +2400,7 @@ export default function Home() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(true);
+  const [helpView, setHelpView] = useState<"overview" | "tutorial">("overview");
   const [editorDarkMode, setEditorDarkMode] = useState(false);
   const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout, user, role } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
@@ -6095,83 +6096,582 @@ ${formatSaveError(error)}`);
 
       {helpOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 p-4 sm:p-8">
-          <div className="mx-auto flex max-h-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-neutral-700 bg-neutral-950 text-white shadow-2xl">
+          <div className="mx-auto flex max-h-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-neutral-700 bg-neutral-950 text-white shadow-2xl">
             <div className="flex items-center justify-between gap-4 border-b border-neutral-800 p-5">
-              <div>
-                <p className="text-xs font-black uppercase tracking-widest text-neutral-500">DiBooks Auteur Studio</p>
-                <h2 className="text-2xl font-black">Handleiding</h2>
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-widest text-neutral-500">
+                  DiBooks Auteur Studio
+                </p>
+                <h2 className="truncate text-2xl font-black">
+                  {helpView === "overview" ? "Handleiding" : "Volledige tutorial"}
+                </h2>
               </div>
-              <button
-                onClick={() => setHelpOpen(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-red-600 text-2xl font-black leading-none text-white hover:bg-red-500"
-                aria-label="Sluit handleiding"
-                title="Sluit handleiding"
-              >
-                ×
-              </button>
+
+              <div className="flex shrink-0 items-center gap-2">
+                {helpView === "tutorial" && (
+                  <button
+                    type="button"
+                    onClick={() => setHelpView("overview")}
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-neutral-200 hover:bg-white/10"
+                  >
+                    ← Overzicht
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    setHelpOpen(false);
+                    setHelpView("overview");
+                  }}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-red-600 text-2xl font-black leading-none text-white hover:bg-red-500"
+                  aria-label="Sluit handleiding"
+                  title="Sluit handleiding"
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             <div className="overflow-y-auto p-5 sm:p-7">
-              <div className="grid gap-5 md:grid-cols-2">
-                <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5">
-                  <h3 className="mb-4 text-lg font-black">Iconen links</h3>
-                  <div className="grid gap-3 text-sm text-neutral-300">
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600"><BookIcon /></span><span><strong className="text-white">Tekst</strong><br />Normale verhaaltekst.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500 text-black"><BookIcon sparkle /></span><span><strong className="text-white">Speciale pagina</strong><br />Brief, logboek, dossier of dagboek. Krijgt een eigen pagina.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-600"><VideoIcon /></span><span><strong className="text-white">Cutscene</strong><br />Kort videofragment van maximaal 12 seconden.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-[11px] font-black">ABC</span><span><strong className="text-white">Keuze menu</strong><br />Lezer kiest uit maximaal drie routes.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600"><JoystickIcon /></span><span><strong className="text-white">Mini game</strong><br />Interactief moment met success/fail route.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white"><FlagVariablesIcon /></span><span><strong className="text-white">Flags & variabelen</strong><br />Centrale lijst met alle flags, tellers en tekstvariabelen van dit boek.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-slate-950"><FunctionIcon /></span><span><strong className="text-white">Functie / flags</strong><br />Onzichtbare node die centrale variabelen aanpast en automatisch doorgaat.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white"><ConditionIcon /></span><span><strong className="text-white">Voorwaarde / IF</strong><br />Controleert een variabele en kiest TRUE of ELSE.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-950"><ScratchpadIcon /></span><span><strong className="text-white">Kladblok</strong><br />Notities, lore en ideeën. Geen paths en niet zichtbaar voor lezers.</span></div>
+              {helpView === "overview" ? (
+                <div className="grid gap-5">
+                  <section className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.055] p-5">
+                    <div className="mb-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">
+                        Tekst & schrijven
+                      </p>
+                      <h3 className="mt-1 text-xl font-black">
+                        Verhaal en structuur
+                      </h3>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600">
+                          <BookIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Normale tekst</strong>
+                          <br />
+                          Gewone verhaaltekst. Opeenvolgende tekstnodes vormen in de Reader één leesflow.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-yellow-500 text-black">
+                          <BookIcon sparkle />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Speciale tekst</strong>
+                          <br />
+                          Voor logboeken, dossiers, brieven of dagboeken. Blijft een eigen readerpagina.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-sm font-black text-white">
+                          H
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Hoofdstuk-marker</strong>
+                          <br />
+                          Markeert het begin van een hoofdstuk. Niet zichtbaar als eigen pagina en telt niet mee als verhaalnode.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-950">
+                          <ScratchpadIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Kladblok / lore</strong>
+                          <br />
+                          Privé-notities, lore en ideeën voor de auteur. Nooit zichtbaar voor lezers.
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.055] p-5">
+                    <div className="mb-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">
+                        Media & interactie
+                      </p>
+                      <h3 className="mt-1 text-xl font-black">
+                        Momenten waar de lezer actief meedoet
+                      </h3>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-600">
+                          <VideoIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Cutscene</strong>
+                          <br />
+                          Kort videofragment dat automatisch naar de volgende route doorgaat.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-600">
+                          <JoystickIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Minigame</strong>
+                          <br />
+                          Interactieve opdracht met een aparte success- en failroute.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-[11px] font-black">
+                          ABC
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Keuzemenu</strong>
+                          <br />
+                          Laat de lezer kiezen uit maximaal drie verhaalroutes en kan variabelen aanpassen.
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.055] p-5">
+                    <div className="mb-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">
+                        Logica & tools
+                      </p>
+                      <h3 className="mt-1 text-xl font-black">
+                        Geheugen en vertakkingen van het verhaal
+                      </h3>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600">
+                          <FlagVariablesIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Flags & variabelen</strong>
+                          <br />
+                          Centrale lijst met booleans, getallen en tekstwaarden die het verhaal kan onthouden.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500 text-slate-950">
+                          <FunctionIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Functie</strong>
+                          <br />
+                          Onzichtbare node die variabelen aanpast en daarna automatisch doorgaat.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-600">
+                          <ConditionIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Voorwaarde / IF</strong>
+                          <br />
+                          Controleert een variabele en kiest automatisch TRUE of ELSE.
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.055] p-5">
+                    <div className="mb-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-sky-300">
+                        Project & vaste knoppen
+                      </p>
+                      <h3 className="mt-1 text-xl font-black">
+                        Opslaan, testen en de editor bedienen
+                      </h3>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-600">
+                          <SaveIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Opslaan</strong>
+                          <br />
+                          Dashboard-opslag, lokale backup en reader-export.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-700">
+                          <FolderIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Project laden</strong>
+                          <br />
+                          Open een lokaal opgeslagen DiBooks-project.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600">
+                          <PlayIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Play / Preview</strong>
+                          <br />
+                          Test het boek vanaf de start-node zoals een lezer het ervaart.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-slate-950">
+                          <MoonIcon darkMode={false} />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Grid thema</strong>
+                          <br />
+                          Wissel alleen de editor-grid tussen licht en donker.
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/20 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-950 text-red-100">
+                          <ResetEditorIcon />
+                        </span>
+                        <span className="text-sm text-neutral-300">
+                          <strong className="text-white">Reset editor</strong>
+                          <br />
+                          Wis bewust de huidige lokale editorsessie en begin opnieuw.
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-indigo-900/70 bg-indigo-950/20 p-5">
+                      <h3 className="mb-3 text-lg font-black">
+                        Nieuwe pagina in tekst
+                      </h3>
+                      <p className="text-sm leading-6 text-neutral-300">
+                        Gebruik in de teksteditor <strong className="text-white">Nieuwe pagina</strong>.
+                        DiBooks plaatst{" "}
+                        <code className="rounded bg-black/40 px-2 py-1 text-indigo-200">
+                          [[NIEUWE_PAGINA]]
+                        </code>{" "}
+                        op die plek. De code is in de Reader onzichtbaar en forceert daar een nieuwe boekpagina.
+                      </p>
+                    </section>
+
+                    <section className="rounded-2xl border border-emerald-900/70 bg-emerald-950/20 p-5">
+                      <h3 className="mb-3 text-lg font-black">Sessiesave</h3>
+                      <p className="text-sm leading-6 text-neutral-300">
+                        De Studio bewaart automatisch je recente browsersessie.
+                        Dashboard-opslag blijft de veilige online versie van je boek.
+                      </p>
+                    </section>
                   </div>
-                </section>
 
-                <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5">
-                  <h3 className="mb-4 text-lg font-black">Project knoppen</h3>
-                  <div className="grid gap-3 text-sm text-neutral-300">
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-600"><SaveIcon /></span><span><strong className="text-white">Save menu</strong><br />Sla op in Dashboard, download een backup of exporteer een reader-versie.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-700"><FolderIcon /></span><span><strong className="text-white">Load project</strong><br />Laadt een eerder opgeslagen DiBooks projectbestand.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600"><PlayIcon /></span><span><strong className="text-white">Play project</strong><br />Test je verhaal vanuit de start-node.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-200 text-slate-950"><MoonIcon darkMode={false} /></span><span><strong className="text-white">Grid thema</strong><br />Wissel tussen lichte en donkere editor-grid.</span></div>
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-950 text-red-100"><ResetEditorIcon /></span><span><strong className="text-white">Reset editor</strong><br />Wist de huidige sessie en start weer met een lege begin-node.</span></div>
-                  </div>
-                </section>
+                  <section className="rounded-3xl border border-blue-400/25 bg-gradient-to-br from-blue-600/15 to-indigo-600/10 p-6 text-center">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-blue-300">
+                      Meer uitleg nodig?
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Lees de volledige Auteur Studio tutorial
+                    </h3>
+                    <p className="mx-auto mt-2 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
+                      Hier leggen we niet alleen uit wat de knoppen zijn, maar ook hoe nodes,
+                      paths, keuzes, variabelen, Function en IF samen één interactief verhaal vormen.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setHelpView("tutorial")}
+                      className="mt-5 rounded-2xl bg-blue-600 px-6 py-3 text-sm font-black text-white shadow-lg hover:bg-blue-500"
+                    >
+                      Volledige tutorial openen →
+                    </button>
+                  </section>
+                </div>
+              ) : (
+                <div className="mx-auto grid max-w-4xl gap-6">
+                  <section className="rounded-3xl border border-blue-500/20 bg-blue-500/[0.055] p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-blue-300">
+                      1 • Hoe DiBooks werkt
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Je boek is een netwerk van nodes
+                    </h3>
+                    <div className="mt-4 grid gap-4 text-sm font-semibold leading-7 text-neutral-300">
+                      <p>
+                        Iedere node stelt een onderdeel van je boek voor. Tekstnodes bevatten verhaal,
+                        een keuzemenu vraagt iets aan de lezer en logica-nodes onthouden of controleren wat eerder is gebeurd.
+                      </p>
+                      <p>
+                        Je verbindt nodes met <strong className="text-white">paths</strong>. De Reader volgt
+                        die verbindingen vanaf de start-node. Een normale tekstflow kan uit meerdere tekstnodes bestaan zonder dat
+                        de lezer merkt waar de ene node eindigt en de volgende begint.
+                      </p>
+                    </div>
 
-                <section className="rounded-2xl border border-indigo-900/70 bg-indigo-950/20 p-5 md:col-span-2">
-                  <h3 className="mb-3 text-lg font-black">Nieuwe pagina in tekst</h3>
-                  <p className="text-sm leading-6 text-neutral-300">
-                    In een tekst-node kun je in de teksteditor op <strong className="text-white">Nieuwe pagina</strong> klikken.
-                    De editor plaatst dan <code className="rounded bg-black/40 px-2 py-1 text-indigo-200">[[NIEUWE_PAGINA]]</code> op die plek.
-                    In de reader wordt deze code verborgen en begint de tekst daarna op een nieuwe boekpagina. Handig voor hoofdstukken, titels of grote tekstblokken.
-                  </p>
-                </section>
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4 font-mono text-sm text-blue-100">
+                      Hoofdstuk → Tekst → Tekst → Keuze → Tekst → Minigame → Tekst
+                    </div>
+                  </section>
 
-                <section className="rounded-2xl border border-emerald-900/70 bg-emerald-950/20 p-5 md:col-span-2">
-                  <h3 className="mb-3 text-lg font-black">Sessiesave</h3>
-                  <p className="text-sm leading-6 text-neutral-300">
-                    De editor herstelt automatisch de meest recente versie uit deze browsersessie. Je krijgt dus geen herstelvraag meer. Sluit je browser helemaal af of klik <strong className="text-white">Reset editor</strong> om de sessie te wissen.
-                    Dashboard opslaan blijft de veilige online opslag.
-                  </p>
-                </section>
+                  <section className="rounded-3xl border border-blue-500/20 bg-neutral-900/70 p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-blue-300">
+                      2 • Tekst, speciale tekst en hoofdstukken
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Bouw de leesbare laag van het boek
+                    </h3>
+                    <div className="mt-5 grid gap-5">
+                      <div>
+                        <h4 className="font-black text-white">Normale tekst</h4>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-neutral-400">
+                          Gebruik dit voor het grootste deel van je verhaal. Wanneer één tekstnode precies één path naar een volgende
+                          tekstnode heeft, voegt de Reader die automatisch samen tot één doorlopende leesflow.
+                        </p>
+                      </div>
 
-                <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5 md:col-span-2">
-                  <h3 className="mb-3 text-lg font-black">Basis workflow</h3>
-                  <ol className="grid gap-2 pl-5 text-sm text-neutral-300 md:grid-cols-2">
-                    <li className="list-decimal">Maak nodes aan met de iconen links.</li>
-                    <li className="list-decimal">Klik op een node om rechts de instellingen te openen.</li>
-                    <li className="list-decimal">Gebruik <strong className="text-white">Paths</strong> om verhaalnodes met elkaar te verbinden.</li>
-                    <li className="list-decimal">Gebruik <strong className="text-white">Keuze menu</strong> voor echte lezerskeuzes.</li>
-                    <li className="list-decimal">Gebruik <strong className="text-white">Mini game</strong> voor success/fail-routes.</li>
-                    <li className="list-decimal">Klik <strong className="text-white">Play</strong> om je verhaal te testen.</li>
-                    <li className="list-decimal">Gebruik <strong className="text-white">Nieuwe pagina</strong> in tekstnodes om hoofdstukken of titels netjes op een nieuwe pagina te starten.</li>
-                    <li className="list-decimal">Gebruik <strong className="text-white">Kladblok</strong> voor lore/notities; deze telt niet mee voor publiceren.</li>
-                    <li className="list-decimal">Gebruik <strong className="text-white">Save menu</strong> voor Dashboard opslag, backup of export.</li>
-                    <li className="list-decimal">Gebruik <strong className="text-white">Reset editor</strong> alleen als je bewust opnieuw wilt beginnen.</li>
-                  </ol>
-                </section>
-              </div>
+                      <div>
+                        <h4 className="font-black text-white">Speciale tekst</h4>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-neutral-400">
+                          Gebruik dit wanneer een onderdeel bewust als een aparte pagina moet voelen, bijvoorbeeld een logboek,
+                          chat, brief of dossier. Speciale tekst wordt nooit automatisch met gewone tekst samengevoegd.
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="font-black text-white">Hoofdstuk-marker</h4>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-neutral-400">
+                          Plaats deze vóór de eerste node van een nieuw hoofdstuk. Vul nummer, titel en eventueel een ondertitel in.
+                          De marker verschijnt niet als eigen pagina, telt niet mee als verhaalnode en gebruikt precies één vervolgpath.
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="font-black text-white">Nieuwe pagina</h4>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-neutral-400">
+                          Wil je binnen één tekstflow bewust een pagina-afbreking? Gebruik dan de knop Nieuwe pagina in de teksteditor.
+                          De marker is alleen voor de editor; de lezer ziet hem niet.
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-3xl border border-orange-500/20 bg-orange-500/[0.055] p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-orange-300">
+                      3 • Keuzemenu
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Laat de lezer het verhaal sturen
+                    </h3>
+                    <div className="mt-4 grid gap-4 text-sm font-semibold leading-7 text-neutral-300">
+                      <p>
+                        Een keuzemenu kan maximaal drie opties bevatten. Iedere optie krijgt zijn eigen doel-node.
+                        Daardoor kan één verhaalpunt zich opsplitsen in verschillende routes.
+                      </p>
+                      <p>
+                        Een keuze kan daarnaast meteen een variabele veranderen. Bijvoorbeeld:
+                        keuze A zet <strong className="text-white">vertrouwen_sarah</strong> +1,
+                        terwijl keuze B een flag <strong className="text-white">kael_verdacht</strong> aanzet.
+                      </p>
+                      <p>
+                        Die informatie kan veel later door een IF-node worden gebruikt. Zo hoeft een keuze niet direct
+                        naar een compleet ander hoofdstuk te leiden om toch gevolgen te hebben.
+                      </p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-3xl border border-purple-500/20 bg-purple-500/[0.055] p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-purple-300">
+                      4 • Minigames en cutscenes
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Voeg interactieve scènes toe
+                    </h3>
+                    <div className="mt-5 grid gap-5">
+                      <div>
+                        <h4 className="font-black text-white">Minigame</h4>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-neutral-400">
+                          Een minigame heeft een successroute en een failroute. Beide resultaten kunnen ook variabelen aanpassen.
+                          Zet herkansing uit wanneer falen echt onderdeel van het verhaal moet worden.
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="font-black text-white">Cutscene</h4>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-neutral-400">
+                          Gebruik een cutscene voor een kort filmisch moment. Zodra de video is afgelopen volgt de Reader automatisch
+                          het vervolgpath. Zet belangrijke verhaalkeuzes daarom niet ín een cutscene, maar in een node erna.
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-3xl border border-indigo-500/20 bg-indigo-500/[0.055] p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-indigo-300">
+                      5 • Flags & variabelen
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Het geheugen van je verhaal
+                    </h3>
+                    <p className="mt-4 text-sm font-semibold leading-7 text-neutral-300">
+                      Maak variabelen centraal aan voordat je ze in Function-, IF-, keuze- of minigame-nodes gebruikt.
+                    </p>
+
+                    <div className="mt-5 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <h4 className="font-black text-white">Boolean / flag</h4>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-neutral-400">
+                          Alleen aan of uit. Bijvoorbeeld: heeft_sleutel = true.
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <h4 className="font-black text-white">Getal</h4>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-neutral-400">
+                          Voor tellers en relaties. Bijvoorbeeld: vertrouwen = 3.
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <h4 className="font-black text-white">Tekst</h4>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-neutral-400">
+                          Voor een opgeslagen tekstwaarde. Bijvoorbeeld: factie = "Dust".
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-3xl border border-cyan-500/20 bg-cyan-500/[0.055] p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">
+                      6 • Function node
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Verander verhaalstatus zonder een zichtbare scène
+                    </h3>
+                    <p className="mt-4 text-sm font-semibold leading-7 text-neutral-300">
+                      Een Function-node is onzichtbaar voor de lezer. Zodra de Reader hem bereikt, worden de ingestelde acties uitgevoerd
+                      en gaat het verhaal automatisch via de enige vervolgpath verder.
+                    </p>
+
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4 font-mono text-sm text-cyan-100">
+                      Keuze → Function: vertrouwen +1 → Tekst
+                    </div>
+
+                    <p className="mt-4 text-sm font-semibold leading-6 text-neutral-400">
+                      Gebruik Function wanneer een statuswijziging onderdeel is van de route zelf. Voor simpele gevolgen van een keuze
+                      kun je het effect ook direct op die keuze instellen.
+                    </p>
+                  </section>
+
+                  <section className="rounded-3xl border border-teal-500/20 bg-teal-500/[0.055] p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-teal-300">
+                      7 • Voorwaarde / IF
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Laat eerder gedrag bepalen wat er nu gebeurt
+                    </h3>
+                    <p className="mt-4 text-sm font-semibold leading-7 text-neutral-300">
+                      Een IF-node controleert een variabele en stuurt de lezer automatisch naar TRUE of ELSE.
+                      De node zelf wordt nooit als pagina getoond.
+                    </p>
+
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4 font-mono text-sm text-teal-100">
+                      IF vertrouwen ≥ 3
+                      <br />
+                      ├─ TRUE → Sarah vertrouwt de speler
+                      <br />
+                      └─ ELSE → Sarah houdt afstand
+                    </div>
+
+                    <p className="mt-4 text-sm font-semibold leading-6 text-neutral-400">
+                      Combineer Keuze → variabele → IF om gevolgen pas veel later zichtbaar te maken.
+                      Dat voorkomt dat iedere keuze meteen een volledig gescheiden verhaallijn nodig heeft.
+                    </p>
+                  </section>
+
+                  <section className="rounded-3xl border border-neutral-700 bg-neutral-900/70 p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-neutral-400">
+                      8 • Paths en vertakkingen
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Verbind nodes bewust
+                    </h3>
+                    <div className="mt-4 grid gap-4 text-sm font-semibold leading-7 text-neutral-300">
+                      <p>
+                        Een gewone verhaalnode kan meerdere paths hebben. Wanneer de Reader niet weet welke route automatisch bedoeld is,
+                        worden de beschikbare routes aan de lezer aangeboden.
+                      </p>
+                      <p>
+                        Voor echte verhaalkeuzes is een <strong className="text-white">Keuzemenu</strong> meestal duidelijker.
+                        Function- en hoofdstuk-nodes gebruiken bewust maar één vervolgpath. Een IF-node gebruikt TRUE en ELSE.
+                      </p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.055] p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-emerald-300">
+                      9 • Testen met Play
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Test niet alleen één route
+                    </h3>
+                    <div className="mt-4 grid gap-4 text-sm font-semibold leading-7 text-neutral-300">
+                      <p>
+                        Play start het boek vanaf de start-node. Controleer tekst, paginering, keuzes, minigames,
+                        hoofdstukken en de effecten van variabelen zoals een echte lezer ze krijgt.
+                      </p>
+                      <p>
+                        Test bij vertakkingen minimaal de belangrijkste alternatieve routes. Vooral IF-nodes kunnen fouten verbergen
+                        wanneer je tijdens testen telkens dezelfde keuze maakt.
+                      </p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-3xl border border-sky-500/20 bg-sky-500/[0.055] p-6 sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-sky-300">
+                      10 • Opslaan
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Sessiesave is handig, Dashboard-opslag is je veilige versie
+                    </h3>
+                    <div className="mt-4 grid gap-4 text-sm font-semibold leading-7 text-neutral-300">
+                      <p>
+                        De Studio bewaart automatisch je recente browsersessie. Daarmee kun je meestal verder waar je gebleven was.
+                      </p>
+                      <p>
+                        Gebruik Dashboard-opslag regelmatig voor de online versie van je boek en download eventueel een lokale backup
+                        voordat je grote wijzigingen aan je verhaalstructuur maakt.
+                      </p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-6 text-center sm:p-8">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-neutral-500">
+                      Klaar
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black">
+                      Je hoeft de tutorial niet te onthouden
+                    </h3>
+                    <p className="mx-auto mt-2 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
+                      Gebruik het overzicht voor snelle herkenning en kom hier terug zodra je met keuzes,
+                      variabelen of voorwaarden gaat werken.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setHelpView("overview")}
+                      className="mt-5 rounded-2xl border border-white/10 bg-white/10 px-6 py-3 text-sm font-black text-white hover:bg-white/15"
+                    >
+                      ← Terug naar overzicht
+                    </button>
+                  </section>
+                </div>
+              )}
             </div>
           </div>
         </div>

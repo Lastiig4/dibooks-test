@@ -1,17 +1,17 @@
 {
-  "name": "DiBooks Global Page Numbers V1",
+  "name": "DiBooks Editor Handleiding V2",
   "date": "2026-08-24",
   "sql_required": false,
   "files": [
-    "app/books/[bookId]/read/page.tsx",
     "app/editor/page.tsx",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Continuous chosen-route page numbering",
-    "Per-page number on each visible page",
-    "Double-page global ranges",
-    "Persistent visited-flow page counts",
-    "Continuous Author Studio preview numbering"
+    "Grouped quick-reference guide",
+    "Chapter-marker documentation",
+    "Separate full tutorial screen",
+    "Node interaction explanations",
+    "Choice/variable/function/IF tutorial",
+    "Removed old basic workflow"
   ]
 }

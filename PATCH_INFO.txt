@@ -1,74 +1,71 @@
-DiBooks Patch - Global Page Numbers V1
-=====================================
+DiBooks Patch - Editor Handleiding V2
+===================================
 
-Ja: deze patch past de PUBLIEKE READER én de READER PREVIEW IN DE EDITOR aan.
+De oude Handleiding is vervangen door een handleiding in twee lagen.
 
-NIEUW
-Paginanummers lopen voortaan door over het daadwerkelijk gekozen verhaalpad.
+1. SNEL OVERZICHT
+De node-legenda is nu gegroepeerd zoals de echte linker toolbar:
 
-Voorbeeld:
-- eerste tekstflow: pagina 1 t/m 6
-- keuze
-- minigame
-- volgende tekstflow begint op pagina 7
+TEKST & SCHRIJVEN
+- Normale tekst
+- Speciale tekst
+- Hoofdstuk-marker
+- Kladblok / lore
 
-Keuzes, minigames, cutscenes, hoofdstuk-markers, Function en IF
-krijgen zelf geen paginanummer en verhogen de teller niet.
+MEDIA & INTERACTIE
+- Cutscene
+- Minigame
+- Keuzemenu
 
-DUBBELE PAGINA
-Bij dubbelpagina worden beide fysieke pagina's apart genummerd:
-- linker pagina: 304
-- rechter pagina: 305
-- footer: Pagina 304–305
+LOGICA & TOOLS
+- Flags & variabelen
+- Functie
+- Voorwaarde / IF
 
-Daarna:
-306–307, 308–309, enz.
+PROJECT & VASTE KNOPPEN
+- Opslaan
+- Project laden
+- Play / Preview
+- Grid thema
+- Reset editor
 
-ENKELE PAGINA
-Footer:
-Pagina 304
+'Basis workflow' is verwijderd.
 
-PUBLIEKE READER
-run_history bewaart vanaf deze patch ook het gemeten aantal readerpagina's
-van iedere bezochte tekstflow (lastPageCount).
+2. VOLLEDIGE TUTORIAL
+Onderaan het overzicht staat:
+'Volledige tutorial openen →'
 
-Dit gebruikt de bestaande JSONB run_history.
-GEEN NIEUWE SQL NODIG.
+Dit opent binnen dezelfde handleiding een tweede scherm.
 
-Terugleesmodus gebruikt dezelfde doorlopende paginanummers van de run.
+Tutorial bevat:
+1. Hoe DiBooks/nodes werken
+2. Tekst, speciale tekst en hoofdstukken
+3. Keuzemenu
+4. Minigames en cutscenes
+5. Flags & variabelen
+6. Function node
+7. Voorwaarde / IF
+8. Paths en vertakkingen
+9. Testen met Play
+10. Opslaan
 
-AUTEUR STUDIO PREVIEW
-De preview start op pagina 1 en houdt tijdens die preview een cumulatieve
-paginateller bij.
+De tutorial legt ook combinaties uit zoals:
+Keuze -> variabele -> IF
+en
+Keuze -> Function -> Tekst
 
-Alleen wanneer je een tekst/speciale tekstflow volledig verlaat wordt het
-aantal pagina's opgeteld. Daarna gaat de volgende tekstflow verder.
+Navigatie:
+- Volledige tutorial openen
+- ← Overzicht
+- ← Terug naar overzicht onderaan
+- Sluiten zet de handleiding weer terug op het overzicht voor de volgende keer.
 
-De bestaande ruwe 'Geschat totaal boek' indicatie blijft alleen voor de auteur.
-De publieke Reader toont bewust geen vast totaal, omdat toekomstige
-keuzeroutes verschillende lengtes kunnen hebben.
+Geen SQL nodig.
+Geen Reader- of databasewijzigingen.
 
-LET OP
-Paginanummers zijn readerpagina's, geen vaste drukwerkpagina's.
-Lettergrootte, regelafstand, schermgrootte en enkel/dubbelmodus beïnvloeden
-hoeveel tekst op een fysieke readerpagina past.
-
-OUDE RUNS
-Oude run_history-items hebben nog geen lastPageCount.
-De Reader gebruikt daarvoor tijdelijk lastPageIndex als fallback.
-Nieuwe flows worden automatisch exact gemeten en opgeslagen.
-
-INSTALLEREN
+Installeren:
 1. ZIP uitpakken.
 2. Sleep map 'app' over dibooks_author_studio.
 3. Bestanden vervangen.
-4. Geen SQL.
-5. npm run build.
-6. Commit/push en deploy.
-
-TEST
-1. Lees tekst met meerdere pagina's.
-2. Ga door een keuze/minigame.
-3. Controleer dat de volgende tekst niet meer op pagina 1 start.
-4. Test dubbelpagina: bijvoorbeeld 6–7 -> 8–9.
-5. Test hetzelfde in Auteur Studio Preview.
+4. npm run build.
+5. Commit/push.
