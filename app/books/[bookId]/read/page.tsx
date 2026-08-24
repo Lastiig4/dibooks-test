@@ -2140,15 +2140,18 @@ export default function ReadBookPage() {
     if (replayStepIndex !== null) return;
 
     const activeReader = reader;
-    const activeUser = user;
 
     if (
-      !activeUser ||
+      !user ||
       loadState.status !== "ready" ||
       !runHistoryReadyRef.current
     ) {
       return;
     }
+
+    // Capture pas NA de null-check. Zo ziet strict TypeScript deze waarde
+    // ook binnen de geneste async callback gegarandeerd als non-null.
+    const activeUser = user;
 
     const nextTargetId = activeReader.outgoingPaths[0]?.target;
     if (!nextTargetId) {
