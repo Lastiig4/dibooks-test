@@ -812,6 +812,472 @@ function BookDashboardCard({
 }
 
 
+function dashboardStatusLabel(book: DashboardBook) {
+  if (book.moderationStatus === "pending") return "In beoordeling";
+  if (book.moderationStatus === "rejected") return "Afgewezen";
+  if (book.published) return "Live";
+  return book.status || "Concept";
+}
+
+function accessLabel(book: DashboardBook) {
+  return book.accessType === "premium" ? "Reader" : "Gratis";
+}
+
+function accessBadgeClass(book: DashboardBook) {
+  return book.accessType === "premium"
+    ? "border-blue-300/30 bg-blue-500/20 text-blue-100"
+    : "border-emerald-300/30 bg-emerald-500/20 text-emerald-100";
+}
+
+function BookShelfCard({
+  book,
+  seriesTitle,
+  onOpen,
+}: {
+  book: DashboardBook;
+  seriesTitle?: string;
+  onOpen: (book: DashboardBook) => void;
+}) {
+  const coverClass =
+    book.coverClass || "from-blue-950 via-slate-950 to-purple-950";
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(book)}
+      className="group min-w-0 text-left"
+      aria-label={`Beheer ${book.title}`}
+    >
+      <div
+        className={`relative aspect-[2/3] overflow-hidden rounded-[1.65rem] border bg-gradient-to-br shadow-2xl transition duration-300 group-hover:-translate-y-2 group-hover:border-white/35 group-hover:shadow-blue-950/30 ${
+          book.accentClass || "border-white/10"
+        }`}
+      >
+        {book.coverImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={book.coverImage}
+            alt={`Cover van ${book.title}`}
+            className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
+          />
+        ) : (
+          <>
+            <div className="absolute left-5 top-5 text-[9px] font-black uppercase tracking-[0.34em] text-white/35">
+              DiBooks
+            </div>
+            <div className="absolute -right-16 top-10 h-44 w-44 rounded-full border border-white/10" />
+            <div className="absolute -right-5 top-28 h-64 w-64 rounded-full border border-white/10" />
+          </>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/15" />
+
+        <div className="absolute left-3 right-3 top-3 flex flex-wrap items-start justify-between gap-2">
+          <span
+            className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest backdrop-blur ${statusClass(
+              book,
+            )}`}
+          >
+            {dashboardStatusLabel(book)}
+          </span>
+          <span
+            className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest backdrop-blur ${accessBadgeClass(
+              book,
+            )}`}
+          >
+            {accessLabel(book)}
+          </span>
+        </div>
+
+        {seriesTitle && (
+          <div className="absolute left-3 top-14 rounded-full border border-violet-300/25 bg-violet-500/20 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-violet-100 backdrop-blur">
+            {book.seriesOrder ? `Deel ${book.seriesOrder}` : "Serie"}
+          </div>
+        )}
+
+        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
+          <p className="text-[9px] font-black uppercase tracking-[0.28em] text-blue-200/80">
+            {book.primaryGenre || "Interactief"}
+          </p>
+          <h3 className="mt-2 line-clamp-3 text-2xl font-black leading-[0.98] text-white drop-shadow-lg">
+            {book.title}
+          </h3>
+          <p className="mt-2 truncate text-xs font-bold text-white/60">
+            {book.author}
+          </p>
+        </div>
+
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
+          <span className="rounded-2xl border border-white/20 bg-black/65 px-4 py-3 text-xs font-black uppercase tracking-widest text-white backdrop-blur">
+            Beheer boek
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function BookShelfSection({
+  eyebrow,
+  title,
+  description,
+  books,
+  seriesTitle,
+  onOpenBook,
+}: {
+  eyebrow: string;
+  title: string;
+  description?: string;
+  books: DashboardBook[];
+  seriesTitle?: string;
+  onOpenBook: (book: DashboardBook) => void;
+}) {
+  if (books.length === 0) return null;
+
+  return (
+    <section className="rounded-[2rem] border border-white/10 bg-white/[0.025] p-5 shadow-2xl sm:p-7">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.32em] text-neutral-500">
+            {eyebrow}
+          </p>
+          <h2 className="mt-2 text-2xl font-black sm:text-3xl">{title}</h2>
+          {description && (
+            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-neutral-500">
+              {description}
+            </p>
+          )}
+        </div>
+        <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-neutral-400">
+          {books.length} {books.length === 1 ? "boek" : "boeken"}
+        </span>
+      </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {books.map((book) => (
+          <BookShelfCard
+            key={`${book.source ?? "dashboard"}-${book.id}`}
+            book={book}
+            seriesTitle={seriesTitle}
+            onOpen={onOpenBook}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BookManagementModal({
+  book,
+  seriesTitle,
+  canPublish,
+  onClose,
+  onPublish,
+  onRemoveFromLibrary,
+  onDeleteDraft,
+  onOpenMedia,
+  onOpenDetails,
+  onShare,
+}: {
+  book: DashboardBook;
+  seriesTitle?: string;
+  canPublish: boolean;
+  onClose: () => void;
+  onPublish: (bookId: string) => void;
+  onRemoveFromLibrary: (bookId: string) => void;
+  onDeleteDraft: (bookId: string) => void;
+  onOpenMedia: (book: DashboardBook) => void;
+  onOpenDetails: (book: DashboardBook) => void;
+  onShare: (book: DashboardBook) => void;
+}) {
+  const isPublished = !!book.published;
+  const isReviewPending = book.moderationStatus === "pending";
+  const isRejected = book.moderationStatus === "rejected";
+  const canEdit = !isPublished && !isReviewPending;
+  const canShowBookPage =
+    book.source !== "dashboard" || book.published || book.status === "Binnenkort";
+  const detailHref =
+    book.source === "dashboard" ? `/books/${book.id}` : getBookDetailPath(book);
+  const stats = book.projectData ? getPublishNodeStats(book.projectData) : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="mx-auto max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#080b13] shadow-2xl">
+        <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-7">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">
+              Boekbeheer
+            </p>
+            <h2 className="mt-1 line-clamp-1 text-2xl font-black">{book.title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-black text-white hover:bg-white/10"
+          >
+            Sluiten
+          </button>
+        </div>
+
+        <div className="grid gap-0 lg:grid-cols-[300px_1fr]">
+          <div className="border-b border-white/10 bg-black/25 p-5 lg:border-b-0 lg:border-r">
+            <div
+              className={`relative mx-auto aspect-[2/3] w-full max-w-[260px] overflow-hidden rounded-[1.5rem] border bg-gradient-to-br ${
+                book.coverClass || "from-blue-950 via-slate-950 to-purple-950"
+              } ${book.accentClass || "border-white/10"}`}
+            >
+              {book.coverImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={book.coverImage}
+                  alt={`Cover van ${book.title}`}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : (
+                <>
+                  <div className="absolute left-5 top-5 text-[9px] font-black uppercase tracking-[0.34em] text-white/35">
+                    DiBooks
+                  </div>
+                  <div className="absolute -right-12 top-16 h-40 w-40 rounded-full border border-white/10" />
+                </>
+              )}
+
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/10" />
+
+              <div className="absolute left-3 right-3 top-3 flex flex-wrap justify-between gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest ${statusClass(
+                    book,
+                  )}`}
+                >
+                  {dashboardStatusLabel(book)}
+                </span>
+                <span
+                  className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest ${accessBadgeClass(
+                    book,
+                  )}`}
+                >
+                  {accessLabel(book)}
+                </span>
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 p-4">
+                <h3 className="text-2xl font-black leading-none text-white">
+                  {book.title}
+                </h3>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid content-start gap-5 p-5 sm:p-7">
+            <div className="flex flex-wrap gap-2">
+              {seriesTitle && (
+                <span className="rounded-full border border-violet-300/25 bg-violet-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-violet-100">
+                  {seriesTitle}
+                  {book.seriesOrder ? ` • Deel ${book.seriesOrder}` : ""}
+                </span>
+              )}
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-neutral-300">
+                {book.primaryGenre}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-neutral-300">
+                {book.ageRating}
+              </span>
+            </div>
+
+            <div>
+              <h3 className="text-3xl font-black">{book.title}</h3>
+              {book.subtitle && (
+                <p className="mt-2 text-sm font-semibold leading-6 text-neutral-400">
+                  {book.subtitle}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
+                  Status
+                </p>
+                <p className="mt-1 text-sm font-black text-white">
+                  {dashboardStatusLabel(book)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
+                  Toegang
+                </p>
+                <p className="mt-1 text-sm font-black text-white">
+                  {accessLabel(book)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
+                  Bewerken
+                </p>
+                <p className="mt-1 text-sm font-black text-white">
+                  {canEdit ? "Open" : "Vergrendeld"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
+                  Leestijd
+                </p>
+                <p className="mt-1 text-sm font-black text-white">
+                  {book.readTime || "Concept"}
+                </p>
+              </div>
+            </div>
+
+            {stats && (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-bold leading-6 text-neutral-300">
+                {stats.totalNodes} verhaalnodes • {stats.completeNodes} compleet
+                {stats.scratchpadNodes > 0 ? ` • ${stats.scratchpadNodes} kladblok` : ""}
+                {stats.functionNodes > 0 ? ` • ${stats.functionNodes} functie` : ""}
+                {stats.conditionNodes > 0 ? ` • ${stats.conditionNodes} IF` : ""}
+                {stats.isFullBook ? " • Volledig interactief" : ""}
+              </div>
+            )}
+
+            {isReviewPending ? (
+              <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm font-semibold leading-6 text-amber-50">
+                Dit boek staat in beoordeling en is tijdelijk vergrendeld.
+              </div>
+            ) : isRejected ? (
+              <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm font-semibold leading-6 text-red-100">
+                Afgewezen. Pas het boek aan en dien daarna opnieuw in.
+                {book.moderationFeedback && (
+                  <p className="mt-2 font-black text-white">
+                    Feedback: {book.moderationFeedback}
+                  </p>
+                )}
+              </div>
+            ) : isPublished ? (
+              <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm font-semibold leading-6 text-emerald-100">
+                Live boeken zijn vergrendeld. Haal het boek uit de Library om een nieuwe versie te maken.
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-yellow-400/25 bg-yellow-500/10 p-4 text-sm font-semibold leading-6 text-yellow-100">
+                Concept/testfase. Je kunt het boek vrij aanpassen en daarna indienen voor beoordeling.
+              </div>
+            )}
+
+            <div>
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.32em] text-neutral-500">
+                Acties
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {canEdit ? (
+                  <Link
+                    href={`/editor?book=${book.id}`}
+                    className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500"
+                  >
+                    Bewerk in Studio
+                  </Link>
+                ) : (
+                  <button
+                    disabled
+                    className="cursor-not-allowed rounded-2xl bg-neutral-800 px-5 py-3 text-sm font-black text-neutral-500"
+                  >
+                    Studio vergrendeld
+                  </button>
+                )}
+
+                {canEdit && book.source === "dashboard" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onOpenMedia(book)}
+                      className="rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-3 text-sm font-black text-cyan-100 hover:bg-cyan-500/20"
+                    >
+                      Cover & banner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenDetails(book)}
+                      className="rounded-2xl border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+                    >
+                      Boekgegevens
+                    </button>
+                  </>
+                )}
+
+                {book.source === "dashboard" && (
+                  <button
+                    type="button"
+                    onClick={() => onShare(book)}
+                    className="rounded-2xl border border-violet-400/30 bg-violet-500/10 px-5 py-3 text-sm font-black text-violet-100 hover:bg-violet-500/20"
+                  >
+                    Deel met contact
+                  </button>
+                )}
+
+                {canShowBookPage && (
+                  <Link
+                    href={detailHref}
+                    className="rounded-2xl border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+                  >
+                    Boekpagina
+                  </Link>
+                )}
+
+                {isReviewPending ? (
+                  <button
+                    disabled
+                    className="cursor-not-allowed rounded-2xl border border-amber-400/25 bg-amber-400/10 px-5 py-3 text-sm font-black text-amber-100"
+                  >
+                    In beoordeling
+                  </button>
+                ) : canEdit && book.source === "dashboard" ? (
+                  <button
+                    type="button"
+                    onClick={() => onPublish(book.id)}
+                    className={`rounded-2xl border px-5 py-3 text-sm font-black ${
+                      canPublish
+                        ? "border-emerald-500/35 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
+                        : "border-neutral-600/50 bg-neutral-800/60 text-neutral-400"
+                    }`}
+                  >
+                    {canPublish ? "Indienen voor beoordeling" : "Author Pro nodig"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="border-t border-white/10 pt-4">
+              {canEdit && book.source === "dashboard" && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteDraft(book.id)}
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-black text-red-100 hover:bg-red-500/20"
+                >
+                  Verwijder concept
+                </button>
+              )}
+
+              {isPublished && book.source === "dashboard" && (
+                <button
+                  type="button"
+                  onClick={() => onRemoveFromLibrary(book.id)}
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-black text-red-100 hover:bg-red-500/20"
+                >
+                  Verwijder uit Library
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function permissionLabel(permission: SharePermission) {
   if (permission === "edit") return "Lezen + feedback + voorstel";
   if (permission === "comment") return "Lezen + feedback";
@@ -1643,6 +2109,7 @@ export default function DashboardPage() {
   const [revisionItems, setRevisionItems] = useState<BookRevisionItem[]>([]);
   const [shareBook, setShareBook] = useState<DashboardBook | null>(null);
   const [feedbackBook, setFeedbackBook] = useState<SharedBook | null>(null);
+  const [manageBookId, setManageBookId] = useState<string | null>(null);
 
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -1703,6 +2170,47 @@ export default function DashboardPage() {
 
   const liveBooks = allBooks.filter((book) => book.published);
   const draftBooks = allBooks.filter((book) => !book.published);
+
+  const seriesBookGroups = useMemo(
+    () =>
+      bookSeries
+        .map((series) => ({
+          series,
+          books: allBooks
+            .filter((book) => book.seriesId === series.id)
+            .sort(
+              (left, right) =>
+                (left.seriesOrder ?? Number.MAX_SAFE_INTEGER) -
+                  (right.seriesOrder ?? Number.MAX_SAFE_INTEGER) ||
+                left.title.localeCompare(right.title, "nl"),
+            ),
+        }))
+        .filter((group) => group.books.length > 0),
+    [allBooks, bookSeries],
+  );
+
+  const knownSeriesIds = useMemo(
+    () => new Set(bookSeries.map((series) => series.id)),
+    [bookSeries],
+  );
+
+  const standaloneBooks = useMemo(
+    () =>
+      allBooks
+        .filter(
+          (book) =>
+            !book.seriesId ||
+            !knownSeriesIds.has(book.seriesId),
+        )
+        .sort((left, right) => left.title.localeCompare(right.title, "nl")),
+    [allBooks, knownSeriesIds],
+  );
+
+  const managedBook = useMemo(
+    () => allBooks.find((book) => book.id === manageBookId) ?? null,
+    [allBooks, manageBookId],
+  );
+
   const incomingFeedback = feedbackItems.filter((item) => item.ownerId === user?.id);
   const outgoingFeedback = feedbackItems.filter((item) => item.fromUserId === user?.id && item.ownerId !== user?.id);
   const incomingRevisions = revisionItems.filter((item) => item.ownerId === user?.id);
@@ -2093,64 +2601,35 @@ export default function DashboardPage() {
       <AppNav title="Auteur Dashboard" subtitle="Beheer concepten en publicaties" />
 
       <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
-        <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-stretch">
-          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-blue-950/70 via-neutral-950 to-purple-950/55 p-6 shadow-2xl sm:p-8">
-            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">Dashboard v3</p>
-            <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight sm:text-6xl">
-              Beheer concepten en live boeken veilig.
-            </h1>
-            <p className="mt-5 max-w-3xl text-lg font-semibold leading-8 text-neutral-300">
-Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 15 nodes. Reader Plus is voor lezen. Publiceren naar de Library is voor Author Pro accounts.
+        <div className="flex flex-col gap-5 border-b border-white/10 pb-7 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-cyan-200">
+                {getRoleLabel(user)}
+              </span>
+              <span className="rounded-full border border-blue-300/20 bg-blue-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-blue-200">
+                {getPlanLabel(user)}
+              </span>
+            </div>
+            <p className="mt-5 text-[10px] font-black uppercase tracking-[0.34em] text-neutral-500">
+              Auteur Dashboard
+            </p>
+            <h1 className="mt-2 text-4xl font-black sm:text-5xl">Mijn boeken</h1>
+            <p className="mt-3 text-sm font-semibold text-neutral-500">
+              {allBooks.length} {allBooks.length === 1 ? "boek" : "boeken"} • {liveBooks.length} live • {draftBooks.length} niet live
             </p>
           </div>
 
-          <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl sm:p-6">
-            <h2 className="text-xl font-black">Plan & publicatie</h2>
-            <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100">
-              <strong>Free:</strong> gratis boeken lezen en bouwen/testen tot {FREE_NODE_LIMIT} nodes. Publiceren is vergrendeld.
-            </div>
-            <div className="rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm leading-6 text-blue-100">
-              <strong>Reader Plus:</strong> premium boeken lezen. <strong>Author Pro:</strong> publiceren vanaf {AUTHOR_PRO_MIN_COMPLETE_NODES_TO_PUBLISH} complete nodes. Vanaf {FULL_BOOK_NODE_BADGE_THRESHOLD} nodes telt het later als volledig interactief boek.
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Rol</p>
-            <p className="mt-2 text-3xl font-black text-cyan-300">{getRoleLabel(user)}</p>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Plan</p>
-            <p className="mt-2 text-3xl font-black text-blue-300">{getPlanLabel(user)}</p>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Totaal boeken</p>
-            <p className="mt-2 text-4xl font-black">{allBooks.length}</p>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Live</p>
-            <p className="mt-2 text-4xl font-black text-emerald-300">{liveBooks.length}</p>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Niet live</p>
-            <p className="mt-2 text-4xl font-black text-yellow-300">{draftBooks.length}</p>
-          </div>
-        </div>
-
-        <div className="mt-10 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.32em] text-neutral-500">Mijn boeken</p>
-            <h2 className="mt-2 text-3xl font-black sm:text-4xl">Auteurcollectie</h2>
-          </div>
           <div className="flex flex-wrap gap-3">
             <button
+              type="button"
               onClick={() => setSeriesManagerContext("dashboard")}
-              className="rounded-2xl border border-purple-400/30 bg-purple-500/10 px-5 py-3 text-sm font-black text-purple-100 hover:bg-purple-500/20"
+              className="rounded-2xl border border-violet-400/30 bg-violet-500/10 px-5 py-3 text-sm font-black text-violet-100 hover:bg-violet-500/20"
             >
-              Series
+              Series beheren
             </button>
             <button
+              type="button"
               onClick={() => {
                 setForm({ ...defaultForm, author: user?.name ?? "" });
                 setNewBookOpen(true);
@@ -2174,21 +2653,51 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
           </div>
         )}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          {allBooks.map((book) => (
-            <BookDashboardCard
-              key={`${book.source}-${book.id}`}
-              book={book}
-              seriesTitle={bookSeries.find((series) => series.id === book.seriesId)?.title}
-              onPublish={submitBookForReview}
-              canPublish={permissions.canPublishBook}
-              onRemoveFromLibrary={removeBookFromLibrary}
-              onDeleteDraft={deleteDraftBook}
-              onOpenMedia={setMediaBook}
-              onOpenDetails={openBookDetails}
-              onShare={setShareBook}
+        {!dashboardLoading && allBooks.length === 0 && (
+          <div className="mt-8 rounded-[2rem] border border-dashed border-white/15 bg-white/[0.025] p-8 text-center sm:p-12">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-500/10 text-3xl ring-1 ring-blue-300/20">
+              📚
+            </div>
+            <h2 className="mt-5 text-2xl font-black">Je boekenplank is nog leeg</h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm font-semibold leading-6 text-neutral-500">
+              Maak je eerste DiBook. Zodra het boek is aangemaakt verschijnt de cover hier.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setForm({ ...defaultForm, author: user?.name ?? "" });
+                setNewBookOpen(true);
+              }}
+              className="mt-6 rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
+            >
+              + Eerste boek maken
+            </button>
+          </div>
+        )}
+
+        <div className="mt-8 grid gap-7">
+          {seriesBookGroups.map(({ series, books }) => (
+            <BookShelfSection
+              key={series.id}
+              eyebrow="Serie"
+              title={series.title}
+              description={
+                series.description ||
+                "Boeken worden automatisch op deelnummer gerangschikt."
+              }
+              books={books}
+              seriesTitle={series.title}
+              onOpenBook={(book) => setManageBookId(book.id)}
             />
           ))}
+
+          <BookShelfSection
+            eyebrow="Losstaande boeken"
+            title="Geen serie"
+            description="Boeken die niet aan een serie zijn gekoppeld."
+            books={standaloneBooks}
+            onOpenBook={(book) => setManageBookId(book.id)}
+          />
         </div>
 
         <div className="mt-12 grid gap-10">
@@ -2255,6 +2764,41 @@ Nieuwe boeken start je als concept. Gratis auteurs kunnen bouwen en testen tot 1
         </div>
 
       </section>
+
+      {managedBook && (
+        <BookManagementModal
+          book={managedBook}
+          seriesTitle={
+            bookSeries.find((series) => series.id === managedBook.seriesId)?.title
+          }
+          canPublish={permissions.canPublishBook}
+          onClose={() => setManageBookId(null)}
+          onPublish={(bookId) => {
+            setManageBookId(null);
+            void submitBookForReview(bookId);
+          }}
+          onRemoveFromLibrary={(bookId) => {
+            setManageBookId(null);
+            void removeBookFromLibrary(bookId);
+          }}
+          onDeleteDraft={(bookId) => {
+            setManageBookId(null);
+            void deleteDraftBook(bookId);
+          }}
+          onOpenMedia={(book) => {
+            setManageBookId(null);
+            setMediaBook(book);
+          }}
+          onOpenDetails={(book) => {
+            setManageBookId(null);
+            openBookDetails(book);
+          }}
+          onShare={(book) => {
+            setManageBookId(null);
+            setShareBook(book);
+          }}
+        />
+      )}
 
       {newBookOpen && (
         <NewBookModal

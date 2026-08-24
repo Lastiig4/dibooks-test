@@ -1,16 +1,18 @@
 {
-  "name": "DiBooks Book Access & Royalty Copy V1",
+  "name": "DiBooks Dashboard Bookshelf V1",
   "date": "2026-08-24",
   "sql_required": false,
   "files": [
     "app/dashboard/page.tsx",
-    "app/editor/page.tsx",
     "PATCH_INFO.txt"
   ],
-  "notes": [
-    "No royalty calculations added yet",
-    "Keeps free/premium database values unchanged",
-    "Free reading explicitly does not accrue royalties",
-    "Reader/premium reading is marked royalty-eligible for future verified reading-time system"
+  "features": [
+    "Compact author dashboard",
+    "Vertical cover cards",
+    "Status/access badges",
+    "Click-to-manage modal",
+    "Books grouped by series",
+    "Series sorted by seriesOrder",
+    "Standalone book section"
   ]
 }
