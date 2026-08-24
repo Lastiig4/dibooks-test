@@ -1,11 +1,16 @@
 {
-  "name": "DiBooks Guest Library Experience V2",
+  "name": "DiBooks Book Access & Royalty Copy V1",
   "date": "2026-08-24",
-  "sql_required": true,
-  "sql_file": "GUEST_LIBRARY_EXPERIENCE_V2_SUPABASE.sql",
+  "sql_required": false,
   "files": [
-    "app/page.tsx",
-    "GUEST_LIBRARY_EXPERIENCE_V2_SUPABASE.sql",
+    "app/dashboard/page.tsx",
+    "app/editor/page.tsx",
     "PATCH_INFO.txt"
+  ],
+  "notes": [
+    "No royalty calculations added yet",
+    "Keeps free/premium database values unchanged",
+    "Free reading explicitly does not accrue royalties",
+    "Reader/premium reading is marked royalty-eligible for future verified reading-time system"
   ]
 }

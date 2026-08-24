@@ -2390,10 +2390,14 @@ function SaveToDashboardModal({
                 onChange={(event) => updateField("accessType", event.target.value as "free" | "premium")}
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
               >
-                <option value="free">Gratis leesbaar</option>
-                <option value="premium">Premium / abonnement</option>
+                <option value="free">Gratis leesbaar — geen royalty</option>
+                <option value="premium">Reader / abonnement — royalty</option>
               </select>
-              <p className="mt-2 text-xs font-semibold leading-5 text-neutral-500">Concept is alleen voor jou. Binnenkort verschijnt als aankondiging. Premium-lezen koppelen we aan Reader Plus/Author Pro.</p>
+              <p className="mt-2 text-xs font-semibold leading-5 text-neutral-500">
+                {form.accessType === "free"
+                  ? "Gratis: iedereen kan dit boek lezen. Gratis leestijd bouwt geen royalty op — ideaal als demo, proloog of instapdeel van een serie."
+                  : "Reader: alleen Reader Plus, Author Pro of Admin kan dit boek lezen. Geverifieerde leestijd telt mee voor de maandelijkse auteursroyalty’s zodra het royaltysysteem actief is."}
+              </p>
             </div>
 
             <div>

@@ -1,68 +1,46 @@
-DiBooks Patch - Guest Library Experience V2
-===========================================
+DiBooks Patch - Book Access & Royalty Copy V1
+==============================================
+
+WAT VERANDERT
+
+De bestaande Toegang-keuze blijft technisch exact hetzelfde:
+- accessType = free
+- accessType = premium
+
+Alleen de auteurs-UX wordt duidelijker.
+
+GRATIS
+Dropdown:
+Gratis leesbaar — geen royalty
+
+Uitleg:
+Iedereen kan het boek lezen.
+Gratis leestijd bouwt geen royalty op.
+Geschikt als demo, proloog of instapdeel van een serie.
+
+READER
+Dropdown:
+Reader / abonnement — royalty
+
+Uitleg:
+Alleen Reader Plus, Author Pro of Admin kan lezen.
+Geverifieerde leestijd telt mee voor de maandelijkse auteursroyalty’s
+zodra het royaltysysteem actief is.
+
+AANGEPAST OP BEIDE PLEKKEN
+- Nieuw / wijzigen boek in Auteur Dashboard
+- Opslaan / metadata vanuit Auteur Studio
 
 BELANGRIJK
-RUN EERST:
-GUEST_LIBRARY_EXPERIENCE_V2_SUPABASE.sql
+Deze patch verandert nog GEEN financiële berekeningen.
+Hij legt alleen de toekomstige royaltybetekenis correct vast in de UI.
+Het echte royalty-ledger, maandafsluiting en payouts bouwen we later.
 
-NIEUW
-
-1. Gast-homepage is veel visueler
-Hero:
-- Jouw keuzes. Jouw verhaal.
-- keuzes / vertakkingen / cutscenes / minigames / gevolgen
-- Ontdek populaire boeken
-- Probeer Studio gratis
-- Account maken
-
-2. Top 3 echte populaire covers in hero
-De rechterkant toont automatisch de drie populairste LIVE DiBooks.
-
-3. Populair op DiBooks
-Nieuwe sectie direct onder de hero:
-- maximaal vijf covers;
-- #1 t/m #5;
-- echte boekcover;
-- titel / auteur / genre;
-- aantal unieke lezers wanneer beschikbaar.
-
-4. Populariteit komt uit echte leesactiviteit
-Supabase RPC:
-get_public_book_popularity()
-
-Deze telt unieke readers per book_id uit reading_progress.
-
-Privacy:
-- frontend ontvangt geen user IDs;
-- geen huidige pagina;
-- geen story_state;
-- alleen book_id + reader_count.
-
-5. Fallback
-Wanneer er nog geen leesdata is:
-- bestaande mostRead-markering;
-- daarna nieuwste publicatie.
-
-Dus de homepage blijft ook bij een nieuwe Library mooi gevuld.
-
-6. Featured Library boek
-Het grote uitgelichte boek onder de gastsecties gebruikt nu eveneens
-het populairste live boek.
-
-7. Studio-sectie
-'Probeer Studio gratis' opent /editor rechtstreeks.
-'Bekijk Auteur-plan' scrollt naar de plannen.
-Proefmodus blijft maximaal 15 verhaalnodes.
-
-8. Ingelogde Library blijft behouden
-Alle nieuwe marketingsecties zijn alleen voor gasten.
-
-Geen auth/role/plan wijzigingen in deze patch.
+GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Eerst GUEST_LIBRARY_EXPERIENCE_V2_SUPABASE.sql uitvoeren.
-3. Sleep map app over dibooks_author_studio.
-4. Bestanden vervangen.
-5. npm run build.
-6. Commit/push naar Vercel.
+2. Sleep de map app over dibooks_author_studio.
+3. Bestanden vervangen.
+4. npm run build.
+5. Commit/push naar GitHub/Vercel.
