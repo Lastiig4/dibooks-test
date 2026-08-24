@@ -138,6 +138,7 @@ type ReaderRunStep = {
   nodeType?: ReaderNodeType;
   enteredAt?: string;
   lastPageIndex?: number;
+  lastPageCount?: number;
   exitSourceNodeId?: string;
   exitTargetNodeId?: string;
   exitKind?:
@@ -407,6 +408,7 @@ function createReaderRunStep(
     nodeType: node?.type,
     enteredAt: new Date().toISOString(),
     lastPageIndex: 0,
+    lastPageCount: undefined,
   };
 }
 
@@ -438,6 +440,10 @@ function normalizeReaderRunHistory(
           0,
           Number(entry.lastPageIndex) || 0,
         ),
+        lastPageCount:
+          Number(entry.lastPageCount) > 0
+            ? Math.max(1, Math.floor(Number(entry.lastPageCount)))
+            : undefined,
         exitSourceNodeId:
           typeof entry.exitSourceNodeId === "string"
             ? entry.exitSourceNodeId
@@ -580,6 +586,75 @@ function getChapterFromRunHistory(
   }
 
   return null;
+}
+
+function getReaderRunStepPageCount(
+  step: ReaderRunStep | undefined,
+  book: ReaderBook,
+) {
+  if (!step) return 0;
+
+  const node = book.nodes.find((item) => item.id === step.nodeId);
+  if (!node || (node.type !== "text" && node.type !== "special")) {
+    return 0;
+  }
+
+  if (Number(step.lastPageCount) > 0) {
+    return Math.max(1, Math.floor(Number(step.lastPageCount)));
+  }
+
+  // Oude run-history van vóór Global Page Numbers V1 kent alleen
+  // lastPageIndex. Dit is een veilige eenmalige fallback.
+  return Math.max(1, Math.floor(Number(step.lastPageIndex) || 0) + 1);
+}
+
+function getReaderGlobalPageOffset(
+  history: ReaderRunStep[],
+  book: ReaderBook,
+  stepIndex: number,
+) {
+  const safeEndIndex = Math.max(
+    0,
+    Math.min(stepIndex, history.length),
+  );
+
+  return history
+    .slice(0, safeEndIndex)
+    .reduce(
+      (total, step) =>
+        total + getReaderRunStepPageCount(step, book),
+      0,
+    );
+}
+
+function withCurrentReaderPageMetrics(
+  history: ReaderRunStep[],
+  book: ReaderBook,
+  currentNodeId: string,
+  pageIndex: number,
+  pageCount: number,
+) {
+  const nextHistory = [...history];
+
+  for (let index = nextHistory.length - 1; index >= 0; index -= 1) {
+    const step = nextHistory[index];
+    if (step?.nodeId !== currentNodeId) continue;
+
+    const node = book.nodes.find((item) => item.id === step.nodeId);
+    if (!node || (node.type !== "text" && node.type !== "special")) {
+      return nextHistory;
+    }
+
+    nextHistory[index] = {
+      ...step,
+      lastPageIndex: Math.max(0, Math.floor(pageIndex)),
+      lastPageCount: Math.max(1, Math.floor(pageCount)),
+    };
+
+    return nextHistory;
+  }
+
+  return nextHistory;
 }
 
 function getLegacyReaderFlagsStorageKey(bookId: string) {
@@ -1311,6 +1386,7 @@ function BookPageReader({
   theme,
   lineSpacing,
   fontFamily,
+  globalPageOffset,
   isSpecialPage = false,
 }: {
   html: string;
@@ -1323,6 +1399,7 @@ function BookPageReader({
   theme: ReaderTheme;
   lineSpacing: ReaderLineSpacing;
   fontFamily: ReaderFontFamily;
+  globalPageOffset: number;
   isSpecialPage?: boolean;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -1435,6 +1512,13 @@ function BookPageReader({
         ? "[&_p]:mb-8"
         : "[&_p]:mb-6";
 
+  const pageNumberClass =
+    theme === "light"
+      ? "text-neutral-500"
+      : theme === "sepia"
+        ? "text-[#c8ab80]/75"
+        : "text-neutral-500";
+
   return (
     <div className="mx-auto flex h-full w-full flex-col px-3 py-3 sm:px-6">
       <div ref={viewportRef} className="min-h-0 flex-1 overflow-hidden">
@@ -1448,7 +1532,7 @@ function BookPageReader({
           {visiblePages.map((pageHtml, index) => (
             <article
               key={`${pageIndex}-${index}`}
-              className={`h-full overflow-hidden rounded-2xl border px-8 pb-20 pt-8 sm:px-12 sm:pb-24 sm:pt-10 md:px-16 ${pageClass}`}
+              className={`relative h-full overflow-hidden rounded-2xl border px-8 pb-20 pt-8 sm:px-12 sm:pb-24 sm:pt-10 md:px-16 ${pageClass}`}
             >
               <div
                 className={`dibooks-reader-content prose max-w-none ${theme === "light" ? "prose-neutral" : "prose-invert"} ${paragraphSpacingClass} [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0`}
@@ -1459,6 +1543,12 @@ function BookPageReader({
                 }}
                 dangerouslySetInnerHTML={{ __html: pageHtml }}
               />
+              <div
+                className={`pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 text-[11px] font-black tabular-nums ${pageNumberClass}`}
+                aria-hidden="true"
+              >
+                {globalPageOffset + pageIndex + index + 1}
+              </div>
             </article>
           ))}
 
@@ -1946,6 +2036,17 @@ export default function ReadBookPage() {
         readerPageCount,
       );
 
+      const historyWithPageMetrics =
+        withCurrentReaderPageMetrics(
+          runHistoryRef.current,
+          loadState.book,
+          currentNodeId,
+          pageIndex,
+          readerPageCount,
+        );
+
+      runHistoryRef.current = historyWithPageMetrics;
+
       saveReaderProgressSnapshot(
         user.id,
         loadState.book.id,
@@ -1953,7 +2054,7 @@ export default function ReadBookPage() {
         pageIndex,
         progressPercent,
         storyStateRef.current,
-        runHistoryRef.current,
+        historyWithPageMetrics,
       )
         .then(() => {
           clearLegacyReaderFlags(loadState.book.id);
@@ -2416,10 +2517,18 @@ export default function ReadBookPage() {
     }
 
     const currentStep = nextHistory[currentStepIndex];
+    const activeNode = book.nodes.find(
+      (item) => item.id === activeNodeId,
+    );
+    const activeStepIsText =
+      activeNode?.type === "text" || activeNode?.type === "special";
 
     nextHistory[currentStepIndex] = {
       ...currentStep,
       lastPageIndex: Math.max(0, pageIndex),
+      lastPageCount: activeStepIsText
+        ? Math.max(1, readerPageCount)
+        : currentStep?.lastPageCount,
       exitSourceNodeId:
         transitionMeta.sourceNodeId ??
         transitionMeta.exitSourceNodeId ??
@@ -3017,6 +3126,24 @@ export default function ReadBookPage() {
     isCutsceneNode && !isReadOnlyReplay;
 
   const currentHistoryIndex = getCurrentHistoryStepIndex();
+  const globalPageOffset = getReaderGlobalPageOffset(
+    runHistory,
+    book,
+    currentHistoryIndex,
+  );
+  const globalPageStart = globalPageOffset + pageIndex + 1;
+  const visibleGlobalPageCount = isTextNode
+    ? Math.max(
+        1,
+        Math.min(
+          readerVisiblePageCount,
+          Math.max(1, readerPageCount - pageIndex),
+        ),
+      )
+    : 0;
+  const globalPageEnd =
+    globalPageStart + Math.max(0, visibleGlobalPageCount - 1);
+
   const canGoToPreviousVisitedScene =
     findReplayVisibleStepIndex(
       runHistory,
@@ -3309,6 +3436,7 @@ export default function ReadBookPage() {
             theme={theme}
             lineSpacing={lineSpacing}
             fontFamily={fontFamily}
+            globalPageOffset={globalPageOffset}
             isSpecialPage={node.type === "special"}
           />
         )}
@@ -3576,13 +3704,9 @@ export default function ReadBookPage() {
 
               <div className="text-center text-sm font-bold text-neutral-400">
                 <div>
-                  {readerVisiblePageCount === 2 &&
-                  pageIndex + 1 < readerPageCount
-                    ? `Pagina ${pageIndex + 1}–${Math.min(
-                        pageIndex + 2,
-                        readerPageCount,
-                      )} van ${readerPageCount}`
-                    : `Pagina ${pageIndex + 1} van ${readerPageCount}`}
+                  {globalPageEnd > globalPageStart
+                    ? `Pagina ${globalPageStart}–${globalPageEnd}`
+                    : `Pagina ${globalPageStart}`}
                 </div>
                 <div className="text-xs text-amber-400/70">
                   Alleen teruglezen • je echte voortgang blijft op {currentProgressPercent}%
@@ -3661,13 +3785,9 @@ export default function ReadBookPage() {
 
             <div className="text-center text-sm font-bold text-neutral-400">
               <div>
-                {readerVisiblePageCount === 2 &&
-                pageIndex + 1 < readerPageCount
-                  ? `Pagina ${pageIndex + 1}–${Math.min(
-                      pageIndex + 2,
-                      readerPageCount,
-                    )} van ${readerPageCount}`
-                  : `Pagina ${pageIndex + 1} van ${readerPageCount}`}
+                {globalPageEnd > globalPageStart
+                    ? `Pagina ${globalPageStart}–${globalPageEnd}`
+                    : `Pagina ${globalPageStart}`}
               </div>
               <div className="text-xs text-neutral-600">
                 {currentProgressPercent}% gelezen

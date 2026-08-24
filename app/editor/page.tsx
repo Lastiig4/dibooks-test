@@ -1441,12 +1441,14 @@ function BookPageReader({
   setPageIndex,
   onPageCountChange,
   onVisiblePageCountChange,
+  globalPageOffset,
 }: {
   html: string;
   pageIndex: number;
   setPageIndex: React.Dispatch<React.SetStateAction<number>>;
   onPageCountChange: (pageCount: number) => void;
   onVisiblePageCountChange: (visiblePageCount: number) => void;
+  globalPageOffset: number;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<string[]>([
@@ -1535,12 +1537,18 @@ function BookPageReader({
           {visiblePages.map((pageHtml, index) => (
             <article
               key={`${pageIndex}-${index}`}
-              className="h-full overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/95 px-8 pb-20 pt-8 shadow-inner sm:px-12 sm:pb-24 sm:pt-10 md:px-16"
+              className="relative h-full overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/95 px-8 pb-20 pt-8 shadow-inner sm:px-12 sm:pb-24 sm:pt-10 md:px-16"
             >
               <div
                 className="dibooks-reader-content prose prose-invert max-w-none text-[18px] leading-8 sm:text-[20px] sm:leading-9 [&_p]:mb-6 [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0"
                 dangerouslySetInnerHTML={{ __html: pageHtml }}
               />
+              <div
+                className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 text-[11px] font-black tabular-nums text-neutral-500"
+                aria-hidden="true"
+              >
+                {globalPageOffset + pageIndex + index + 1}
+              </div>
             </article>
           ))}
 
@@ -2417,6 +2425,7 @@ export default function Home() {
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [previewPageCount, setPreviewPageCount] = useState(1);
+  const [previewGlobalPageOffset, setPreviewGlobalPageOffset] = useState(0);
   const [readerVisiblePageCount, setReaderVisiblePageCount] = useState(1);
   const flowWrapperRef = useRef<HTMLDivElement | null>(null);
   const reviewFlowInstanceRef = useRef<any>(null);
@@ -2725,6 +2734,18 @@ export default function Home() {
 
     return Math.max(1, Math.ceil(totalCharacters / 1800));
   }, [nodes]);
+
+  const previewGlobalPageStart =
+    previewGlobalPageOffset + previewPageIndex + 1;
+  const previewVisibleGlobalPageCount = Math.max(
+    1,
+    Math.min(
+      readerVisiblePageCount,
+      Math.max(1, previewPageCount - previewPageIndex),
+    ),
+  );
+  const previewGlobalPageEnd =
+    previewGlobalPageStart + previewVisibleGlobalPageCount - 1;
 
   useEffect(() => {
     if (!previewOpen || previewNode?.data.type !== "chapter") return;
@@ -3393,6 +3414,7 @@ ${formatSaveError(error)}`);
     setPreviewNodeId(startNodeId);
     setPreviewPageIndex(0);
     setPreviewPageCount(1);
+    setPreviewGlobalPageOffset(0);
     setReaderVisiblePageCount(1);
     setPreviewOpen(true);
   }
@@ -3402,11 +3424,15 @@ ${formatSaveError(error)}`);
     setPreviewNodeId(null);
     setPreviewPageIndex(0);
     setPreviewPageCount(1);
+    setPreviewGlobalPageOffset(0);
     setReaderVisiblePageCount(1);
     setPreviewVariableValues({});
   }
 
-  function goToPreviewNode(nodeId: string) {
+  function goToPreviewNode(
+    nodeId: string,
+    completedTextPageCount = 0,
+  ) {
     const targetNode = nodes.find((node) => node.id === nodeId);
 
     if (!targetNode || isScratchpadNode(targetNode)) {
@@ -3414,9 +3440,16 @@ ${formatSaveError(error)}`);
       return;
     }
 
-    // Belangrijk: interactieve nodes zoals minigames moeten nooit worden
-    // meegenomen alsof ze gewone tekstflow zijn. Daarom resetten we hier
-    // altijd de reader-state voordat we naar een nieuwe node springen.
+    // Alleen een volledig verlaten tekstflow verhoogt de globale teller.
+    // Keuzes, minigames, cutscenes, IF/Function en hoofdstuk-markers
+    // zijn geen fysieke readerpagina's.
+    if (completedTextPageCount > 0) {
+      setPreviewGlobalPageOffset(
+        (current) =>
+          current + Math.max(1, Math.floor(completedTextPageCount)),
+      );
+    }
+
     setPreviewNodeId(nodeId);
     setPreviewPageIndex(0);
     setPreviewPageCount(1);
@@ -6717,6 +6750,7 @@ ${formatSaveError(error)}`);
                 setPageIndex={setPreviewPageIndex}
                 onPageCountChange={setPreviewPageCount}
                 onVisiblePageCountChange={setReaderVisiblePageCount}
+                globalPageOffset={previewGlobalPageOffset}
               />
             )}
 
@@ -6980,13 +7014,9 @@ ${formatSaveError(error)}`);
 
                 <div className="text-center text-sm font-bold text-neutral-400">
                   <div>
-                    {readerVisiblePageCount === 2 &&
-                    previewPageIndex + 1 < previewPageCount
-                      ? `Pagina ${previewPageIndex + 1}–${Math.min(
-                          previewPageIndex + 2,
-                          previewPageCount,
-                        )} van ${previewPageCount}`
-                      : `Pagina ${previewPageIndex + 1} van ${previewPageCount}`}
+                    {previewGlobalPageEnd > previewGlobalPageStart
+                      ? `Pagina ${previewGlobalPageStart}–${previewGlobalPageEnd}`
+                      : `Pagina ${previewGlobalPageStart}`}
                   </div>
                   <div className="text-xs text-neutral-500">
                     Geschat totaal boek: ±{estimatedTotalBookPages} pagina’s
@@ -7015,7 +7045,10 @@ ${formatSaveError(error)}`);
                   textChain.nextNodeAfterChain && (
                     <button
                       onClick={() => {
-                        goToPreviewNode(textChain.nextNodeAfterChain!.id);
+                        goToPreviewNode(
+                          textChain.nextNodeAfterChain!.id,
+                          previewPageCount,
+                        );
                       }}
                       className="rounded-xl bg-emerald-600 px-4 py-3 font-black text-white hover:bg-emerald-500"
                     >
@@ -7036,7 +7069,12 @@ ${formatSaveError(error)}`);
                         return (
                           <button
                             key={edge.id}
-                            onClick={() => goToPreviewNode(edge.target)}
+                            onClick={() =>
+                              goToPreviewNode(
+                                edge.target,
+                                previewPageCount,
+                              )
+                            }
                             className="rounded-xl bg-emerald-600 px-4 py-3 text-left font-black text-white hover:bg-emerald-500"
                           >
                             {edge.label

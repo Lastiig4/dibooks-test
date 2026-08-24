@@ -1,10 +1,17 @@
 {
-  "name": "DiBooks Reader Readback History V1.1 TypeScript Fix",
+  "name": "DiBooks Global Page Numbers V1",
   "date": "2026-08-24",
   "sql_required": false,
   "files": [
     "app/books/[bookId]/read/page.tsx",
+    "app/editor/page.tsx",
     "PATCH_INFO.txt"
   ],
-  "fix": "Capture chapter activeUser only after null guard"
+  "features": [
+    "Continuous chosen-route page numbering",
+    "Per-page number on each visible page",
+    "Double-page global ranges",
+    "Persistent visited-flow page counts",
+    "Continuous Author Studio preview numbering"
+  ]
 }

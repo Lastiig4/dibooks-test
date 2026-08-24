@@ -1,36 +1,74 @@
-DiBooks Reader Readback History V1.1 - TypeScript Fix
-====================================================
+DiBooks Patch - Global Page Numbers V1
+=====================================
 
-Vercel fout:
-'activeUser' is possibly 'null'
-in de chapter auto-forward async callback.
+Ja: deze patch past de PUBLIEKE READER én de READER PREVIEW IN DE EDITOR aan.
 
-Oorzaak:
-activeUser werd vastgelegd VOOR de !activeUser/null-check.
-TypeScript kon daardoor in de geneste async functie niet bewijzen
-dat activeUser gegarandeerd bestaat.
+NIEUW
+Paginanummers lopen voortaan door over het daadwerkelijk gekozen verhaalpad.
 
-Fix:
-- eerst !user controleren;
-- daarna pas:
-    const activeUser = user;
-- hierdoor is activeUser in continueFromChapter() strikt non-null.
+Voorbeeld:
+- eerste tekstflow: pagina 1 t/m 6
+- keuze
+- minigame
+- volgende tekstflow begint op pagina 7
 
-De andere nieuwe async flows zijn proactief gecontroleerd:
-- Function
-- Condition
-- keuze/minigame effects
-- restart
+Keuzes, minigames, cutscenes, hoofdstuk-markers, Function en IF
+krijgen zelf geen paginanummer en verhogen de teller niet.
 
-Die capturen user al na hun !user guard.
+DUBBELE PAGINA
+Bij dubbelpagina worden beide fysieke pagina's apart genummerd:
+- linker pagina: 304
+- rechter pagina: 305
+- footer: Pagina 304–305
 
-GEEN nieuwe SQL nodig.
-Als je READER_READBACK_HISTORY_V1_SUPABASE.sql al hebt uitgevoerd,
-hoef je SQL niet opnieuw te draaien.
+Daarna:
+306–307, 308–309, enz.
 
-Installeren:
+ENKELE PAGINA
+Footer:
+Pagina 304
+
+PUBLIEKE READER
+run_history bewaart vanaf deze patch ook het gemeten aantal readerpagina's
+van iedere bezochte tekstflow (lastPageCount).
+
+Dit gebruikt de bestaande JSONB run_history.
+GEEN NIEUWE SQL NODIG.
+
+Terugleesmodus gebruikt dezelfde doorlopende paginanummers van de run.
+
+AUTEUR STUDIO PREVIEW
+De preview start op pagina 1 en houdt tijdens die preview een cumulatieve
+paginateller bij.
+
+Alleen wanneer je een tekst/speciale tekstflow volledig verlaat wordt het
+aantal pagina's opgeteld. Daarna gaat de volgende tekstflow verder.
+
+De bestaande ruwe 'Geschat totaal boek' indicatie blijft alleen voor de auteur.
+De publieke Reader toont bewust geen vast totaal, omdat toekomstige
+keuzeroutes verschillende lengtes kunnen hebben.
+
+LET OP
+Paginanummers zijn readerpagina's, geen vaste drukwerkpagina's.
+Lettergrootte, regelafstand, schermgrootte en enkel/dubbelmodus beïnvloeden
+hoeveel tekst op een fysieke readerpagina past.
+
+OUDE RUNS
+Oude run_history-items hebben nog geen lastPageCount.
+De Reader gebruikt daarvoor tijdelijk lastPageIndex als fallback.
+Nieuwe flows worden automatisch exact gemeten en opgeslagen.
+
+INSTALLEREN
 1. ZIP uitpakken.
 2. Sleep map 'app' over dibooks_author_studio.
 3. Bestanden vervangen.
-4. Commit/push.
-5. Vercel opnieuw laten bouwen.
+4. Geen SQL.
+5. npm run build.
+6. Commit/push en deploy.
+
+TEST
+1. Lees tekst met meerdere pagina's.
+2. Ga door een keuze/minigame.
+3. Controleer dat de volgende tekst niet meer op pagina 1 start.
+4. Test dubbelpagina: bijvoorbeeld 6–7 -> 8–9.
+5. Test hetzelfde in Auteur Studio Preview.
