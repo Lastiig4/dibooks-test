@@ -1,70 +1,119 @@
-DiBooks Patch - Chapter Marker V1
-================================
+DiBooks Patch - Reader Readback History V1
+=========================================
 
-NIEUWE NODE
-Hoofdstuk-marker (onder Tekst & schrijven)
+BELANGRIJK:
+RUN EERST:
+READER_READBACK_HISTORY_V1_SUPABASE.sql
+in Supabase SQL Editor.
 
-Velden:
-- Hoofdstuknummer (bijv. 4, IV of Proloog)
-- Hoofdstuktitel
-- Optionele ondertitel
+WAT DEZE PATCH DOET
 
-VOORBEELD ROUTE
-Hoofdstuk-marker -> Tekst -> Tekst -> Keuze -> ...
+1. Leesgeschiedenis per verhaalrun
+De Reader bewaart voortaan het werkelijk gevolgde pad in
+reading_progress.run_history.
 
-GEDRAG
-- Hoofdstuk-marker is GEEN reader-pagina.
-- Reader gaat automatisch via de ene vervolgpath naar de volgende node.
-- Reader toont het actieve hoofdstuk subtiel onder de boektitel.
-- Footer toont ook het actieve hoofdstuk bij de leesvoortgang.
-- Bij refresh/hervatten zoekt de Reader terug naar de dichtstbijzijnde
-  hoofdstuk-marker, dus hoofdstuktitel blijft zichtbaar.
-- Preview in Auteur Studio slaat de marker automatisch over.
-- De marker mag start-node zijn (handig bij Hoofdstuk 1 / Proloog).
+Opgeslagen wordt o.a.:
+- welke scene/node bereikt is;
+- via welk pad iemand doorging;
+- gekozen keuze-optie;
+- success/fail van minigame;
+- TRUE/ELSE route van IF;
+- Function- en hoofdstuk-overgangen.
 
-NIET MEETELLEN
-Hoofdstuk-markers tellen NIET mee:
-- voor de verhaalnode-limiet;
-- als verhaalnode voor boekvereisten;
-- in de Reader voortgang als eigen node;
-- voor DeepSeek tekstmoderatie/API-kosten.
+2. Teruglezen zonder verhaal te veranderen
+Als de lezer teruggaat voorbij de eerste pagina van de huidige scene,
+schakelt DiBooks naar TERUGLEESMODUS.
 
-PADREGEL
-Een hoofdstuk-marker gebruikt maximaal één vervolgpath.
-Zo blijft de betekenis eenduidig: vanaf hier begint dit hoofdstuk.
+In die modus:
+- story state verandert NIET;
+- Function nodes worden NIET opnieuw uitgevoerd;
+- IF nodes worden NIET opnieuw berekend;
+- keuzes kunnen NIET gewijzigd worden;
+- de eerder gekozen optie is gemarkeerd als 'Jouw keuze';
+- minigames worden NIET opnieuw gespeeld;
+- het oude success/fail resultaat wordt getoond;
+- echte leesvoortgang blijft op de oorspronkelijke positie.
 
-STRUCTUURMENU
-Bovenin Structuur staat nu ook:
-- Hoofdstukken: X
+Bovenin staat:
+'Terugleesmodus'
++ knop 'Terug naar waar ik was'.
 
-MODERATIE
-DeepSeek scanner slaat chapter nodes volledig over.
-Geen SQL nodig.
+3. Interactieve grenzen blokkeren teruglezen niet meer
+Je kunt nu terug over:
+- tekst;
+- keuzes;
+- minigames;
+- cutscenes;
+- hoofdstukovergangen;
+- Function/IF nodes (deze worden intern overgeslagen).
+
+Dus een keuzemenu of minigame is niet meer het verste punt waar je
+naar terug kunt.
+
+4. Inhoud / hoofdstukken
+Nieuwe knop 'Inhoud' in Reader header.
+
+Toont ALLEEN hoofdstukken die in deze specifieke verhaalrun werkelijk
+zijn bereikt.
+
+Geen toekomstige hoofdstukken.
+Geen alternatieve niet-gekozen hoofdstukken.
+Dus geen spoilers en geen mogelijkheid om vooruit te springen.
+
+Klik op een bereikt hoofdstuk:
+-> opent dat hoofdstuk in read-only terugleesmodus.
+
+5. Normale vorige knop
+Op pagina > 1:
+'Vorige pagina'
+
+Op pagina 1, wanneer er een eerder bezocht onderdeel bestaat:
+'Teruglezen'
+
+Daarmee stap je logisch door je echte eerdere route heen.
+
+6. Opnieuw lezen
+'Opnieuw lezen' wist zoals voorheen reading_progress.
+Daarmee wordt ook run_history gewist en begint een volledig nieuwe run.
+Dat is de enige manier om bewust een ander interactief pad te spelen.
 
 BESTAANDE SYSTEMEN BEHOUDEN
 - Reader UX V1
-- swipe / toetsenbord / fullscreen
+- hoofdstuk-markers
+- swipe
+- pijltjestoetsen
+- fullscreen
 - slimme paginering
+- regelafstand / fonts
 - Story State
 - Function / IF
-- variable effects
-- minigames
-- moderation/review
-- incremental DeepSeek scan
+- choice effects
+- minigame effects
+- Supabase voortgang
+
+LET OP BESTAANDE LEESRUNS
+Oude leesruns hebben vóór deze patch nog geen routegeschiedenis.
+Bij eerste openen wordt daarom het huidige punt als start van de nieuwe
+geschiedenis gebruikt.
+
+Voor een volledige terugleesgeschiedenis vanaf het begin:
+druk één keer op 'Opnieuw lezen' en lees daarna verder.
+Nieuwe runs worden volledig bijgehouden.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep de map 'app' over dibooks_author_studio.
-3. Bestanden vervangen.
-4. GEEN SQL uitvoeren.
+2. RUN EERST READER_READBACK_HISTORY_V1_SUPABASE.sql in Supabase.
+3. Sleep daarna map 'app' over dibooks_author_studio.
+4. Bestanden vervangen.
 5. npm run build
 6. Commit/push naar GitHub/Vercel.
 
 TEST
-1. Voeg Tekst & schrijven -> Hoofdstuk-marker toe.
-2. Vul nummer '1' en titel 'Het Begin' in.
-3. Maak één path naar een tekstnode.
-4. Zet marker eventueel als start-node.
-5. Preview: marker hoort automatisch te verdwijnen.
-6. Public Reader: onder boektitel moet 'Hoofdstuk 1 — Het Begin' staan.
-7. Controleer Structuur: verhaalnode-teller mag door de marker niet omhoog gaan.
+1. Start boek opnieuw.
+2. Lees tekst -> maak keuze -> speel minigame -> lees verder.
+3. Ga op pagina 1 terug via 'Teruglezen'.
+4. Controleer dat keuze zichtbaar maar geblokkeerd is.
+5. Controleer dat minigame alleen resultaat toont.
+6. Klik 'Terug naar waar ik was'.
+7. Controleer dat je weer exact op je echte voortgang staat.
+8. Open 'Inhoud' en controleer dat alleen bereikte hoofdstukken zichtbaar zijn.

@@ -8,7 +8,7 @@ import { useParams } from "next/navigation";
 import { books } from "@/lib/books";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useDemoAuth } from "@/lib/auth";
-import { getReadingProgress, resetReadingProgress, upsertReadingProgress } from "@/lib/supabase/readerFeatures";
+import { getReadingProgress, resetReadingProgress } from "@/lib/supabase/readerFeatures";
 import { resolveDiBooksMediaUrl } from "@/lib/supabase/mediaStorage";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
@@ -132,6 +132,41 @@ type ReaderPageMode = "auto" | "single" | "double";
 type ReaderTheme = "dark" | "light" | "sepia";
 type ReaderLineSpacing = "compact" | "normal" | "relaxed";
 type ReaderFontFamily = "serif" | "sans";
+
+type ReaderRunStep = {
+  nodeId: string;
+  nodeType?: ReaderNodeType;
+  enteredAt?: string;
+  lastPageIndex?: number;
+  exitSourceNodeId?: string;
+  exitTargetNodeId?: string;
+  exitKind?:
+    | "path"
+    | "choice"
+    | "minigame"
+    | "function"
+    | "condition"
+    | "chapter"
+    | "cutscene";
+  edgeLabel?: string;
+  choiceIndex?: number;
+  choiceLabel?: string;
+  miniGameResult?: "success" | "fail";
+  conditionResult?: boolean;
+};
+
+type ReaderTransitionMeta = Omit<
+  Partial<ReaderRunStep>,
+  "nodeId" | "nodeType" | "enteredAt" | "exitTargetNodeId"
+> & {
+  sourceNodeId?: string;
+};
+
+type ReaderReplayReturnPoint = {
+  nodeId: string;
+  pageIndex: number;
+  progressPercent: number;
+};
 
 function escapeHtml(value: string) {
   return value
@@ -360,6 +395,192 @@ function clampProgressPercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+
+function createReaderRunStep(
+  book: ReaderBook,
+  nodeId: string,
+): ReaderRunStep {
+  const node = book.nodes.find((item) => item.id === nodeId);
+
+  return {
+    nodeId,
+    nodeType: node?.type,
+    enteredAt: new Date().toISOString(),
+    lastPageIndex: 0,
+  };
+}
+
+function normalizeReaderRunHistory(
+  value: unknown,
+  book: ReaderBook,
+): ReaderRunStep[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(
+      (entry: any) =>
+        entry &&
+        typeof entry === "object" &&
+        typeof entry.nodeId === "string" &&
+        book.nodes.some((node) => node.id === entry.nodeId),
+    )
+    .map((entry: any) => {
+      const node = book.nodes.find((item) => item.id === entry.nodeId);
+
+      return {
+        nodeId: entry.nodeId,
+        nodeType: node?.type,
+        enteredAt:
+          typeof entry.enteredAt === "string"
+            ? entry.enteredAt
+            : undefined,
+        lastPageIndex: Math.max(
+          0,
+          Number(entry.lastPageIndex) || 0,
+        ),
+        exitSourceNodeId:
+          typeof entry.exitSourceNodeId === "string"
+            ? entry.exitSourceNodeId
+            : undefined,
+        exitTargetNodeId:
+          typeof entry.exitTargetNodeId === "string"
+            ? entry.exitTargetNodeId
+            : undefined,
+        exitKind:
+          typeof entry.exitKind === "string"
+            ? entry.exitKind
+            : undefined,
+        edgeLabel:
+          typeof entry.edgeLabel === "string"
+            ? entry.edgeLabel
+            : undefined,
+        choiceIndex:
+          typeof entry.choiceIndex === "number"
+            ? entry.choiceIndex
+            : undefined,
+        choiceLabel:
+          typeof entry.choiceLabel === "string"
+            ? entry.choiceLabel
+            : undefined,
+        miniGameResult:
+          entry.miniGameResult === "success" ||
+          entry.miniGameResult === "fail"
+            ? entry.miniGameResult
+            : undefined,
+        conditionResult:
+          typeof entry.conditionResult === "boolean"
+            ? entry.conditionResult
+            : undefined,
+      } satisfies ReaderRunStep;
+    });
+}
+
+async function loadReaderRunHistory(
+  userId: string,
+  bookId: string,
+  book: ReaderBook,
+) {
+  const supabase = createSupabaseBrowserClient();
+
+  const { data, error } = await supabase
+    .from("reading_progress")
+    .select("run_history")
+    .eq("user_id", userId)
+    .eq("book_id", bookId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return normalizeReaderRunHistory(data?.run_history, book);
+}
+
+async function saveReaderProgressSnapshot(
+  userId: string,
+  bookId: string,
+  currentNodeId: string,
+  pageIndex: number,
+  progressPercent: number,
+  storyState: ReaderStoryState,
+  runHistory: ReaderRunStep[],
+) {
+  if (!bookId || !currentNodeId) return;
+
+  const supabase = createSupabaseBrowserClient();
+
+  const { error } = await supabase
+    .from("reading_progress")
+    .upsert(
+      {
+        user_id: userId,
+        book_id: bookId,
+        current_node_id: currentNodeId,
+        page_index: Math.max(0, Number(pageIndex) || 0),
+        progress_percent: Math.max(
+          0,
+          Math.min(100, Math.round(Number(progressPercent) || 0)),
+        ),
+        story_state: storyState,
+        run_history: runHistory,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,book_id" },
+    );
+
+  if (error) throw error;
+}
+
+function isReaderReplayVisibleNode(node: ReaderNode | undefined | null) {
+  if (!node) return false;
+
+  return (
+    node.type === "text" ||
+    node.type === "special" ||
+    node.type === "choice" ||
+    node.type === "minigame" ||
+    node.type === "cutscene"
+  );
+}
+
+function findReplayVisibleStepIndex(
+  history: ReaderRunStep[],
+  book: ReaderBook,
+  startIndex: number,
+  direction: 1 | -1,
+) {
+  for (
+    let index = startIndex;
+    index >= 0 && index < history.length;
+    index += direction
+  ) {
+    const node = book.nodes.find(
+      (item) => item.id === history[index]?.nodeId,
+    );
+
+    if (isReaderReplayVisibleNode(node)) return index;
+  }
+
+  return -1;
+}
+
+function getChapterFromRunHistory(
+  history: ReaderRunStep[],
+  book: ReaderBook,
+  stepIndex: number,
+) {
+  for (
+    let index = Math.min(stepIndex, history.length - 1);
+    index >= 0;
+    index -= 1
+  ) {
+    const node = book.nodes.find(
+      (item) => item.id === history[index]?.nodeId,
+    );
+
+    if (node?.type === "chapter") return node;
+  }
+
+  return null;
+}
 
 function getLegacyReaderFlagsStorageKey(bookId: string) {
   return `dibooks-reader-flags:${bookId}`;
@@ -1528,6 +1749,7 @@ export default function ReadBookPage() {
   const [lineSpacing, setLineSpacing] = useState<ReaderLineSpacing>("normal");
   const [fontFamily, setFontFamily] = useState<ReaderFontFamily>("sans");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [contentsOpen, setContentsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cutsceneFading, setCutsceneFading] = useState(false);
   const [resetProgressBusy, setResetProgressBusy] = useState(false);
@@ -1536,6 +1758,11 @@ export default function ReadBookPage() {
   const [storyState, setStoryState] = useState<ReaderStoryState>({});
   const storyStateRef = useRef<ReaderStoryState>({});
   const storyStateReadyRef = useRef(false);
+  const [runHistory, setRunHistory] = useState<ReaderRunStep[]>([]);
+  const runHistoryRef = useRef<ReaderRunStep[]>([]);
+  const runHistoryReadyRef = useRef(false);
+  const [replayStepIndex, setReplayStepIndex] = useState<number | null>(null);
+  const replayReturnPointRef = useRef<ReaderReplayReturnPoint | null>(null);
   const lastExecutedFunctionNodeRef = useRef<string | null>(null);
   const lastEvaluatedConditionNodeRef = useRef<string | null>(null);
   const cutsceneShellRef = useRef<HTMLDivElement | null>(null);
@@ -1551,6 +1778,11 @@ export default function ReadBookPage() {
       storyStateReadyRef.current = false;
       storyStateRef.current = {};
       setStoryState({});
+      runHistoryReadyRef.current = false;
+      runHistoryRef.current = [];
+      setRunHistory([]);
+      setReplayStepIndex(null);
+      replayReturnPointRef.current = null;
 
       try {
         if (authLoading) return;
@@ -1575,10 +1807,36 @@ export default function ReadBookPage() {
           return;
         }
 
-        const progress = await getReadingProgress(user, book.id);
+        const [progress, storedRunHistory] = await Promise.all([
+          getReadingProgress(user, book.id),
+          loadReaderRunHistory(user.id, book.id, book),
+        ]);
+
         const progressNodeExists = progress?.currentNodeId
           ? book.nodes.some((node) => node.id === progress.currentNodeId)
           : false;
+
+        const activeNodeId = progressNodeExists
+          ? progress!.currentNodeId
+          : book.startNodeId;
+
+        const restoredRunHistory =
+          storedRunHistory.length > 0
+            ? [...storedRunHistory]
+            : [createReaderRunStep(book, activeNodeId)];
+
+        if (
+          restoredRunHistory[restoredRunHistory.length - 1]?.nodeId !==
+          activeNodeId
+        ) {
+          restoredRunHistory.push(
+            createReaderRunStep(book, activeNodeId),
+          );
+        }
+
+        runHistoryRef.current = restoredRunHistory;
+        runHistoryReadyRef.current = true;
+        setRunHistory(restoredRunHistory);
 
         const legacyFlags = loadLegacyReaderFlags(book.id);
         const restoredStoryState = mergeReaderStoryState(
@@ -1594,7 +1852,7 @@ export default function ReadBookPage() {
         lastEvaluatedConditionNodeRef.current = null;
 
         setLoadState({ status: "ready", book });
-        setCurrentNodeId(progressNodeExists ? progress!.currentNodeId : book.startNodeId);
+        setCurrentNodeId(activeNodeId);
         setPageIndex(progressNodeExists ? progress?.pageIndex ?? 0 : 0);
       } catch (error: any) {
         console.error(error);
@@ -1673,7 +1931,9 @@ export default function ReadBookPage() {
       loadState.status !== "ready" ||
       !user ||
       !currentNodeId ||
-      !storyStateReadyRef.current
+      !storyStateReadyRef.current ||
+      !runHistoryReadyRef.current ||
+      replayStepIndex !== null
     ) {
       return;
     }
@@ -1686,13 +1946,14 @@ export default function ReadBookPage() {
         readerPageCount,
       );
 
-      upsertReadingProgress(
-        user,
+      saveReaderProgressSnapshot(
+        user.id,
         loadState.book.id,
         currentNodeId,
         pageIndex,
         progressPercent,
         storyStateRef.current,
+        runHistoryRef.current,
       )
         .then(() => {
           clearLegacyReaderFlags(loadState.book.id);
@@ -1703,7 +1964,16 @@ export default function ReadBookPage() {
     }, 450);
 
     return () => window.clearTimeout(timeout);
-  }, [currentNodeId, loadState, pageIndex, readerPageCount, storyState, user]);
+  }, [
+    currentNodeId,
+    loadState,
+    pageIndex,
+    readerPageCount,
+    replayStepIndex,
+    runHistory,
+    storyState,
+    user,
+  ]);
 
   const reader = useMemo(() => {
     if (loadState.status !== "ready") return null;
@@ -1782,11 +2052,24 @@ export default function ReadBookPage() {
       }
 
       if (event.key === "ArrowLeft") {
-        if (pageIndex <= 0) return;
-        event.preventDefault();
-        setPageIndex((current) =>
-          Math.max(0, current - readerVisiblePageCount),
-        );
+        if (pageIndex > 0) {
+          event.preventDefault();
+          setPageIndex((current) =>
+            Math.max(0, current - readerVisiblePageCount),
+          );
+          return;
+        }
+
+        if (replayStepIndex !== null) {
+          event.preventDefault();
+          goToPreviousReplayStep();
+          return;
+        }
+
+        if (canEnterPreviousReplayStep()) {
+          event.preventDefault();
+          enterPreviousReplayStep();
+        }
       }
 
       if (event.key === "ArrowRight") {
@@ -1805,9 +2088,21 @@ export default function ReadBookPage() {
           return;
         }
 
+        if (replayStepIndex !== null) {
+          event.preventDefault();
+          goToNextReplayStep();
+          return;
+        }
+
+        const lastTextNode =
+          activeReader.textNodes[activeReader.textNodes.length - 1];
+
         if (activeReader.nextNodeAfterChain) {
           event.preventDefault();
-          goToNode(activeReader.nextNodeAfterChain.id);
+          goToNode(activeReader.nextNodeAfterChain.id, {
+            sourceNodeId: lastTextNode?.id ?? activeReader.node.id,
+            exitKind: "path",
+          });
           return;
         }
 
@@ -1815,7 +2110,12 @@ export default function ReadBookPage() {
         // Bij echte keuzes beslist de lezer via de knoppen.
         if (activeReader.branchPaths.length === 1) {
           event.preventDefault();
-          goToNode(activeReader.branchPaths[0].target);
+          const edge = activeReader.branchPaths[0];
+          goToNode(edge.target, {
+            sourceNodeId: lastTextNode?.id ?? activeReader.node.id,
+            exitKind: "path",
+            edgeLabel: edge.label,
+          });
         }
       }
     }
@@ -1827,6 +2127,8 @@ export default function ReadBookPage() {
     reader,
     readerPageCount,
     readerVisiblePageCount,
+    replayStepIndex,
+    runHistory,
     settingsOpen,
   ]);
 
@@ -1835,20 +2137,77 @@ export default function ReadBookPage() {
 
   useEffect(() => {
     if (!reader || reader.node.type !== "chapter") return;
+    if (replayStepIndex !== null) return;
 
-    const nextTargetId = reader.outgoingPaths[0]?.target;
+    const activeReader = reader;
+    const activeUser = user;
+
+    if (
+      !activeUser ||
+      loadState.status !== "ready" ||
+      !runHistoryReadyRef.current
+    ) {
+      return;
+    }
+
+    const nextTargetId = activeReader.outgoingPaths[0]?.target;
     if (!nextTargetId) {
       console.warn(
-        `Hoofdstuk-marker "${reader.node.title}" heeft geen vervolgpath.`,
+        `Hoofdstuk-marker "${activeReader.node.title}" heeft geen vervolgpath.`,
       );
       return;
     }
 
-    lastExecutedFunctionNodeRef.current = null;
-    lastEvaluatedConditionNodeRef.current = null;
-    setCurrentNodeId(nextTargetId);
-    setPageIndex(0);
-  }, [reader]);
+    let cancelled = false;
+
+    async function continueFromChapter() {
+      const nextHistory = buildNextRunHistory(
+        activeReader.book,
+        activeReader.node.id,
+        nextTargetId,
+        {
+          sourceNodeId: activeReader.node.id,
+          exitKind: "chapter",
+        },
+      );
+
+      try {
+        await saveReaderProgressSnapshot(
+          activeUser.id,
+          activeReader.book.id,
+          nextTargetId,
+          0,
+          calculateBookProgressPercent(
+            activeReader.book,
+            nextTargetId,
+            0,
+            1,
+          ),
+          storyStateRef.current,
+          nextHistory,
+        );
+      } catch (progressError) {
+        console.warn(
+          "Hoofdstuk-overgang opslaan mislukt.",
+          progressError,
+        );
+      }
+
+      if (cancelled) return;
+
+      commitRunHistory(nextHistory);
+      lastExecutedFunctionNodeRef.current = null;
+      lastEvaluatedConditionNodeRef.current = null;
+      setCurrentNodeId(nextTargetId);
+      setPageIndex(0);
+    }
+
+    void continueFromChapter();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reader, loadState, replayStepIndex, user]);
 
   useEffect(() => {
     if (
@@ -1856,7 +2215,9 @@ export default function ReadBookPage() {
       reader.node.type !== "function" ||
       loadState.status !== "ready" ||
       !user ||
-      !storyStateReadyRef.current
+      !storyStateReadyRef.current ||
+      !runHistoryReadyRef.current ||
+      replayStepIndex !== null
     ) {
       return;
     }
@@ -1895,14 +2256,27 @@ export default function ReadBookPage() {
 
         // Eerst status + volgende node opslaan. Daardoor kan een refresh op een
         // functie-node een +1/increment niet per ongeluk dubbel uitvoeren.
-        await upsertReadingProgress(
-          activeUser,
+        const nextHistory = buildNextRunHistory(
+          activeReader.book,
+          activeReader.node.id,
+          nextTargetId,
+          {
+            sourceNodeId: activeReader.node.id,
+            exitKind: "function",
+          },
+        );
+
+        await saveReaderProgressSnapshot(
+          activeUser.id,
           activeReader.book.id,
           nextTargetId,
           0,
           progressPercent,
           nextStoryState,
+          nextHistory,
         );
+
+        commitRunHistory(nextHistory);
         clearLegacyReaderFlags(activeReader.book.id);
       } catch (progressError) {
         console.warn(
@@ -1924,7 +2298,7 @@ export default function ReadBookPage() {
     return () => {
       cancelled = true;
     };
-  }, [reader, loadState, user]);
+  }, [reader, loadState, replayStepIndex, user]);
 
   useEffect(() => {
     if (
@@ -1932,7 +2306,9 @@ export default function ReadBookPage() {
       reader.node.type !== "condition" ||
       loadState.status !== "ready" ||
       !user ||
-      !storyStateReadyRef.current
+      !storyStateReadyRef.current ||
+      !runHistoryReadyRef.current ||
+      replayStepIndex !== null
     ) {
       return;
     }
@@ -1972,14 +2348,28 @@ export default function ReadBookPage() {
           1,
         );
 
-        await upsertReadingProgress(
-          activeUser,
+        const nextHistory = buildNextRunHistory(
+          activeReader.book,
+          activeReader.node.id,
+          nextTargetId,
+          {
+            sourceNodeId: activeReader.node.id,
+            exitKind: "condition",
+            conditionResult: result,
+          },
+        );
+
+        await saveReaderProgressSnapshot(
+          activeUser.id,
           activeReader.book.id,
           nextTargetId,
           0,
           progressPercent,
           storyStateRef.current,
+          nextHistory,
         );
+
+        commitRunHistory(nextHistory);
       } catch (progressError) {
         console.warn("Voorwaarde-route opslaan mislukt.", progressError);
       }
@@ -1997,19 +2387,272 @@ export default function ReadBookPage() {
     return () => {
       cancelled = true;
     };
-  }, [reader, loadState, user]);
+  }, [reader, loadState, replayStepIndex, user]);
 
+
+  function commitRunHistory(nextHistory: ReaderRunStep[]) {
+    runHistoryRef.current = nextHistory;
+    setRunHistory(nextHistory);
+  }
+
+  function buildNextRunHistory(
+    book: ReaderBook,
+    activeNodeId: string,
+    targetNodeId: string,
+    transitionMeta: ReaderTransitionMeta = {},
+  ) {
+    const nextHistory = [...runHistoryRef.current];
+    let currentStepIndex = nextHistory.length - 1;
+
+    if (
+      currentStepIndex < 0 ||
+      nextHistory[currentStepIndex]?.nodeId !== activeNodeId
+    ) {
+      nextHistory.push(createReaderRunStep(book, activeNodeId));
+      currentStepIndex = nextHistory.length - 1;
+    }
+
+    const currentStep = nextHistory[currentStepIndex];
+
+    nextHistory[currentStepIndex] = {
+      ...currentStep,
+      lastPageIndex: Math.max(0, pageIndex),
+      exitSourceNodeId:
+        transitionMeta.sourceNodeId ??
+        transitionMeta.exitSourceNodeId ??
+        activeNodeId,
+      exitTargetNodeId: targetNodeId,
+      exitKind: transitionMeta.exitKind ?? "path",
+      edgeLabel: transitionMeta.edgeLabel,
+      choiceIndex: transitionMeta.choiceIndex,
+      choiceLabel: transitionMeta.choiceLabel,
+      miniGameResult: transitionMeta.miniGameResult,
+      conditionResult: transitionMeta.conditionResult,
+    };
+
+    nextHistory.push(createReaderRunStep(book, targetNodeId));
+    return nextHistory;
+  }
+
+  function navigateToNodeWithoutHistory(
+    nodeId: string,
+    targetPageIndex = 0,
+  ) {
+    if (loadState.status !== "ready") return;
+
+    const exists = loadState.book.nodes.some(
+      (node) => node.id === nodeId,
+    );
+
+    if (!exists) {
+      alert("Deze doel-node bestaat niet meer.");
+      return;
+    }
+
+    lastExecutedFunctionNodeRef.current = null;
+    lastEvaluatedConditionNodeRef.current = null;
+    setCurrentNodeId(nodeId);
+    setPageIndex(Math.max(0, targetPageIndex));
+  }
+
+  function goToNode(
+    nodeId: string,
+    transitionMeta: ReaderTransitionMeta = {},
+  ) {
+    if (loadState.status !== "ready") return;
+    if (replayStepIndex !== null) return;
+
+    const exists = loadState.book.nodes.some(
+      (node) => node.id === nodeId,
+    );
+
+    if (!exists) {
+      alert("Deze doel-node bestaat niet meer.");
+      return;
+    }
+
+    const nextHistory = buildNextRunHistory(
+      loadState.book,
+      currentNodeId,
+      nodeId,
+      transitionMeta,
+    );
+
+    commitRunHistory(nextHistory);
+    navigateToNodeWithoutHistory(nodeId);
+  }
 
   function goToFirstOutgoingNode() {
     if (!reader?.outgoingPaths.length) return;
-    goToNode(reader.outgoingPaths[0].target);
+
+    const edge = reader.outgoingPaths[0];
+
+    goToNode(edge.target, {
+      sourceNodeId: reader.node.id,
+      exitKind: reader.node.type === "cutscene" ? "cutscene" : "path",
+      edgeLabel: edge.label,
+    });
+  }
+
+  function getCurrentHistoryStepIndex() {
+    if (replayStepIndex !== null) return replayStepIndex;
+
+    for (
+      let index = runHistoryRef.current.length - 1;
+      index >= 0;
+      index -= 1
+    ) {
+      if (runHistoryRef.current[index]?.nodeId === currentNodeId) {
+        return index;
+      }
+    }
+
+    return runHistoryRef.current.length - 1;
+  }
+
+  function canEnterPreviousReplayStep() {
+    if (loadState.status !== "ready") return false;
+
+    const currentIndex = getCurrentHistoryStepIndex();
+
+    return (
+      findReplayVisibleStepIndex(
+        runHistoryRef.current,
+        loadState.book,
+        currentIndex - 1,
+        -1,
+      ) >= 0
+    );
+  }
+
+  function openReplayAtStep(
+    stepIndex: number,
+    targetPageIndex = 0,
+  ) {
+    if (loadState.status !== "ready") return;
+
+    const safeIndex = findReplayVisibleStepIndex(
+      runHistoryRef.current,
+      loadState.book,
+      stepIndex,
+      1,
+    );
+
+    if (safeIndex < 0) return;
+
+    if (replayStepIndex === null) {
+      replayReturnPointRef.current = {
+        nodeId: currentNodeId,
+        pageIndex,
+        progressPercent: calculateBookProgressPercent(
+          loadState.book,
+          currentNodeId,
+          pageIndex,
+          readerPageCount,
+        ),
+      };
+    }
+
+    setContentsOpen(false);
+    setSettingsOpen(false);
+    setReplayStepIndex(safeIndex);
+    navigateToNodeWithoutHistory(
+      runHistoryRef.current[safeIndex].nodeId,
+      targetPageIndex,
+    );
+  }
+
+  function enterPreviousReplayStep() {
+    if (loadState.status !== "ready") return;
+
+    const currentIndex = getCurrentHistoryStepIndex();
+    const previousIndex = findReplayVisibleStepIndex(
+      runHistoryRef.current,
+      loadState.book,
+      currentIndex - 1,
+      -1,
+    );
+
+    if (previousIndex < 0) return;
+
+    const savedPage =
+      runHistoryRef.current[previousIndex]?.lastPageIndex ?? 0;
+
+    openReplayAtStep(previousIndex, savedPage);
+  }
+
+  function goToPreviousReplayStep() {
+    if (
+      loadState.status !== "ready" ||
+      replayStepIndex === null
+    ) {
+      return;
+    }
+
+    const previousIndex = findReplayVisibleStepIndex(
+      runHistoryRef.current,
+      loadState.book,
+      replayStepIndex - 1,
+      -1,
+    );
+
+    if (previousIndex < 0) return;
+
+    setReplayStepIndex(previousIndex);
+    navigateToNodeWithoutHistory(
+      runHistoryRef.current[previousIndex].nodeId,
+      runHistoryRef.current[previousIndex]?.lastPageIndex ?? 0,
+    );
+  }
+
+  function goToNextReplayStep() {
+    if (
+      loadState.status !== "ready" ||
+      replayStepIndex === null
+    ) {
+      return;
+    }
+
+    const nextIndex = findReplayVisibleStepIndex(
+      runHistoryRef.current,
+      loadState.book,
+      replayStepIndex + 1,
+      1,
+    );
+
+    if (nextIndex < 0) return;
+
+    setReplayStepIndex(nextIndex);
+    navigateToNodeWithoutHistory(
+      runHistoryRef.current[nextIndex].nodeId,
+      0,
+    );
+  }
+
+  function exitReplayMode() {
+    const returnPoint = replayReturnPointRef.current;
+    replayReturnPointRef.current = null;
+    setReplayStepIndex(null);
+    setContentsOpen(false);
+
+    if (!returnPoint) return;
+
+    navigateToNodeWithoutHistory(
+      returnPoint.nodeId,
+      returnPoint.pageIndex,
+    );
   }
 
   function handleCutsceneLoadedMetadata(event: React.SyntheticEvent<HTMLVideoElement>) {
     setCutsceneFading(false);
 
     const shell = cutsceneShellRef.current;
-    if (shell && !document.fullscreenElement && shell.requestFullscreen) {
+    if (
+      replayStepIndex === null &&
+      shell &&
+      !document.fullscreenElement &&
+      shell.requestFullscreen
+    ) {
       shell.requestFullscreen().catch(() => {
         // Browsers mogen echte fullscreen blokkeren zonder directe user gesture.
         // De reader blijft dan alsnog in full-viewport zonder HUD.
@@ -2034,18 +2677,33 @@ export default function ReadBookPage() {
       document.exitFullscreen().catch(() => undefined);
     }
 
+    if (replayStepIndex !== null) {
+      goToNextReplayStep();
+      return;
+    }
+
     goToFirstOutgoingNode();
   }
 
   async function applyEffectsAndGoToNode(
     targetNodeId: string,
     effects: ReaderFunctionAction[] = [],
+    transitionMeta: ReaderTransitionMeta = {},
   ) {
-    if (loadState.status !== "ready" || !user || interactionBusyRef.current) return;
+    if (
+      loadState.status !== "ready" ||
+      !user ||
+      interactionBusyRef.current ||
+      replayStepIndex !== null
+    ) {
+      return;
+    }
 
     const activeBook = loadState.book;
     const activeUser = user;
-    const exists = activeBook.nodes.some((node) => node.id === targetNodeId);
+    const exists = activeBook.nodes.some(
+      (node) => node.id === targetNodeId,
+    );
 
     if (!exists) {
       alert("Deze doel-node bestaat niet meer.");
@@ -2061,45 +2719,51 @@ export default function ReadBookPage() {
       effects,
     );
 
-    try {
-      const progressPercent = calculateBookProgressPercent(activeBook, targetNodeId, 0, 1);
+    const nextHistory = buildNextRunHistory(
+      activeBook,
+      currentNodeId,
+      targetNodeId,
+      transitionMeta,
+    );
 
-      // Effect + nieuwe node worden samen opgeslagen voordat we navigeren.
-      // Zo kan dubbelklikken of refresh geen +1-effect twee keer uitvoeren.
-      await upsertReadingProgress(
-        activeUser,
+    try {
+      const progressPercent = calculateBookProgressPercent(
+        activeBook,
+        targetNodeId,
+        0,
+        1,
+      );
+
+      // Effect + routekeuze + nieuwe node worden samen opgeslagen.
+      await saveReaderProgressSnapshot(
+        activeUser.id,
         activeBook.id,
         targetNodeId,
         0,
         progressPercent,
         nextStoryState,
+        nextHistory,
       );
 
       storyStateRef.current = nextStoryState;
       setStoryState(nextStoryState);
+      commitRunHistory(nextHistory);
       clearLegacyReaderFlags(activeBook.id);
-      goToNode(targetNodeId);
+      navigateToNodeWithoutHistory(targetNodeId);
     } catch (effectError: any) {
-      console.warn("Variable effects opslaan mislukt.", effectError);
-      alert(`Verhaalstatus opslaan mislukt: ${effectError?.message ?? "onbekende fout"}`);
+      console.warn(
+        "Variable effects / leesgeschiedenis opslaan mislukt.",
+        effectError,
+      );
+      alert(
+        `Verhaalstatus opslaan mislukt: ${
+          effectError?.message ?? "onbekende fout"
+        }`,
+      );
     } finally {
       interactionBusyRef.current = false;
       setInteractionBusy(false);
     }
-  }
-
-  function goToNode(nodeId: string) {
-    if (loadState.status !== "ready") return;
-    const exists = loadState.book.nodes.some((node) => node.id === nodeId);
-    if (!exists) {
-      alert("Deze doel-node bestaat niet meer.");
-      return;
-    }
-
-    lastExecutedFunctionNodeRef.current = null;
-    lastEvaluatedConditionNodeRef.current = null;
-    setCurrentNodeId(nodeId);
-    setPageIndex(0);
   }
 
   async function toggleReaderFullscreen() {
@@ -2152,7 +2816,18 @@ export default function ReadBookPage() {
         setPageIndex((current) =>
           Math.max(0, current - readerVisiblePageCount),
         );
+        return;
       }
+
+      if (replayStepIndex !== null) {
+        goToPreviousReplayStep();
+        return;
+      }
+
+      if (canEnterPreviousReplayStep()) {
+        enterPreviousReplayStep();
+      }
+
       return;
     }
 
@@ -2169,13 +2844,30 @@ export default function ReadBookPage() {
       return;
     }
 
+    if (replayStepIndex !== null) {
+      goToNextReplayStep();
+      return;
+    }
+
+    const lastTextNode =
+      reader.textNodes[reader.textNodes.length - 1];
+
     if (reader.nextNodeAfterChain) {
-      goToNode(reader.nextNodeAfterChain.id);
+      goToNode(reader.nextNodeAfterChain.id, {
+        sourceNodeId: lastTextNode?.id ?? reader.node.id,
+        exitKind: "path",
+      });
       return;
     }
 
     if (reader.branchPaths.length === 1) {
-      goToNode(reader.branchPaths[0].target);
+      const edge = reader.branchPaths[0];
+
+      goToNode(edge.target, {
+        sourceNodeId: lastTextNode?.id ?? reader.node.id,
+        exitKind: "path",
+        edgeLabel: edge.label,
+      });
     }
   }
 
@@ -2201,6 +2893,16 @@ export default function ReadBookPage() {
       storyStateRef.current = resetStoryState;
       storyStateReadyRef.current = true;
       setStoryState(resetStoryState);
+
+      const resetRunHistory = [
+        createReaderRunStep(activeBook, activeBook.startNodeId),
+      ];
+      runHistoryRef.current = resetRunHistory;
+      runHistoryReadyRef.current = true;
+      setRunHistory(resetRunHistory);
+      setReplayStepIndex(null);
+      replayReturnPointRef.current = null;
+
       lastExecutedFunctionNodeRef.current = null;
       lastEvaluatedConditionNodeRef.current = null;
       setCurrentNodeId(activeBook.startNodeId);
@@ -2208,6 +2910,7 @@ export default function ReadBookPage() {
       setReaderPageCount(1);
       setReaderVisiblePageCount(1);
       setSettingsOpen(false);
+      setContentsOpen(false);
     } catch (resetError: any) {
       alert(`Leesvoortgang resetten mislukt: ${resetError?.message ?? "onbekende fout"}`);
     } finally {
@@ -2249,6 +2952,39 @@ export default function ReadBookPage() {
   const { book, node } = reader;
   const isTextNode = node.type === "text" || node.type === "special";
   const isCutsceneNode = node.type === "cutscene";
+  const isReadOnlyReplay = replayStepIndex !== null;
+  const activeReplayStep =
+    replayStepIndex !== null
+      ? runHistory[replayStepIndex] ?? null
+      : null;
+  const displayedChapter = isReadOnlyReplay
+    ? getChapterFromRunHistory(
+        runHistory,
+        book,
+        replayStepIndex ?? 0,
+      )
+    : reader.activeChapter;
+
+  const reachedChapters = (() => {
+    const seen = new Set<string>();
+    const chapters: Array<{
+      stepIndex: number;
+      node: ReaderNode;
+    }> = [];
+
+    runHistory.forEach((step, stepIndex) => {
+      const chapterNode = book.nodes.find(
+        (item) => item.id === step.nodeId && item.type === "chapter",
+      );
+
+      if (!chapterNode || seen.has(chapterNode.id)) return;
+      seen.add(chapterNode.id);
+      chapters.push({ stepIndex, node: chapterNode });
+    });
+
+    return chapters;
+  })();
+
   const canGoPreviousPage = isTextNode && pageIndex > 0;
   const canGoNextPage = isTextNode && pageIndex < Math.max(1, readerPageCount) - readerVisiblePageCount;
   const readerShellClass =
@@ -2264,19 +3000,50 @@ export default function ReadBookPage() {
         ? "border-[#8f6b38]/35 bg-[#23190f]/90 text-[#f3e4c9]"
         : "border-white/10 bg-[#05070d]/90 text-white";
 
-  const currentProgressPercent = calculateBookProgressPercent(
-    book,
-    currentNodeId,
-    pageIndex,
-    readerPageCount,
-  );
+  const currentProgressPercent =
+    isReadOnlyReplay && replayReturnPointRef.current
+      ? replayReturnPointRef.current.progressPercent
+      : calculateBookProgressPercent(
+          book,
+          currentNodeId,
+          pageIndex,
+          readerPageCount,
+        );
+
+  const hideReaderChromeForCutscene =
+    isCutsceneNode && !isReadOnlyReplay;
+
+  const currentHistoryIndex = getCurrentHistoryStepIndex();
+  const canGoToPreviousVisitedScene =
+    findReplayVisibleStepIndex(
+      runHistory,
+      book,
+      currentHistoryIndex - 1,
+      -1,
+    ) >= 0;
+  const canGoToNextReplayScene =
+    isReadOnlyReplay &&
+    findReplayVisibleStepIndex(
+      runHistory,
+      book,
+      (replayStepIndex ?? 0) + 1,
+      1,
+    ) >= 0;
+  const canGoToPreviousReplayScene =
+    isReadOnlyReplay &&
+    findReplayVisibleStepIndex(
+      runHistory,
+      book,
+      (replayStepIndex ?? 0) - 1,
+      -1,
+    ) >= 0;
 
   return (
     <main
       ref={readerShellRef}
-      className={`flex h-screen flex-col overflow-hidden ${readerShellClass}`}
+      className={`relative flex h-screen flex-col overflow-hidden ${readerShellClass}`}
     >
-      {!isCutsceneNode && (
+      {!hideReaderChromeForCutscene && (
       <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
@@ -2284,11 +3051,11 @@ export default function ReadBookPage() {
               DiBooks Reader
             </p>
             <h1 className="truncate text-xl font-black sm:text-2xl">{book.title}</h1>
-            {reader.activeChapter && (
+            {displayedChapter && (
               <p className="mt-0.5 truncate text-[11px] font-black tracking-wide text-blue-300/80 sm:text-xs">
-                {formatReaderChapterLabel(reader.activeChapter)}
-                {reader.activeChapter.chapterSubtitle
-                  ? ` • ${reader.activeChapter.chapterSubtitle}`
+                {formatReaderChapterLabel(displayedChapter)}
+                {displayedChapter.chapterSubtitle
+                  ? ` • ${displayedChapter.chapterSubtitle}`
                   : ""}
               </p>
             )}
@@ -2296,11 +3063,24 @@ export default function ReadBookPage() {
 
           <div className="flex shrink-0 items-center gap-2">
             <button
-              onClick={() => setSettingsOpen((current) => !current)}
+              onClick={() => {
+                setSettingsOpen((current) => !current);
+                setContentsOpen(false);
+              }}
               className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10"
               title="Reader instellingen"
             >
               Aa
+            </button>
+            <button
+              onClick={() => {
+                setContentsOpen((current) => !current);
+                setSettingsOpen(false);
+              }}
+              className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10"
+              title="Bereikte hoofdstukken"
+            >
+              Inhoud
             </button>
             <button
               onClick={() => void toggleReaderFullscreen()}
@@ -2407,7 +3187,91 @@ export default function ReadBookPage() {
       </header>
       )}
 
-      {!isCutsceneNode && (
+      {contentsOpen && !hideReaderChromeForCutscene && (
+        <div className="absolute right-4 top-[5.25rem] z-50 w-[min(24rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-[#090c13]/98 p-4 text-white shadow-2xl backdrop-blur-xl sm:right-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">
+                Inhoud
+              </p>
+              <h2 className="mt-1 text-xl font-black">
+                Bereikte hoofdstukken
+              </h2>
+              <p className="mt-1 text-xs font-semibold leading-5 text-neutral-500">
+                Alleen hoofdstukken uit jouw huidige verhaalpad worden getoond.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setContentsOpen(false)}
+              className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-neutral-300 hover:bg-white/10"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mt-4 grid max-h-[55vh] gap-2 overflow-y-auto pr-1">
+            {reachedChapters.length === 0 && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm font-semibold text-neutral-400">
+                Er is in deze leesrun nog geen hoofdstuk-marker opgeslagen.
+              </div>
+            )}
+
+            {reachedChapters.map(({ stepIndex, node: chapterNode }) => {
+              const targetIndex = findReplayVisibleStepIndex(
+                runHistory,
+                book,
+                stepIndex + 1,
+                1,
+              );
+
+              return (
+                <button
+                  key={`${chapterNode.id}-${stepIndex}`}
+                  type="button"
+                  disabled={targetIndex < 0}
+                  onClick={() => openReplayAtStep(stepIndex + 1, 0)}
+                  className="rounded-2xl border border-white/10 bg-white/[0.045] p-4 text-left transition hover:border-blue-400/30 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span className="block text-sm font-black text-white">
+                    {formatReaderChapterLabel(chapterNode)}
+                  </span>
+                  {chapterNode.chapterSubtitle && (
+                    <span className="mt-1 block text-xs font-semibold text-neutral-500">
+                      {chapterNode.chapterSubtitle}
+                    </span>
+                  )}
+                  <span className="mt-2 block text-[10px] font-black uppercase tracking-widest text-blue-300/70">
+                    Teruglezen
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {isReadOnlyReplay && !hideReaderChromeForCutscene && (
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-amber-400/20 bg-amber-500/10 px-4 py-2 text-amber-100 sm:px-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
+              Terugleesmodus
+            </p>
+            <p className="text-xs font-semibold text-amber-100/70">
+              Je bekijkt je eerder gelezen pad. Keuzes en verhaalstatus kunnen hier niet veranderen.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={exitReplayMode}
+            className="rounded-full bg-amber-300 px-4 py-2 text-xs font-black text-amber-950 hover:bg-amber-200"
+          >
+            Terug naar waar ik was
+          </button>
+        </div>
+      )}
+
+      {!hideReaderChromeForCutscene && (
         <div
           className={`h-1 shrink-0 ${
             theme === "light"
@@ -2513,80 +3377,299 @@ export default function ReadBookPage() {
         {node.type === "choice" && (
           <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 p-6">
             <div className="rounded-[2rem] border border-orange-500/20 bg-orange-950/20 p-7 shadow-2xl sm:p-9">
-              <p className="text-xs font-black uppercase tracking-[0.28em] text-orange-300">Keuze moment</p>
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-orange-300">
+                {isReadOnlyReplay ? "Eerder keuzemoment" : "Keuze moment"}
+              </p>
               <h1 className="mt-3 text-3xl font-black sm:text-5xl">{node.title}</h1>
+
+              {isReadOnlyReplay && (
+                <p className="mt-3 text-sm font-semibold leading-6 text-orange-100/65">
+                  Je kunt je gemaakte keuze terugzien, maar niet wijzigen.
+                </p>
+              )}
+
               <div className="mt-8 grid gap-3">
                 {node.choices
                   .slice(0, 3)
                   .filter((choice) => choice.label?.trim())
-                  .map((choice, index) => (
-                    <button
-                      key={`${choice.label}-${index}`}
-                      onClick={() => {
-                        if (!choice.targetNodeId) return;
-                        void applyEffectsAndGoToNode(choice.targetNodeId, choice.effects ?? []);
-                      }}
-                      disabled={!choice.targetNodeId || interactionBusy}
-                      className="rounded-2xl border border-orange-400/25 bg-orange-500/15 px-5 py-4 text-left text-lg font-black text-orange-50 hover:bg-orange-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <span className="mr-3 text-orange-300">{["A", "B", "C"][index]}.</span>
-                      {choice.label}
-                    </button>
-                  ))}
+                  .map((choice, index) => {
+                    const wasSelected =
+                      isReadOnlyReplay &&
+                      (
+                        activeReplayStep?.choiceIndex === index ||
+                        (
+                          activeReplayStep?.choiceLabel &&
+                          activeReplayStep.choiceLabel === choice.label
+                        ) ||
+                        (
+                          activeReplayStep?.exitTargetNodeId &&
+                          activeReplayStep.exitTargetNodeId ===
+                            choice.targetNodeId
+                        )
+                      );
+
+                    return (
+                      <button
+                        key={`${choice.label}-${index}`}
+                        onClick={() => {
+                          if (isReadOnlyReplay || !choice.targetNodeId) return;
+
+                          void applyEffectsAndGoToNode(
+                            choice.targetNodeId,
+                            choice.effects ?? [],
+                            {
+                              sourceNodeId: node.id,
+                              exitKind: "choice",
+                              choiceIndex: index,
+                              choiceLabel: choice.label,
+                            },
+                          );
+                        }}
+                        disabled={
+                          isReadOnlyReplay ||
+                          !choice.targetNodeId ||
+                          interactionBusy
+                        }
+                        className={`rounded-2xl border px-5 py-4 text-left text-lg font-black transition ${
+                          wasSelected
+                            ? "border-emerald-300/50 bg-emerald-500/20 text-emerald-50 ring-2 ring-emerald-300/20"
+                            : isReadOnlyReplay
+                              ? "border-white/10 bg-white/[0.035] text-neutral-500 opacity-55"
+                              : "border-orange-400/25 bg-orange-500/15 text-orange-50 hover:bg-orange-500/25"
+                        } disabled:cursor-default`}
+                      >
+                        <span className={`mr-3 ${wasSelected ? "text-emerald-300" : "text-orange-300"}`}>
+                          {["A", "B", "C"][index]}.
+                        </span>
+                        {choice.label}
+                        {wasSelected && (
+                          <span className="ml-3 rounded-full bg-emerald-300 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-950">
+                            Jouw keuze
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           </div>
         )}
 
         {node.type === "minigame" && (
-          <StabilizeLineMiniGame
-            node={node}
-            onSuccess={() => {
-              const targetId =
-                node.miniGameSuccessTargetNodeId ||
-                book.edges.find((edge) => edge.source === node.id && edge.data?.miniGameResult === "success")?.target;
-              if (!targetId) {
-                alert("Deze minigame heeft nog geen success route.");
-                return;
-              }
-              void applyEffectsAndGoToNode(targetId, node.miniGameSuccessEffects ?? []);
-            }}
-            onFail={() => {
-              const targetId =
-                node.miniGameFailTargetNodeId ||
-                book.edges.find((edge) => edge.source === node.id && edge.data?.miniGameResult === "fail")?.target;
-              if (!targetId) {
-                alert("Deze minigame heeft nog geen fail route.");
-                return;
-              }
-              void applyEffectsAndGoToNode(targetId, node.miniGameFailEffects ?? []);
-            }}
-          />
+          isReadOnlyReplay ? (
+            <div className="mx-auto flex h-full max-w-3xl items-center justify-center p-6">
+              <div className="w-full rounded-[2rem] border border-purple-500/25 bg-purple-950/25 p-7 shadow-2xl sm:p-9">
+                <p className="text-xs font-black uppercase tracking-[0.28em] text-purple-300">
+                  Eerdere minigame
+                </p>
+                <h1 className="mt-3 text-3xl font-black sm:text-5xl">
+                  {node.title}
+                </h1>
+                <p className="mt-4 text-sm font-semibold leading-6 text-neutral-400">
+                  Minigames worden in terugleesmodus niet opnieuw gespeeld.
+                </p>
+
+                <div
+                  className={`mt-7 rounded-2xl border p-5 ${
+                    activeReplayStep?.miniGameResult === "success"
+                      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                      : activeReplayStep?.miniGameResult === "fail"
+                        ? "border-red-400/30 bg-red-500/10 text-red-100"
+                        : "border-white/10 bg-white/5 text-neutral-300"
+                  }`}
+                >
+                  <p className="text-xs font-black uppercase tracking-widest opacity-70">
+                    Jouw resultaat
+                  </p>
+                  <p className="mt-2 text-2xl font-black">
+                    {activeReplayStep?.miniGameResult === "success"
+                      ? "Gelukt"
+                      : activeReplayStep?.miniGameResult === "fail"
+                        ? "Mislukt"
+                        : "Resultaat onbekend"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <StabilizeLineMiniGame
+              node={node}
+              onSuccess={() => {
+                const targetId =
+                  node.miniGameSuccessTargetNodeId ||
+                  book.edges.find(
+                    (edge) =>
+                      edge.source === node.id &&
+                      edge.data?.miniGameResult === "success",
+                  )?.target;
+
+                if (!targetId) {
+                  alert("Deze minigame heeft nog geen success route.");
+                  return;
+                }
+
+                void applyEffectsAndGoToNode(
+                  targetId,
+                  node.miniGameSuccessEffects ?? [],
+                  {
+                    sourceNodeId: node.id,
+                    exitKind: "minigame",
+                    miniGameResult: "success",
+                  },
+                );
+              }}
+              onFail={() => {
+                const targetId =
+                  node.miniGameFailTargetNodeId ||
+                  book.edges.find(
+                    (edge) =>
+                      edge.source === node.id &&
+                      edge.data?.miniGameResult === "fail",
+                  )?.target;
+
+                if (!targetId) {
+                  alert("Deze minigame heeft nog geen fail route.");
+                  return;
+                }
+
+                void applyEffectsAndGoToNode(
+                  targetId,
+                  node.miniGameFailEffects ?? [],
+                  {
+                    sourceNodeId: node.id,
+                    exitKind: "minigame",
+                    miniGameResult: "fail",
+                  },
+                );
+              }}
+            />
+          )
         )}
       </section>
 
-      {!isCutsceneNode && (
+      {!hideReaderChromeForCutscene && (
       <footer className={`shrink-0 border-t px-4 py-3 sm:px-6 ${readerChromeClass}`}>
-        {isTextNode ? (
+        {isReadOnlyReplay ? (
+          isTextNode ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  if (pageIndex > 0) {
+                    setPageIndex((current) =>
+                      Math.max(0, current - readerVisiblePageCount),
+                    );
+                    return;
+                  }
+
+                  goToPreviousReplayStep();
+                }}
+                disabled={
+                  pageIndex <= 0 && !canGoToPreviousReplayScene
+                }
+                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                Vorige
+              </button>
+
+              <div className="text-center text-sm font-bold text-neutral-400">
+                <div>
+                  {readerVisiblePageCount === 2 &&
+                  pageIndex + 1 < readerPageCount
+                    ? `Pagina ${pageIndex + 1}–${Math.min(
+                        pageIndex + 2,
+                        readerPageCount,
+                      )} van ${readerPageCount}`
+                    : `Pagina ${pageIndex + 1} van ${readerPageCount}`}
+                </div>
+                <div className="text-xs text-amber-400/70">
+                  Alleen teruglezen • je echte voortgang blijft op {currentProgressPercent}%
+                </div>
+              </div>
+
+              {canGoNextPage ? (
+                <button
+                  onClick={() =>
+                    setPageIndex((current) =>
+                      Math.min(
+                        Math.max(0, readerPageCount - 1),
+                        current + readerVisiblePageCount,
+                      ),
+                    )
+                  }
+                  className="rounded-2xl bg-blue-600 px-5 py-3 font-black text-white hover:bg-blue-500"
+                >
+                  Volgende pagina
+                </button>
+              ) : (
+                <button
+                  onClick={goToNextReplayStep}
+                  disabled={!canGoToNextReplayScene}
+                  className="rounded-2xl bg-amber-400 px-5 py-3 font-black text-amber-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  Verder teruglezen
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={goToPreviousReplayStep}
+                disabled={!canGoToPreviousReplayScene}
+                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                Vorige scène
+              </button>
+
+              <div className="text-center text-xs font-black uppercase tracking-widest text-amber-400/70">
+                Terugleesmodus
+              </div>
+
+              <button
+                type="button"
+                onClick={goToNextReplayStep}
+                disabled={!canGoToNextReplayScene}
+                className="rounded-2xl bg-amber-400 px-5 py-3 font-black text-amber-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                Volgende scène
+              </button>
+            </div>
+          )
+        ) : isTextNode ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
-              onClick={() =>
-                setPageIndex((current) =>
-                  Math.max(0, current - readerVisiblePageCount),
-                )
+              onClick={() => {
+                if (pageIndex > 0) {
+                  setPageIndex((current) =>
+                    Math.max(0, current - readerVisiblePageCount),
+                  );
+                  return;
+                }
+
+                enterPreviousReplayStep();
+              }}
+              disabled={
+                pageIndex <= 0 && !canGoToPreviousVisitedScene
               }
-              disabled={!canGoPreviousPage}
               className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
             >
-              Vorige pagina
+              {pageIndex > 0 ? "Vorige pagina" : "Teruglezen"}
             </button>
 
             <div className="text-center text-sm font-bold text-neutral-400">
-              <div>{readerVisiblePageCount === 2 && pageIndex + 1 < readerPageCount ? `Pagina ${pageIndex + 1}–${Math.min(pageIndex + 2, readerPageCount)} van ${readerPageCount}` : `Pagina ${pageIndex + 1} van ${readerPageCount}`}</div>
+              <div>
+                {readerVisiblePageCount === 2 &&
+                pageIndex + 1 < readerPageCount
+                  ? `Pagina ${pageIndex + 1}–${Math.min(
+                      pageIndex + 2,
+                      readerPageCount,
+                    )} van ${readerPageCount}`
+                  : `Pagina ${pageIndex + 1} van ${readerPageCount}`}
+              </div>
               <div className="text-xs text-neutral-600">
                 {currentProgressPercent}% gelezen
-                {reader.activeChapter
-                  ? ` • ${formatReaderChapterLabel(reader.activeChapter)}`
+                {displayedChapter
+                  ? ` • ${formatReaderChapterLabel(displayedChapter)}`
                   : ""}
                 {" • "}
                 {book.author}
@@ -2601,34 +3684,84 @@ export default function ReadBookPage() {
             </div>
 
             {canGoNextPage && (
-              <button onClick={() => setPageIndex((current) => Math.min(Math.max(0, readerPageCount - 1), current + readerVisiblePageCount))} className="rounded-2xl bg-blue-600 px-5 py-3 font-black text-white hover:bg-blue-500">
+              <button
+                onClick={() =>
+                  setPageIndex((current) =>
+                    Math.min(
+                      Math.max(0, readerPageCount - 1),
+                      current + readerVisiblePageCount,
+                    ),
+                  )
+                }
+                className="rounded-2xl bg-blue-600 px-5 py-3 font-black text-white hover:bg-blue-500"
+              >
                 Volgende pagina
               </button>
             )}
 
             {!canGoNextPage && reader.nextNodeAfterChain && (
-              <button onClick={() => goToNode(reader.nextNodeAfterChain!.id)} className="rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white hover:bg-emerald-500">
+              <button
+                onClick={() => {
+                  const lastTextNode =
+                    reader.textNodes[reader.textNodes.length - 1];
+
+                  goToNode(reader.nextNodeAfterChain!.id, {
+                    sourceNodeId:
+                      lastTextNode?.id ?? reader.node.id,
+                    exitKind: "path",
+                  });
+                }}
+                className="rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white hover:bg-emerald-500"
+              >
                 Ga verder
               </button>
             )}
 
-            {!canGoNextPage && !reader.nextNodeAfterChain && reader.branchPaths.length > 0 && (
-              <div className="flex flex-wrap justify-end gap-3">
-                {reader.branchPaths.map((edge, index) => {
-                  const targetNode = book.nodes.find((item) => item.id === edge.target);
-                  return (
-                    <button key={edge.id} onClick={() => goToNode(edge.target)} className="rounded-2xl bg-emerald-600 px-5 py-3 text-left font-black text-white hover:bg-emerald-500">
-                      {edge.label ? `${edge.label}: ` : reader.branchPaths.length > 1 ? `Optie ${index + 1}: ` : "Ga verder naar "}
-                      {targetNode?.title ?? "volgende scène"}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {!canGoNextPage &&
+              !reader.nextNodeAfterChain &&
+              reader.branchPaths.length > 0 && (
+                <div className="flex flex-wrap justify-end gap-3">
+                  {reader.branchPaths.map((edge, index) => {
+                    const targetNode = book.nodes.find(
+                      (item) => item.id === edge.target,
+                    );
+                    const lastTextNode =
+                      reader.textNodes[
+                        reader.textNodes.length - 1
+                      ];
 
-            {!canGoNextPage && !reader.nextNodeAfterChain && reader.branchPaths.length === 0 && (
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">Einde bereikt</div>
-            )}
+                    return (
+                      <button
+                        key={edge.id}
+                        onClick={() =>
+                          goToNode(edge.target, {
+                            sourceNodeId:
+                              lastTextNode?.id ?? reader.node.id,
+                            exitKind: "path",
+                            edgeLabel: edge.label,
+                          })
+                        }
+                        className="rounded-2xl bg-emerald-600 px-5 py-3 text-left font-black text-white hover:bg-emerald-500"
+                      >
+                        {edge.label
+                          ? `${edge.label}: `
+                          : reader.branchPaths.length > 1
+                            ? `Optie ${index + 1}: `
+                            : "Ga verder naar "}
+                        {targetNode?.title ?? "volgende scène"}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+            {!canGoNextPage &&
+              !reader.nextNodeAfterChain &&
+              reader.branchPaths.length === 0 && (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">
+                  Einde bereikt
+                </div>
+              )}
           </div>
         ) : node.type !== "choice" &&
           node.type !== "minigame" &&
@@ -2636,11 +3769,32 @@ export default function ReadBookPage() {
           node.type !== "condition" &&
           node.type !== "chapter" ? (
           <div className="flex flex-wrap justify-end gap-3">
-            {reader.outgoingPaths.length === 0 && <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">Einde bereikt</div>}
+            {reader.outgoingPaths.length === 0 && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">
+                Einde bereikt
+              </div>
+            )}
+
             {reader.outgoingPaths.map((edge) => {
-              const targetNode = book.nodes.find((item) => item.id === edge.target);
+              const targetNode = book.nodes.find(
+                (item) => item.id === edge.target,
+              );
+
               return (
-                <button key={edge.id} onClick={() => goToNode(edge.target)} className="rounded-2xl bg-blue-600 px-5 py-3 font-black text-white hover:bg-blue-500">
+                <button
+                  key={edge.id}
+                  onClick={() =>
+                    goToNode(edge.target, {
+                      sourceNodeId: node.id,
+                      exitKind:
+                        node.type === "cutscene"
+                          ? "cutscene"
+                          : "path",
+                      edgeLabel: edge.label,
+                    })
+                  }
+                  className="rounded-2xl bg-blue-600 px-5 py-3 font-black text-white hover:bg-blue-500"
+                >
                   Ga verder naar {targetNode?.title ?? "volgende scène"}
                 </button>
               );
@@ -2648,7 +3802,9 @@ export default function ReadBookPage() {
           </div>
         ) : (
           <div className="text-center text-xs font-black uppercase tracking-widest text-neutral-600">
-            {node.type === "chapter" ? "Hoofdstuk laden…" : "Interactieve scène"}
+            {node.type === "chapter"
+              ? "Hoofdstuk laden…"
+              : "Interactieve scène"}
           </div>
         )}
       </footer>

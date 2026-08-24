@@ -1,21 +1,21 @@
 {
-  "name": "DiBooks Chapter Marker V1",
+  "name": "DiBooks Reader Readback History V1",
   "date": "2026-08-24",
-  "sql_required": false,
+  "sql_required": true,
+  "sql_file": "READER_READBACK_HISTORY_V1_SUPABASE.sql",
   "files": [
-    "app/editor/page.tsx",
     "app/books/[bookId]/read/page.tsx",
-    "app/api/moderation/scan-submission/route.ts",
+    "READER_READBACK_HISTORY_V1_SUPABASE.sql",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Chapter marker node",
-    "Chapter number/title/subtitle",
-    "Automatic chapter forwarding",
-    "Chapter shown in reader chrome",
-    "Excluded from story node limits",
-    "Excluded from progress node count",
-    "Excluded from DeepSeek moderation scan",
-    "Single outgoing path for chapter markers"
+    "Persistent per-run route history",
+    "Readonly rewind mode",
+    "Previously selected choices visible",
+    "Previous minigame results visible",
+    "No Function/IF replay",
+    "Reached-chapters-only contents panel",
+    "No forward chapter jumping",
+    "Return to live reading position"
   ]
 }
