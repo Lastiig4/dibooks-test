@@ -49,6 +49,21 @@ type ReaderFunctionActionType =
   | "set_number"
   | "set_text";
 
+type ReaderFeedbackType =
+  | "item_received"
+  | "item_lost"
+  | "relationship_up"
+  | "relationship_down"
+  | "stat_up"
+  | "stat_down"
+  | "info";
+
+type ReaderFeedbackToast = {
+  id: string;
+  type: ReaderFeedbackType;
+  text: string;
+};
+
 type ReaderFunctionAction = {
   id?: string;
   type: ReaderFunctionActionType;
@@ -56,6 +71,9 @@ type ReaderFunctionAction = {
   variableId?: string;
   amount?: number;
   textValue?: string;
+  notifyReader?: boolean;
+  notificationType?: ReaderFeedbackType;
+  notificationText?: string;
 };
 
 type ConditionOperator =
@@ -848,6 +866,86 @@ function applyReaderFunctionActions(
   });
 
   return nextState;
+}
+
+function getReaderFeedbackPresentation(type: ReaderFeedbackType) {
+  if (type === "item_received") return { icon: "🎒", title: "Item ontvangen" };
+  if (type === "item_lost") return { icon: "🗑️", title: "Item verloren" };
+  if (type === "relationship_up") return { icon: "❤️", title: "Relatie verbeterd" };
+  if (type === "relationship_down") return { icon: "💔", title: "Relatie verslechterd" };
+  if (type === "stat_up") return { icon: "⬆️", title: "Stat verhoogd" };
+  if (type === "stat_down") return { icon: "⬇️", title: "Stat verlaagd" };
+  return { icon: "ℹ️", title: "Update" };
+}
+
+function formatReaderFeedbackVariableLabel(value?: string) {
+  const clean = String(value ?? "")
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (!clean) return "Verhaalstatus gewijzigd";
+
+  return clean
+    .split(" ")
+    .map((part) =>
+      part.length > 0
+        ? part.slice(0, 1).toUpperCase() + part.slice(1)
+        : part,
+    )
+    .join(" ");
+}
+
+function buildReaderFeedbackItems(
+  book: ReaderBook,
+  actions: ReaderFunctionAction[] = [],
+): Omit<ReaderFeedbackToast, "id">[] {
+  return actions.flatMap((action) => {
+    if (!action.notifyReader) return [];
+
+    const variable = findStoryVariable(book, action.variableId, action.key);
+
+    return [
+      {
+        type: action.notificationType ?? "info",
+        text:
+          action.notificationText?.trim() ||
+          formatReaderFeedbackVariableLabel(variable?.name || action.key),
+      },
+    ];
+  });
+}
+
+function enqueueReaderFeedbackToasts(
+  setFeedbacks: (
+    value:
+      | ReaderFeedbackToast[]
+      | ((current: ReaderFeedbackToast[]) => ReaderFeedbackToast[]),
+  ) => void,
+  book: ReaderBook,
+  actions: ReaderFunctionAction[] = [],
+) {
+  const feedbackItems = buildReaderFeedbackItems(book, actions);
+
+  feedbackItems.forEach((item, index) => {
+    const id = `reader_feedback_${Date.now()}_${index}_${Math.random()
+      .toString(36)
+      .slice(2, 7)}`;
+
+    setFeedbacks((current) => [
+      ...current,
+      {
+        ...item,
+        id,
+      },
+    ]);
+
+    window.setTimeout(() => {
+      setFeedbacks((current) =>
+        current.filter((feedback) => feedback.id !== id),
+      );
+    }, 3600 + index * 220);
+  });
 }
 
 function evaluateReaderCondition(
@@ -1846,6 +1944,7 @@ export default function ReadBookPage() {
   const [interactionBusy, setInteractionBusy] = useState(false);
   const interactionBusyRef = useRef(false);
   const [storyState, setStoryState] = useState<ReaderStoryState>({});
+  const [readerFeedbacks, setReaderFeedbacks] = useState<ReaderFeedbackToast[]>([]);
   const storyStateRef = useRef<ReaderStoryState>({});
   const storyStateReadyRef = useRef(false);
   const [runHistory, setRunHistory] = useState<ReaderRunStep[]>([]);
@@ -1868,6 +1967,7 @@ export default function ReadBookPage() {
       storyStateReadyRef.current = false;
       storyStateRef.current = {};
       setStoryState({});
+      setReaderFeedbacks([]);
       runHistoryReadyRef.current = false;
       runHistoryRef.current = [];
       setRunHistory([]);
@@ -2350,6 +2450,8 @@ export default function ReadBookPage() {
         return;
       }
 
+      let functionStateSaved = false;
+
       try {
         const progressPercent = calculateBookProgressPercent(
           activeReader.book,
@@ -2382,6 +2484,7 @@ export default function ReadBookPage() {
 
         commitRunHistory(nextHistory);
         clearLegacyReaderFlags(activeReader.book.id);
+        functionStateSaved = true;
       } catch (progressError) {
         console.warn(
           "Functie uitgevoerd, maar directe story-state save mislukte.",
@@ -2390,6 +2493,14 @@ export default function ReadBookPage() {
       }
 
       if (cancelled) return;
+
+      if (functionStateSaved) {
+        enqueueReaderFeedbackToasts(
+          setReaderFeedbacks,
+          activeReader.book,
+          activeReader.node.functionActions ?? [],
+        );
+      }
 
       lastExecutedFunctionNodeRef.current = null;
       lastEvaluatedConditionNodeRef.current = null;
@@ -2860,6 +2971,11 @@ export default function ReadBookPage() {
       storyStateRef.current = nextStoryState;
       setStoryState(nextStoryState);
       commitRunHistory(nextHistory);
+      enqueueReaderFeedbackToasts(
+        setReaderFeedbacks,
+        activeBook,
+        effects,
+      );
       clearLegacyReaderFlags(activeBook.id);
       navigateToNodeWithoutHistory(targetNodeId);
     } catch (effectError: any) {
@@ -3005,6 +3121,7 @@ export default function ReadBookPage() {
       storyStateRef.current = resetStoryState;
       storyStateReadyRef.current = true;
       setStoryState(resetStoryState);
+      setReaderFeedbacks([]);
 
       const resetRunHistory = [
         createReaderRunStep(activeBook, activeBook.startNodeId),
@@ -3250,6 +3367,33 @@ export default function ReadBookPage() {
         </div>
 
       </header>
+      )}
+
+      {readerFeedbacks.length > 0 && replayStepIndex === null && (
+        <div className="pointer-events-none fixed right-4 top-20 z-[70] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2 sm:right-6 sm:top-24">
+          {readerFeedbacks.map((feedback) => {
+            const presentation = getReaderFeedbackPresentation(feedback.type);
+
+            return (
+              <div
+                key={feedback.id}
+                className="rounded-2xl border border-blue-300/20 bg-[#0b1020]/95 p-4 text-white shadow-2xl shadow-black/55 backdrop-blur-xl"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">{presentation.icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-blue-200">
+                      {presentation.title}
+                    </p>
+                    <p className="mt-1 text-sm font-bold leading-5 text-white">
+                      {feedback.text}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {settingsOpen && !hideReaderChromeForCutscene && (

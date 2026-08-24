@@ -136,6 +136,21 @@ type FunctionActionType =
   | "set_number"
   | "set_text";
 
+type ReaderFeedbackType =
+  | "item_received"
+  | "item_lost"
+  | "relationship_up"
+  | "relationship_down"
+  | "stat_up"
+  | "stat_down"
+  | "info";
+
+type ReaderFeedbackToast = {
+  id: string;
+  type: ReaderFeedbackType;
+  text: string;
+};
+
 type FunctionAction = {
   id: string;
   type: FunctionActionType;
@@ -143,6 +158,9 @@ type FunctionAction = {
   variableId?: string;
   amount?: number;
   textValue?: string;
+  notifyReader?: boolean;
+  notificationType?: ReaderFeedbackType;
+  notificationText?: string;
 };
 
 type ConditionOperator =
@@ -305,6 +323,139 @@ function getSafeStartNodeId(currentNodes: Node<DiNodeData>[], preferredStartId?:
 }
 
 
+function getReaderFeedbackPresentation(type: ReaderFeedbackType) {
+  if (type === "item_received") return { icon: "🎒", title: "Item ontvangen" };
+  if (type === "item_lost") return { icon: "🗑️", title: "Item verloren" };
+  if (type === "relationship_up") return { icon: "❤️", title: "Relatie verbeterd" };
+  if (type === "relationship_down") return { icon: "💔", title: "Relatie verslechterd" };
+  if (type === "stat_up") return { icon: "⬆️", title: "Stat verhoogd" };
+  if (type === "stat_down") return { icon: "⬇️", title: "Stat verlaagd" };
+  return { icon: "ℹ️", title: "Update" };
+}
+
+function formatReaderFeedbackVariableLabel(value?: string) {
+  const clean = String(value ?? "")
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (!clean) return "Verhaalstatus gewijzigd";
+
+  return clean
+    .split(" ")
+    .map((part) =>
+      part.length > 0
+        ? part.slice(0, 1).toUpperCase() + part.slice(1)
+        : part,
+    )
+    .join(" ");
+}
+
+function buildEditorReaderFeedback(
+  action: FunctionAction,
+  variables: StoryVariable[],
+): Omit<ReaderFeedbackToast, "id"> | null {
+  if (!action.notifyReader) return null;
+
+  const variable =
+    variables.find((item) => item.id === action.variableId) ??
+    variables.find((item) => item.name === action.key);
+
+  return {
+    type: action.notificationType ?? "info",
+    text:
+      action.notificationText?.trim() ||
+      formatReaderFeedbackVariableLabel(variable?.name || action.key),
+  };
+}
+
+function ReaderFeedbackEditor({
+  action,
+  onChange,
+}: {
+  action: FunctionAction;
+  onChange: (updates: Partial<FunctionAction>) => void;
+}) {
+  const enabled = !!action.notifyReader;
+  const presentation = getReaderFeedbackPresentation(
+    action.notificationType ?? "info",
+  );
+
+  return (
+    <div className="mt-3 rounded-xl border border-blue-400/20 bg-blue-500/[0.07] p-3">
+      <label className="flex cursor-pointer items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black text-blue-100">Reader feedback</p>
+          <p className="mt-0.5 text-[11px] font-semibold leading-4 text-neutral-400">
+            Alleen aanzetten als de lezer deze wijziging bewust mag zien.
+          </p>
+        </div>
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) =>
+            onChange({
+              notifyReader: event.target.checked,
+              notificationType: action.notificationType ?? "info",
+            })
+          }
+          className="h-5 w-5 accent-blue-500"
+        />
+      </label>
+
+      {enabled && (
+        <div className="mt-3 grid gap-2 border-t border-white/10 pt-3">
+          <select
+            value={action.notificationType ?? "info"}
+            onChange={(event) =>
+              onChange({
+                notificationType: event.target.value as ReaderFeedbackType,
+              })
+            }
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-xs font-bold text-white outline-none focus:border-blue-400"
+          >
+            <option value="item_received">🎒 Item ontvangen</option>
+            <option value="item_lost">🗑️ Item verloren</option>
+            <option value="relationship_up">❤️ Relatie verbeterd</option>
+            <option value="relationship_down">💔 Relatie verslechterd</option>
+            <option value="stat_up">⬆️ Stat omhoog</option>
+            <option value="stat_down">⬇️ Stat omlaag</option>
+            <option value="info">ℹ️ Eigen / algemene melding</option>
+          </select>
+
+          <input
+            value={action.notificationText ?? ""}
+            onChange={(event) =>
+              onChange({ notificationText: event.target.value })
+            }
+            placeholder="Bijv. Mattias vertrouwt je meer."
+            maxLength={160}
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-xs font-bold text-white outline-none placeholder:text-neutral-600 focus:border-blue-400"
+          />
+
+          <div className="rounded-lg border border-white/10 bg-black/30 p-2.5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+              Voorbeeld
+            </p>
+            <div className="mt-1.5 flex items-start gap-2">
+              <span className="text-lg">{presentation.icon}</span>
+              <div>
+                <p className="text-xs font-black text-white">
+                  {presentation.title}
+                </p>
+                <p className="mt-0.5 text-[11px] font-semibold text-neutral-400">
+                  {action.notificationText?.trim() ||
+                    formatReaderFeedbackVariableLabel(action.key)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function createVariableEffectAction(prefix = "effect"): FunctionAction {
   return {
     id: `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -313,6 +464,9 @@ function createVariableEffectAction(prefix = "effect"): FunctionAction {
     variableId: "",
     amount: 1,
     textValue: "",
+    notifyReader: false,
+    notificationType: "info",
+    notificationText: "",
   };
 }
 
@@ -441,6 +595,11 @@ function VariableEffectsEditor({
                     placeholder="Nieuwe tekstwaarde..."
                   />
                 )}
+
+                <ReaderFeedbackEditor
+                  action={action}
+                  onChange={(updates) => updateAction(action.id, updates)}
+                />
               </div>
             );
           })}
@@ -2519,6 +2678,7 @@ export default function Home() {
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [previewPageCount, setPreviewPageCount] = useState(1);
   const [previewGlobalPageOffset, setPreviewGlobalPageOffset] = useState(0);
+  const [previewFeedbacks, setPreviewFeedbacks] = useState<ReaderFeedbackToast[]>([]);
   const [readerVisiblePageCount, setReaderVisiblePageCount] = useState(1);
   const flowWrapperRef = useRef<HTMLDivElement | null>(null);
   const reviewFlowInstanceRef = useRef<any>(null);
@@ -3536,7 +3696,39 @@ ${formatSaveError(error)}`);
     return false;
   }
 
+  function queuePreviewReaderFeedback(actions: FunctionAction[] = []) {
+    const feedbackItems = actions
+      .map((action) => buildEditorReaderFeedback(action, storyVariables))
+      .filter(
+        (
+          item,
+        ): item is Omit<ReaderFeedbackToast, "id"> => !!item,
+      );
+
+    feedbackItems.forEach((item, index) => {
+      const id = `preview_feedback_${Date.now()}_${index}_${Math.random()
+        .toString(36)
+        .slice(2, 7)}`;
+
+      setPreviewFeedbacks((current) => [
+        ...current,
+        {
+          ...item,
+          id,
+        },
+      ]);
+
+      window.setTimeout(() => {
+        setPreviewFeedbacks((current) =>
+          current.filter((feedback) => feedback.id !== id),
+        );
+      }, 3600 + index * 220);
+    });
+  }
+
   function executePreviewActions(actions: FunctionAction[] = []) {
+    queuePreviewReaderFeedback(actions);
+
     setPreviewVariableValues((current) => {
       const next = { ...current };
 
@@ -3579,6 +3771,7 @@ ${formatSaveError(error)}`);
     }
 
     setPreviewVariableValues(createInitialPreviewVariableValues());
+    setPreviewFeedbacks([]);
     setPreviewNodeId(startNodeId);
     setPreviewPageIndex(0);
     setPreviewPageCount(1);
@@ -3594,6 +3787,7 @@ ${formatSaveError(error)}`);
     setPreviewPageCount(1);
     setPreviewGlobalPageOffset(0);
     setReaderVisiblePageCount(1);
+    setPreviewFeedbacks([]);
     setPreviewVariableValues({});
   }
 
@@ -4243,6 +4437,9 @@ ${formatSaveError(error)}`);
                 key: "",
                 variableId: "",
                 amount: 1,
+                notifyReader: false,
+                notificationType: "info",
+                notificationText: "",
               },
             ],
           },
@@ -5321,6 +5518,33 @@ ${formatSaveError(error)}`);
             </div>
           )}
 
+          {previewFeedbacks.length > 0 && (
+            <div className="pointer-events-none fixed right-4 top-20 z-[70] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2 sm:right-6">
+              {previewFeedbacks.map((feedback) => {
+                const presentation = getReaderFeedbackPresentation(feedback.type);
+
+                return (
+                  <div
+                    key={feedback.id}
+                    className="rounded-2xl border border-blue-300/20 bg-[#0b1020]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">{presentation.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-widest text-blue-200">
+                          {presentation.title}
+                        </p>
+                        <p className="mt-1 text-sm font-bold leading-5 text-white">
+                          {feedback.text}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="min-h-0 flex-1">
           <ReactFlow
             nodes={flowNodes}
@@ -6006,6 +6230,13 @@ ${formatSaveError(error)}`);
                             />
                           </div>
                         )}
+
+                        <ReaderFeedbackEditor
+                          action={action}
+                          onChange={(updates) =>
+                            updateSelectedFunctionAction(action.id, updates)
+                          }
+                        />
                       </div>
                     ))}
 

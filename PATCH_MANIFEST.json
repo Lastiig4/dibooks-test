@@ -1,26 +1,21 @@
 {
-  "name": "DiBooks Account & Security V1",
+  "name": "DiBooks Reader Feedback V1",
   "date": "2026-08-24",
-  "sql_required": true,
-  "sql_file": "ACCOUNT_SECURITY_V1_SUPABASE.sql",
+  "sql_required": false,
   "files": [
-    "lib/auth.ts",
-    "components/AuthModal.tsx",
-    "app/account/page.tsx",
-    "app/dashboard/page.tsx",
     "app/editor/page.tsx",
-    "ACCOUNT_SECURITY_V1_SUPABASE.sql",
+    "app/books/[bookId]/read/page.tsx",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Editable display name",
-    "Separate author/pen name",
-    "Email change through Supabase Auth",
-    "Password change",
-    "Forgot password/reset email",
-    "Recovery return to Account",
-    "Subscription summary",
-    "Royalty/payout placeholder",
-    "Author name defaults for new books"
+    "Opt-in reader notifications per variable effect",
+    "Item gained/lost notification types",
+    "Relationship up/down notification types",
+    "Stat up/down notification types",
+    "Custom/info notification",
+    "Choice and minigame notifications",
+    "Function node notifications",
+    "Studio Preview notifications",
+    "No replay notification re-trigger"
   ]
 }

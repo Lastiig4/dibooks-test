@@ -1,110 +1,106 @@
-DiBooks Patch - Account & Security V1
-=====================================
+DiBooks Patch - Reader Feedback V1
+==================================
+
+DOEL
+Variable-effect wijzigingen kunnen nu optioneel een zichtbare melding aan de
+lezer geven.
 
 BELANGRIJK
-Voer EERST uit:
-ACCOUNT_SECURITY_V1_SUPABASE.sql
+Reader feedback is ALTIJD opt-in per effect.
+Geheime flags/variabelen blijven dus onzichtbaar zolang
+'Reader feedback' uit staat.
 
-Daarna de mappen `app`, `components` en `lib` vervangen.
+ONDERSTEUND OP
+- Keuze effects
+- Minigame success effects
+- Minigame fail effects
+- Function node actions
+- Studio Preview
+- Publieke Reader
 
-NIEUW
+READER FEEDBACK TYPES
+- 🎒 Item ontvangen
+- 🗑️ Item verloren
+- ❤️ Relatie verbeterd
+- 💔 Relatie verslechterd
+- ⬆️ Stat omhoog
+- ⬇️ Stat omlaag
+- ℹ️ Eigen / algemene melding
 
-1. Naam en auteursnaam apart
-Account > Profielgegevens:
-- Naam
-- Auteursnaam
-- E-mailadres
+PER EFFECT
+In de Studio staat nu:
+Reader feedback [aan/uit]
 
-Auteursnaam wordt de standaard auteur voor NIEUWE boeken.
-Bestaande boeken worden bewust NIET automatisch hernoemd.
+Wanneer aan:
+1. kies type;
+2. optioneel eigen tekst, bijv.
+   'Mattias vertrouwt je meer.'
 
-Bij bestaande accounts vult de SQL auteursnaam initieel met de huidige
-display_name.
+Als eigen tekst leeg blijft gebruikt DiBooks de naam van de variabele als
+fallback.
 
-2. Profiel bewerken
-Naam + auteursnaam kunnen vanuit Account worden opgeslagen.
+VOORBEELD
+Keuze:
+'Vertel Mattias de waarheid'
 
-De auth-cache wordt direct bijgewerkt zodat de nieuwe naam zonder uitloggen
-zichtbaar wordt.
+Effect 1:
+mattias_relation +2
+Reader feedback:
+❤️ Relatie verbeterd
+'Mattias vertrouwt je meer.'
 
-3. E-mailadres wijzigen
-Account bevat nu 'E-mail wijzigen'.
+Effect 2:
+mattias_knows_secret = true
+Reader feedback UIT
 
-Supabase Auth beheert de wijziging. Afhankelijk van je Supabase Auth-instellingen
-kan eerst een bevestigingsmail nodig zijn.
+De lezer ziet dan alleen de relatie-update en niet de geheime flag.
 
-4. Wachtwoord wijzigen
-Onder Beveiliging:
-- Nieuw wachtwoord
-- Herhaal nieuw wachtwoord
-- Wachtwoord wijzigen
-- Resetmail sturen
+TOASTS
+- verschijnen rechtsboven;
+- verdwijnen automatisch na ongeveer 3,6 seconden;
+- meerdere zichtbare effecten worden onder elkaar gezet.
 
-5. Wachtwoord vergeten bij Login
-De loginmodal heeft nu:
-'Wachtwoord vergeten?'
+TERUGLEESMODUS
+Reader feedback wordt NIET opnieuw uitgevoerd of getoond tijdens
+Terugleesmodus.
 
-Dit verstuurt een Supabase resetmail naar het ingevulde e-mailadres.
-De recovery-link keert terug naar:
-/account?recovery=1
+De bestaande read-only history/story-state bescherming blijft intact.
 
-Account toont dan direct dat de gebruiker een nieuw wachtwoord kan kiezen.
+FUNCTION NODES
+Function nodes blijven onzichtbaar.
+Als een function-action Reader feedback aan heeft, verschijnt de toast pas
+nadat de function state/progress succesvol is opgeslagen en de route doorgaat.
 
-LET OP VOOR SUPABASE AUTH
-In Supabase Dashboard > Authentication > URL Configuration moet je productie-
-domein toegestaan zijn als Redirect URL, bijvoorbeeld:
-https://www.dibooks.nl/account
-of passend wildcardbeleid voor je deployment.
+STUDIO PREVIEW
+Dezelfde toast verschijnt ook in Preview, zodat auteurs het resultaat direct
+kunnen testen.
 
-6. Abonnement rustiger zichtbaar
-Account heeft nu één compacte Abonnement-kaart:
-- huidig plan;
-- rol;
-- Plannen bekijken;
-- Auteur Dashboard / Studio.
+OPSLAG / COMPATIBILITEIT
+De feedbackvelden worden in de bestaande project JSON opgeslagen als onderdeel
+van een FunctionAction:
+- notifyReader
+- notificationType
+- notificationText
 
-Billing is nog NIET gekoppeld.
+Oude boeken blijven volledig werken omdat alle velden optioneel zijn.
 
-7. Royalty & uitbetalingen voorbereid
-Er staat een rustige placeholder onder Abonnement voor:
-- definitieve royalty-overzichten;
-- uitbetaalbaar saldo;
-- uitbetalingsmethode.
-
-Er wordt in deze V1 nog GEEN geld berekend of opgeslagen.
-
-8. Auteursnaam automatisch bij nieuwe boeken
-Auteur Dashboard + Studio gebruiken voortaan:
-authorName -> fallback display name
-
-Daardoor hoeft een auteur zijn pseudoniem niet bij elk nieuw boek opnieuw
-in te vullen.
-
-BEHOUDEN
-- Instant Auth INITIAL_SESSION architectuur;
-- Gratis/Reader/Auteur plan/role systeem;
-- openbare Studio proefmodus 15 nodes;
-- Dashboard Bookshelf;
-- vrienden/contacten/chat;
-- favorieten;
-- delen/feedback/revisions;
-- moderatie;
-- Reader;
-- gratis/Reader royaltylabels.
+GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. ACCOUNT_SECURITY_V1_SUPABASE.sql uitvoeren in Supabase SQL Editor.
-3. `app`, `components`, `lib` over je project slepen en vervangen.
+2. Sleep map `app` over `dibooks_author_studio`.
+3. Bestanden vervangen.
 4. npm run build.
 5. Commit/push naar Vercel.
 
 TEST
-1. Login.
-2. Account: wijzig Naam + Auteursnaam.
-3. Reload: waarden moeten blijven staan.
-4. Maak Nieuw boek: Auteur moet automatisch de auteursnaam zijn.
-5. Test E-mail wijzigen met een testaccount.
-6. Log uit -> Login -> Wachtwoord vergeten.
-7. Open resetmail -> stel op Account nieuw wachtwoord in.
-8. Log opnieuw in met nieuw wachtwoord.
+1. Maak getalvariabele `mattias_relation`.
+2. Geef keuze effect `+1`.
+3. Zet Reader feedback aan.
+4. Kies ❤️ Relatie verbeterd.
+5. Tekst: `Mattias vertrouwt je meer.`
+6. Preview -> maak keuze.
+7. Controleer toast.
+8. Public/test Reader -> controleer toast.
+9. Blader terug -> toast mag NIET opnieuw verschijnen.
+10. Test daarnaast een geheime flag met Reader feedback UIT.
