@@ -9,6 +9,7 @@ import {
   fetchPublishedDashboardBooksFromSupabase,
 } from "@/lib/supabase/dashboardBooks";
 import { useDemoAuth } from "@/lib/auth";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   PUBLIC_PLANS,
   openDiBooksAuth,
@@ -23,10 +24,69 @@ type DashboardBook = DiBook & {
   projectData?: any;
   colorTheme?: string;
   accessType?: "free" | "premium";
+  mostRead?: boolean;
+  readCount?: number;
+  readerCount?: number;
+  viewCount?: number;
+  favoritesCount?: number;
+};
+
+type PopularityRow = {
+  book_id?: string;
+  bookId?: string;
+  reader_count?: number | string;
+  readerCount?: number | string;
 };
 
 const FALLBACK_COVER_CLASS = "from-blue-950 via-slate-950 to-purple-950";
 const FALLBACK_ACCENT_CLASS = "border-blue-500/50";
+
+function getPopularityCount(
+  book: DashboardBook,
+  popularityByBookId: Record<string, number>,
+) {
+  const storedCount = popularityByBookId[book.id];
+
+  if (Number.isFinite(storedCount)) {
+    return Math.max(0, Number(storedCount));
+  }
+
+  return Math.max(
+    0,
+    Number(book.readerCount) ||
+      Number(book.readCount) ||
+      Number(book.viewCount) ||
+      Number(book.favoritesCount) ||
+      0,
+  );
+}
+
+function sortBooksByPopularity(
+  books: DashboardBook[],
+  popularityByBookId: Record<string, number>,
+) {
+  return [...books].sort((left, right) => {
+    const popularityDifference =
+      getPopularityCount(right, popularityByBookId) -
+      getPopularityCount(left, popularityByBookId);
+
+    if (popularityDifference !== 0) return popularityDifference;
+
+    if (!!right.mostRead !== !!left.mostRead) {
+      return right.mostRead ? 1 : -1;
+    }
+
+    const rightDate = Date.parse(
+      right.publishedAt || right.updatedAt || right.createdAt || "",
+    );
+    const leftDate = Date.parse(
+      left.publishedAt || left.updatedAt || left.createdAt || "",
+    );
+
+    return (Number.isFinite(rightDate) ? rightDate : 0) -
+      (Number.isFinite(leftDate) ? leftDate : 0);
+  });
+}
 
 function getBookStatusLabel(book: DashboardBook) {
   if (book.source === "dashboard") return book.published ? "Live" : book.status;
@@ -105,6 +165,73 @@ function BookCard({ book, large = false }: { book: DashboardBook; large?: boolea
   );
 }
 
+function GuestPopularCover({
+  book,
+  rank,
+  readerCount,
+}: {
+  book: DashboardBook;
+  rank: number;
+  readerCount: number;
+}) {
+  const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
+
+  return (
+    <Link
+      href={`/books/${book.id}`}
+      className="group min-w-0 overflow-hidden rounded-[1.6rem] border border-white/10 bg-neutral-950 shadow-2xl transition duration-300 hover:-translate-y-2 hover:border-blue-300/35"
+    >
+      <div className={`relative aspect-[2/3] overflow-hidden bg-gradient-to-br ${coverClass}`}>
+        {book.coverImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={book.coverImage}
+            alt={`Cover van ${book.title}`}
+            className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]"
+          />
+        ) : (
+          <>
+            <div className="absolute left-5 top-5 text-[10px] font-black uppercase tracking-[0.32em] text-white/30">
+              DiBooks
+            </div>
+            <div className="absolute -right-12 top-16 h-40 w-40 rounded-full border border-white/10" />
+            <div className="absolute -right-3 top-28 h-56 w-56 rounded-full border border-white/10" />
+          </>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
+
+        <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/55 text-xs font-black text-white backdrop-blur">
+          #{rank}
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <div className="flex flex-wrap gap-1.5">
+            <AccessBadge book={book} />
+            {readerCount > 0 && (
+              <span className="rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white/80 backdrop-blur">
+                {readerCount} lezer{readerCount === 1 ? "" : "s"}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4">
+        <p className="text-[9px] font-black uppercase tracking-[0.28em] text-blue-300/75">
+          {book.primaryGenre}
+        </p>
+        <h3 className="mt-2 line-clamp-2 text-xl font-black leading-tight text-white">
+          {book.title}
+        </h3>
+        <p className="mt-2 truncate text-xs font-bold text-neutral-500">
+          {book.author}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
 function FeaturedPanel({ book }: { book: DashboardBook }) {
   const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
   const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
@@ -139,79 +266,215 @@ function FeaturedPanel({ book }: { book: DashboardBook }) {
   );
 }
 
-function GuestHero() {
+function GuestHero({
+  popularBooks,
+  popularityByBookId,
+}: {
+  popularBooks: DashboardBook[];
+  popularityByBookId: Record<string, number>;
+}) {
+  const heroBooks = popularBooks.slice(0, 3);
+  const cardTransforms = [
+    "lg:-rotate-6 lg:translate-y-8",
+    "lg:z-10 lg:scale-110",
+    "lg:rotate-6 lg:translate-y-8",
+  ];
+
   return (
     <section className="px-4 pt-7 sm:px-6 sm:pt-10 lg:px-8">
-      <div className="relative isolate overflow-hidden rounded-[2rem] border border-blue-300/15 bg-[#080c18] shadow-2xl shadow-blue-950/20">
-        <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_10%_10%,rgba(37,99,235,0.30),transparent_34%),radial-gradient(circle_at_88%_18%,rgba(168,85,247,0.20),transparent_30%),linear-gradient(135deg,#080c18_0%,#070912_52%,#05070d_100%)]" />
+      <div className="relative isolate overflow-hidden rounded-[2.4rem] border border-blue-300/15 bg-[#080c18] shadow-2xl shadow-blue-950/25">
+        <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_10%_10%,rgba(37,99,235,0.32),transparent_34%),radial-gradient(circle_at_88%_18%,rgba(168,85,247,0.22),transparent_30%),linear-gradient(135deg,#080c18_0%,#070912_52%,#05070d_100%)]" />
         <div className="absolute -right-32 -top-32 -z-10 h-[430px] w-[430px] rounded-full border border-blue-300/10" />
         <div className="absolute -right-12 top-10 -z-10 h-[360px] w-[360px] rounded-full border border-violet-300/10" />
-        <div className="grid min-h-[520px] items-center gap-10 p-6 sm:p-10 lg:grid-cols-[1.08fr_0.92fr] lg:p-14">
+
+        <div className="grid min-h-[610px] items-center gap-12 p-6 sm:p-10 lg:grid-cols-[1.02fr_0.98fr] lg:p-14 xl:p-16">
           <div className="max-w-4xl">
             <div className="inline-flex rounded-full border border-cyan-300/25 bg-cyan-400/10 px-4 py-2 text-xs font-black uppercase tracking-[0.30em] text-cyan-100">
-              Boeken die met je meebewegen
+              Lezen • kiezen • beleven
             </div>
-            <h1 className="mt-7 text-5xl font-black leading-[0.94] sm:text-7xl lg:text-8xl">
-              Lees geen verhaal. <span className="text-blue-300">Beleef jouw versie.</span>
+
+            <h1 className="mt-7 text-5xl font-black leading-[0.93] sm:text-7xl xl:text-[5.6rem]">
+              Jouw keuzes.{" "}
+              <span className="bg-gradient-to-r from-blue-300 via-cyan-200 to-violet-300 bg-clip-text text-transparent">
+                Jouw verhaal.
+              </span>
             </h1>
+
             <p className="mt-6 max-w-2xl text-base font-semibold leading-8 text-neutral-300 sm:text-xl">
-              DiBooks combineert lezen met keuzes, verschillende verhaalroutes, cutscenes en interactieve momenten. Jouw beslissingen bepalen hoe het verhaal verdergaat.
+              DiBooks maakt van lezen een interactieve ervaring. Kies je route,
+              bekijk cutscenes, speel minigames en ontdek scènes die reageren op
+              wat jij eerder hebt gedaan.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button type="button" onClick={() => openDiBooksAuth("register", "free")} className="rounded-2xl bg-white px-7 py-4 text-base font-black text-black shadow-xl transition hover:-translate-y-0.5 hover:bg-neutral-200">
-                Gratis beginnen
-              </button>
-              <a href="#library" className="rounded-2xl border border-white/15 bg-white/[0.045] px-7 py-4 text-base font-black text-white transition hover:bg-white/10">
-                Ontdek boeken
+
+            <div className="mt-7 flex flex-wrap gap-2">
+              {["Keuzes", "Vertakkingen", "Cutscenes", "Minigames", "Flags & gevolgen"].map(
+                (feature) => (
+                  <span
+                    key={feature}
+                    className="rounded-full border border-white/10 bg-white/[0.045] px-3 py-2 text-[10px] font-black uppercase tracking-widest text-neutral-300"
+                  >
+                    {feature}
+                  </span>
+                ),
+              )}
+            </div>
+
+            <div className="mt-9 flex flex-wrap gap-3">
+              <a
+                href="#populair"
+                className="rounded-2xl bg-white px-7 py-4 text-base font-black text-black shadow-xl transition hover:-translate-y-0.5 hover:bg-neutral-200"
+              >
+                Ontdek populaire boeken
               </a>
-              <Link href="/editor" className="rounded-2xl border border-cyan-400/25 bg-cyan-500/10 px-7 py-4 text-base font-black text-cyan-100 transition hover:bg-cyan-500/20">
-                Probeer Auteur Studio
+
+              <Link
+                href="/editor"
+                className="rounded-2xl border border-cyan-400/30 bg-cyan-500/12 px-7 py-4 text-base font-black text-cyan-100 transition hover:-translate-y-0.5 hover:bg-cyan-500/20"
+              >
+                Probeer Studio gratis
               </Link>
+
+              <button
+                type="button"
+                onClick={() => openDiBooksAuth("register", "free")}
+                className="rounded-2xl border border-white/12 bg-white/[0.04] px-7 py-4 text-base font-black text-white transition hover:bg-white/10"
+              >
+                Account maken
+              </button>
             </div>
-            <div className="mt-8 flex flex-wrap gap-2 text-xs font-black uppercase tracking-widest text-neutral-400">
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Keuzes</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Meerdere routes</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Cutscenes</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Minigames</span>
-            </div>
+
+            <p className="mt-4 text-xs font-bold text-neutral-500">
+              Geen account nodig voor de Studio • proefmodus met maximaal 15 verhaalnodes
+            </p>
           </div>
 
-          <div className="relative mx-auto w-full max-w-xl">
-            <div className="rounded-[2rem] border border-white/12 bg-black/35 p-5 shadow-2xl backdrop-blur-xl sm:p-7">
-              <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.30em] text-cyan-300">Een DiBook</p>
-                  <p className="mt-1 text-xl font-black">Jouw route door het verhaal</p>
-                </div>
-                <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-200">Interactief</span>
-              </div>
-              <div className="mt-6 grid gap-4">
-                <div className="mx-auto w-[78%] rounded-2xl border border-blue-400/30 bg-blue-500/12 p-4 text-center">
-                  <p className="text-xs font-black uppercase tracking-widest text-blue-200">Lees</p>
-                  <p className="mt-1 text-sm font-bold text-neutral-200">Een geheim wordt ontdekt...</p>
-                </div>
-                <div className="mx-auto h-6 w-px bg-white/20" />
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4 text-center">
-                    <p className="text-xs font-black uppercase tracking-widest text-violet-200">Keuze A</p>
-                    <p className="mt-2 text-sm font-bold">Vertel de waarheid</p>
+          <div className="relative">
+            {heroBooks.length > 0 ? (
+              <>
+                <div className="mb-5 flex items-center justify-between gap-3 lg:px-6">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.32em] text-blue-300">
+                      Nu populair
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-neutral-400">
+                      Gebaseerd op echte leesactiviteit
+                    </p>
                   </div>
-                  <div className="rounded-2xl border border-orange-400/30 bg-orange-500/10 p-4 text-center">
-                    <p className="text-xs font-black uppercase tracking-widest text-orange-200">Keuze B</p>
-                    <p className="mt-2 text-sm font-bold">Hou het geheim</p>
-                  </div>
+                  <a
+                    href="#populair"
+                    className="text-xs font-black text-white/70 hover:text-white"
+                  >
+                    Bekijk lijst →
+                  </a>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="mx-auto h-6 w-px bg-violet-300/25" />
-                  <div className="mx-auto h-6 w-px bg-orange-300/25" />
+
+                <div className="grid grid-cols-3 items-center gap-2 sm:gap-4 lg:px-5">
+                  {heroBooks.map((book, index) => (
+                    <Link
+                      key={`hero-${book.id}`}
+                      href={`/books/${book.id}`}
+                      className={`group relative overflow-hidden rounded-[1.25rem] border border-white/15 bg-neutral-950 shadow-2xl transition duration-300 hover:z-20 hover:-translate-y-3 ${cardTransforms[index]}`}
+                    >
+                      <div className={`relative aspect-[2/3] overflow-hidden bg-gradient-to-br ${book.coverClass || FALLBACK_COVER_CLASS}`}>
+                        {book.coverImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={book.coverImage}
+                            alt={`Cover van ${book.title}`}
+                            className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                          />
+                        ) : (
+                          <>
+                            <div className="absolute left-3 top-3 text-[8px] font-black uppercase tracking-[0.28em] text-white/30">
+                              DiBooks
+                            </div>
+                            <div className="absolute -right-10 top-14 h-32 w-32 rounded-full border border-white/10" />
+                          </>
+                        )}
+
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/10" />
+
+                        <div className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-[10px] font-black text-white ring-1 ring-white/15 backdrop-blur">
+                          #{index + 1}
+                        </div>
+
+                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                          <h3 className="line-clamp-2 text-sm font-black leading-tight text-white sm:text-base">
+                            {book.title}
+                          </h3>
+                          {getPopularityCount(book, popularityByBookId) > 0 && (
+                            <p className="mt-1 text-[9px] font-black uppercase tracking-wider text-blue-200/80">
+                              {getPopularityCount(book, popularityByBookId)} lezers
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center text-sm font-black text-neutral-300">Route verandert</div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center text-sm font-black text-neutral-300">Andere gevolgen</div>
+              </>
+            ) : (
+              <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-8 text-center shadow-2xl">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-500/10 text-4xl ring-1 ring-blue-300/20">
+                  📚
                 </div>
+                <h2 className="mt-5 text-2xl font-black">
+                  De eerste verhalen komen eraan
+                </h2>
+                <p className="mt-3 text-sm font-semibold leading-6 text-neutral-400">
+                  Zodra boeken live zijn verschijnen de populairste covers hier automatisch.
+                </p>
               </div>
-            </div>
+            )}
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GuestPopularSection({
+  books,
+  popularityByBookId,
+}: {
+  books: DashboardBook[];
+  popularityByBookId: Record<string, number>;
+}) {
+  if (books.length === 0) return null;
+
+  return (
+    <section id="populair" className="scroll-mt-28 px-5 py-16 sm:px-8 lg:px-10">
+      <div className="mx-auto max-w-7xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.32em] text-blue-300">
+              Populair op DiBooks
+            </p>
+            <h2 className="mt-3 text-4xl font-black sm:text-6xl">
+              Waar lezers nu in verdwijnen.
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-neutral-400 sm:text-base">
+              Automatisch gerangschikt op echte leesactiviteit van gepubliceerde DiBooks.
+            </p>
+          </div>
+
+          <a
+            href="#library"
+            className="w-fit rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-black text-white hover:bg-white/10"
+          >
+            Hele Library ↓
+          </a>
+        </div>
+
+        <div className="mt-9 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+          {books.slice(0, 5).map((book, index) => (
+            <GuestPopularCover
+              key={`popular-${book.id}`}
+              book={book}
+              rank={index + 1}
+              readerCount={getPopularityCount(book, popularityByBookId)}
+            />
+          ))}
         </div>
       </div>
     </section>
@@ -263,9 +526,9 @@ function GuestAuthorStudio() {
             <Link href="/editor" className="w-fit rounded-2xl bg-cyan-500 px-6 py-4 text-sm font-black text-black transition hover:-translate-y-0.5 hover:bg-cyan-400">
               Probeer Studio gratis
             </Link>
-            <button type="button" onClick={() => openDiBooksAuth("register", "author_pro")} className="w-fit rounded-2xl border border-violet-400/25 bg-violet-500/10 px-6 py-4 text-sm font-black text-violet-100 transition hover:-translate-y-0.5 hover:bg-violet-500/20">
+            <a href="#plannen" className="w-fit rounded-2xl border border-violet-400/25 bg-violet-500/10 px-6 py-4 text-sm font-black text-violet-100 transition hover:-translate-y-0.5 hover:bg-violet-500/20">
               Bekijk Auteur-plan
-            </button>
+            </a>
           </div>
           <p className="mt-3 text-xs font-semibold leading-5 text-neutral-500">
             Proefmodus: maximaal 15 verhaalnodes en alleen lokaal opslaan. Author Pro ontgrendelt onbeperkt bouwen, Dashboard en publiceren.
@@ -381,6 +644,7 @@ function makeGenreRows(allBooks: DashboardBook[]) {
 export default function LibraryPage() {
   const [publishedBooks, setPublishedBooks] = useState<DashboardBook[]>([]);
   const [comingSoonBooks, setComingSoonBooks] = useState<DashboardBook[]>([]);
+  const [popularityByBookId, setPopularityByBookId] = useState<Record<string, number>>({});
   const { isLoggedIn, permissions } = useDemoAuth();
 
   useEffect(() => {
@@ -403,10 +667,65 @@ export default function LibraryPage() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPopularity() {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data, error } = await supabase.rpc(
+          "get_public_book_popularity",
+        );
+
+        if (error) throw error;
+        if (cancelled) return;
+
+        const nextPopularity = Object.fromEntries(
+          ((data ?? []) as PopularityRow[])
+            .map((row) => {
+              const bookId = String(row.book_id ?? row.bookId ?? "").trim();
+              const readerCount = Number(
+                row.reader_count ?? row.readerCount ?? 0,
+              );
+
+              return [
+                bookId,
+                Number.isFinite(readerCount)
+                  ? Math.max(0, readerCount)
+                  : 0,
+              ] as const;
+            })
+            .filter(([bookId]) => !!bookId),
+        );
+
+        setPopularityByBookId(nextPopularity);
+      } catch (error) {
+        console.warn(
+          "Kon publieke DiBooks-populariteit niet laden.",
+          error,
+        );
+      }
+    }
+
+    void loadPopularity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const allBooks = useMemo<DashboardBook[]>(() => [...publishedBooks, ...comingSoonBooks], [publishedBooks, comingSoonBooks]);
-  const liveBooks = useMemo(() => publishedBooks.filter((book) => book.published), [publishedBooks]);
-  const featuredBook = liveBooks[0] ?? comingSoonBooks[0] ?? null;
-  const mostReadBooks = liveBooks.filter((book) => book.mostRead || book.source === "dashboard").slice(0, 12);
+  const liveBooks = useMemo(
+    () => publishedBooks.filter((book) => book.published),
+    [publishedBooks],
+  );
+  const popularBooks = useMemo(
+    () => sortBooksByPopularity(liveBooks, popularityByBookId),
+    [liveBooks, popularityByBookId],
+  );
+  const featuredBook =
+    popularBooks[0] ?? liveBooks[0] ?? comingSoonBooks[0] ?? null;
+  const mostReadBooks = popularBooks.slice(0, 12);
   const genreRows = makeGenreRows(liveBooks);
 
   return (
@@ -416,7 +735,14 @@ export default function LibraryPage() {
 
       {!isLoggedIn && (
         <>
-          <GuestHero />
+          <GuestHero
+            popularBooks={popularBooks}
+            popularityByBookId={popularityByBookId}
+          />
+          <GuestPopularSection
+            books={popularBooks}
+            popularityByBookId={popularityByBookId}
+          />
           <GuestHowItWorks />
           <GuestAuthorStudio />
           <GuestPlans />
@@ -478,7 +804,7 @@ export default function LibraryPage() {
 
         {comingSoonBooks.length > 0 && <BookRow title="Binnenkort" rowBooks={comingSoonBooks} />}
         {liveBooks.length > 0 && <BookRow title="Nieuw in de Library" rowBooks={liveBooks} />}
-        <BookRow title="Meest gelezen boeken" rowBooks={mostReadBooks} />
+        <BookRow title="Populair bij lezers" rowBooks={mostReadBooks} />
         {genreRows.map((row) => <BookRow key={row.genre} title={row.genre} rowBooks={row.books} />)}
       </div>
 

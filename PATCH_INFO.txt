@@ -1,59 +1,68 @@
-DiBooks Patch - Editor Demo Polish V1
-====================================
+DiBooks Patch - Guest Library Experience V2
+===========================================
 
-Deze patch bouwt voort op Public Studio Trial V1.
+BELANGRIJK
+RUN EERST:
+GUEST_LIBRARY_EXPERIENCE_V2_SUPABASE.sql
 
-WAT VERANDERT
+NIEUW
 
-1. Zichtbare proefmodus-teller
-Niet-Auteur gebruikers zien bovenin de Studio een rustige teller:
+1. Gast-homepage is veel visueler
+Hero:
+- Jouw keuzes. Jouw verhaal.
+- keuzes / vertakkingen / cutscenes / minigames / gevolgen
+- Ontdek populaire boeken
+- Probeer Studio gratis
+- Account maken
 
-  Proefmodus  7/15
+2. Top 3 echte populaire covers in hero
+De rechterkant toont automatisch de drie populairste LIVE DiBooks.
 
-Er is GEEN extra melding of waarschuwing wanneer iemand bijna op 15 zit.
+3. Populair op DiBooks
+Nieuwe sectie direct onder de hero:
+- maximaal vijf covers;
+- #1 t/m #5;
+- echte boekcover;
+- titel / auteur / genre;
+- aantal unieke lezers wanneer beschikbaar.
 
-Function, IF, Hoofdstuk-marker en Kladblok tellen zoals eerder NIET mee.
+4. Populariteit komt uit echte leesactiviteit
+Supabase RPC:
+get_public_book_popularity()
 
-2. Auteur worden
-Naast de teller staat:
+Deze telt unieke readers per book_id uit reading_progress.
 
-  Auteur worden
+Privacy:
+- frontend ontvangt geen user IDs;
+- geen huidige pagina;
+- geen story_state;
+- alleen book_id + reader_count.
 
-Gast:
-- opent direct Registreren met het Auteur-plan geselecteerd.
+5. Fallback
+Wanneer er nog geen leesdata is:
+- bestaande mostRead-markering;
+- daarna nieuwste publicatie.
 
-Ingelogde Gratis/Reader gebruiker:
-- opent het plan-overzicht in een nieuwe tab;
-- de editor blijft dus open en de sessiesave blijft staan.
+Dus de homepage blijft ook bij een nieuwe Library mooi gevuld.
 
-3. Limiet
-Bij 15/15 blijft de bestaande harde blokkade werken.
-Pas wanneer iemand daadwerkelijk node 16 probeert toe te voegen krijgt
-hij een korte melding dat het Auteur-plan onbeperkt bouwen mogelijk maakt.
+6. Featured Library boek
+Het grote uitgelichte boek onder de gastsecties gebruikt nu eveneens
+het populairste live boek.
 
-Er bestaat dus GEEN 'je bent bijna vol'-waarschuwing.
+7. Studio-sectie
+'Probeer Studio gratis' opent /editor rechtstreeks.
+'Bekijk Auteur-plan' scrollt naar de plannen.
+Proefmodus blijft maximaal 15 verhaalnodes.
 
-4. Bestaande trial-regels blijven intact
-Zonder Auteur-plan:
-- maximaal 15 echte verhaalnodes;
-- lokaal opslaan/laden blijft mogelijk;
-- Play/Preview blijft mogelijk;
-- geen Dashboard-opslag;
-- geen publicatie/review;
-- geen online author-writes.
+8. Ingelogde Library blijft behouden
+Alle nieuwe marketingsecties zijn alleen voor gasten.
 
-Met Auteur-plan/Admin:
-- onbeperkt;
-- Dashboard;
-- publicatieflow;
-- volledige Studio.
-
-GEEN SQL NODIG.
-Public Studio Trial V1 SQL hoeft niet opnieuw uitgevoerd te worden.
+Geen auth/role/plan wijzigingen in deze patch.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep alleen map 'app' over dibooks_author_studio.
-3. Bestanden vervangen.
-4. npm run build.
-5. Commit/push naar GitHub/Vercel.
+2. Eerst GUEST_LIBRARY_EXPERIENCE_V2_SUPABASE.sql uitvoeren.
+3. Sleep map app over dibooks_author_studio.
+4. Bestanden vervangen.
+5. npm run build.
+6. Commit/push naar Vercel.

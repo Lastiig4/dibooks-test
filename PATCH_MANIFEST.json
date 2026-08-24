@@ -1,17 +1,11 @@
 {
-  "name": "DiBooks Editor Demo Polish V1",
+  "name": "DiBooks Guest Library Experience V2",
   "date": "2026-08-24",
-  "sql_required": false,
-  "base": "Public Studio Trial V1",
+  "sql_required": true,
+  "sql_file": "GUEST_LIBRARY_EXPERIENCE_V2_SUPABASE.sql",
   "files": [
-    "app/editor/page.tsx",
+    "app/page.tsx",
+    "GUEST_LIBRARY_EXPERIENCE_V2_SUPABASE.sql",
     "PATCH_INFO.txt"
-  ],
-  "features": [
-    "Visible trial node counter",
-    "No near-limit warning",
-    "Author upgrade CTA",
-    "Guest registration opens on author plan",
-    "Existing hard 15-node cap retained"
   ]
 }
