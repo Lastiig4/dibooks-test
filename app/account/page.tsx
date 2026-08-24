@@ -4,7 +4,13 @@ import Link from "next/link";
 import AppNav from "@/components/AppNav";
 import { useEffect, useMemo, useState } from "react";
 import AuthModal from "@/components/AuthModal";
-import { useDemoAuth } from "@/lib/auth";
+import {
+  requestPasswordResetEmail,
+  updateCurrentUserEmail,
+  updateCurrentUserPassword,
+  updateCurrentUserProfile,
+  useDemoAuth,
+} from "@/lib/auth";
 import {
   fetchFavoriteBooks,
   getAccessLabel,
@@ -346,6 +352,40 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [profileName, setProfileName] = useState("");
+  const [authorName, setAuthorName] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setProfileName("");
+      setAuthorName("");
+      setAccountEmail("");
+      return;
+    }
+
+    setProfileName(user.name || "");
+    setAuthorName(user.authorName || user.name || "");
+    setAccountEmail(user.email || "");
+  }, [user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setRecoveryMode(
+      new URLSearchParams(window.location.search).get("recovery") === "1",
+    );
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -418,6 +458,106 @@ export default function AccountPage() {
   const topSharedBooks = useMemo(() => sharedBooks.slice(0, 4), [sharedBooks]);
   const topFeedback = useMemo(() => bookFeedback.slice(0, 4), [bookFeedback]);
   const topRevisions = useMemo(() => bookRevisions.slice(0, 4), [bookRevisions]);
+
+  async function handleSaveProfile() {
+    if (!user) return;
+
+    setProfileBusy(true);
+    setProfileMessage(null);
+    setProfileError(null);
+
+    try {
+      const result = await updateCurrentUserProfile(user, {
+        displayName: profileName,
+        authorName,
+      });
+
+      if (!result.ok) {
+        setProfileError(result.message ?? "Profiel opslaan mislukt.");
+        return;
+      }
+
+      setProfileMessage(result.message ?? "Profiel opgeslagen.");
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
+  async function handleChangeEmail() {
+    if (!user) return;
+
+    setProfileBusy(true);
+    setProfileMessage(null);
+    setProfileError(null);
+
+    try {
+      const result = await updateCurrentUserEmail(accountEmail);
+
+      if (!result.ok) {
+        setProfileError(result.message ?? "E-mailadres wijzigen mislukt.");
+        return;
+      }
+
+      setProfileMessage(result.message ?? "E-mailwijziging aangevraagd.");
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    setPasswordMessage(null);
+    setPasswordError(null);
+
+    if (newPassword !== repeatPassword) {
+      setPasswordError("De twee wachtwoorden zijn niet gelijk.");
+      return;
+    }
+
+    setPasswordBusy(true);
+
+    try {
+      const result = await updateCurrentUserPassword(newPassword);
+
+      if (!result.ok) {
+        setPasswordError(result.message ?? "Wachtwoord wijzigen mislukt.");
+        return;
+      }
+
+      setNewPassword("");
+      setRepeatPassword("");
+      setRecoveryMode(false);
+      setPasswordMessage(result.message ?? "Wachtwoord gewijzigd.");
+
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("recovery");
+        window.history.replaceState({}, "", url.toString());
+      }
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
+
+  async function handleSendPasswordReset() {
+    if (!user?.email) return;
+
+    setPasswordBusy(true);
+    setPasswordMessage(null);
+    setPasswordError(null);
+
+    try {
+      const result = await requestPasswordResetEmail(user.email);
+
+      if (!result.ok) {
+        setPasswordError(result.message ?? "Resetmail versturen mislukt.");
+        return;
+      }
+
+      setPasswordMessage(result.message ?? "Resetmail verstuurd.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
 
   async function reloadConnections() {
     if (!user) return;
@@ -536,7 +676,7 @@ export default function AccountPage() {
 
   return (
     <main className="min-h-screen bg-[#05070d] text-white">
-      <AppNav title="Account" subtitle="Profiel en vrienden" />
+      <AppNav title="Account" subtitle="Profiel, abonnement en vrienden" />
 
       <section className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-7">
@@ -583,64 +723,216 @@ export default function AccountPage() {
 
         {isLoggedIn && user && (
           <>
-            <div className="mt-8 grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
-              <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 shadow-2xl">
-                <p className="text-xs font-black uppercase tracking-[0.32em] text-neutral-500">
-                  Profiel
+            <div className="mt-8 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+              <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 shadow-2xl sm:p-7">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-600 text-2xl font-black text-white">
+                      {profileInitial(user.name, user.email)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-[0.32em] text-neutral-500">
+                        Profielgegevens
+                      </p>
+                      <h2 className="mt-1 truncate text-2xl font-black">
+                        {user.name || "DiBooks gebruiker"}
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge>{roleLabel(user.role)}</Badge>
+                    <Badge light>{planLabel(user.plan)}</Badge>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-2">
+                    <span className="text-xs font-black uppercase tracking-widest text-neutral-500">
+                      Naam
+                    </span>
+                    <input
+                      value={profileName}
+                      onChange={(event) => setProfileName(event.target.value)}
+                      autoComplete="name"
+                      placeholder="Jouw naam"
+                      className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3.5 text-sm font-bold text-white outline-none placeholder:text-neutral-600 focus:border-blue-400"
+                    />
+                  </label>
+
+                  <label className="grid gap-2">
+                    <span className="text-xs font-black uppercase tracking-widest text-neutral-500">
+                      Auteursnaam
+                    </span>
+                    <input
+                      value={authorName}
+                      onChange={(event) => setAuthorName(event.target.value)}
+                      placeholder="Naam op nieuwe boeken"
+                      className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3.5 text-sm font-bold text-white outline-none placeholder:text-neutral-600 focus:border-violet-400"
+                    />
+                  </label>
+                </div>
+
+                <p className="mt-2 text-xs font-semibold leading-5 text-neutral-600">
+                  Je auteursnaam wordt standaard gebruikt bij nieuwe boeken. Bestaande boeken worden niet automatisch aangepast.
                 </p>
-                <div className="mt-5 flex items-center gap-4">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-600 text-3xl font-black text-white">
-                    {profileInitial(user.name, user.email)}
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-3xl font-black">
-                      {user.name || "DiBooks gebruiker"}
-                    </h2>
-                    <p className="mt-1 truncate text-sm font-bold text-neutral-400">{user.email}</p>
-                  </div>
-                </div>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Rol</p>
-                    <p className="mt-1 text-xl font-black text-white">{roleLabel(user.role)}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Plan</p>
-                    <p className="mt-1 text-xl font-black text-white">{planLabel(user.plan)}</p>
-                  </div>
-                </div>
-                <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm font-semibold leading-6 text-blue-100">
-                  {planDescription(user.plan)}
-                </div>
-              </section>
 
-              <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                <Link
-                  href="/favorites"
-                  className="rounded-3xl border border-yellow-400/15 bg-yellow-500/[0.06] p-5 shadow-2xl transition hover:border-yellow-300/35 hover:bg-yellow-500/10"
-                >
-                  <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Favorieten</p>
-                  <div className="mt-2 flex items-end justify-between gap-3">
-                    <p className="text-4xl font-black text-yellow-300">{favoriteBooks.length}</p>
-                    <span className="text-sm font-black text-yellow-100">Open →</span>
-                  </div>
-                </Link>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveProfile()}
+                    disabled={profileBusy}
+                    className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {profileBusy ? "Opslaan..." : "Profiel opslaan"}
+                  </button>
+                </div>
 
-                <Link
-                  href={permissions.canUseDashboard ? "/dashboard" : "/editor"}
-                  className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.055] p-5 shadow-2xl transition hover:border-emerald-300/35 hover:bg-emerald-500/10"
-                >
+                <div className="mt-7 border-t border-white/10 pt-6">
                   <p className="text-xs font-black uppercase tracking-widest text-neutral-500">
-                    {permissions.canUseDashboard ? "Auteur Dashboard" : "Auteur Studio"}
+                    E-mailadres
                   </p>
-                  <div className="mt-2 flex items-end justify-between gap-3">
-                    <p className="text-2xl font-black text-emerald-200">
-                      {permissions.canUseDashboard ? "Mijn boeken" : "Probeer gratis"}
-                    </p>
-                    <span className="text-sm font-black text-emerald-100">Open →</span>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      value={accountEmail}
+                      onChange={(event) => setAccountEmail(event.target.value)}
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/35 px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-blue-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleChangeEmail()}
+                      disabled={profileBusy || accountEmail.trim().toLowerCase() === user.email.trim().toLowerCase()}
+                      className="rounded-2xl border border-white/15 bg-white/[0.05] px-5 py-3 text-sm font-black text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      E-mail wijzigen
+                    </button>
                   </div>
-                </Link>
+                </div>
+
+                {profileError && (
+                  <div className="mt-4 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm font-bold text-red-100">
+                    {profileError}
+                  </div>
+                )}
+                {profileMessage && (
+                  <div className="mt-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm font-bold text-emerald-100">
+                    {profileMessage}
+                  </div>
+                )}
               </section>
+
+              <div className="grid gap-5">
+                <section className="rounded-3xl border border-blue-400/15 bg-blue-500/[0.055] p-6 shadow-2xl">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-300">
+                        Abonnement
+                      </p>
+                      <h2 className="mt-2 text-3xl font-black">{planLabel(user.plan)}</h2>
+                    </div>
+                    <Badge>{roleLabel(user.role)}</Badge>
+                  </div>
+                  <p className="mt-4 text-sm font-semibold leading-6 text-neutral-300">
+                    {planDescription(user.plan)}
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <Link
+                      href="/#plannen"
+                      className="rounded-2xl border border-blue-300/20 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-100 hover:bg-blue-500/20"
+                    >
+                      Plannen bekijken
+                    </Link>
+                    <Link
+                      href={permissions.canUseDashboard ? "/dashboard" : "/editor"}
+                      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-black text-white hover:bg-white/10"
+                    >
+                      {permissions.canUseDashboard ? "Auteur Dashboard" : "Probeer Studio"}
+                    </Link>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-violet-400/15 bg-violet-500/[0.06] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-black text-violet-100">
+                        Royalty & uitbetalingen
+                      </p>
+                      <span className="rounded-full border border-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-neutral-400">
+                        later
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-neutral-500">
+                      Hier komen later je definitieve royalty-overzichten, uitbetaalbaar saldo en gekoppelde uitbetalingsmethode.
+                    </p>
+                  </div>
+                </section>
+
+                <section
+                  id="beveiliging"
+                  className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-2xl"
+                >
+                  <p className="text-xs font-black uppercase tracking-[0.3em] text-neutral-500">
+                    Beveiliging
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black">Wachtwoord</h2>
+
+                  {recoveryMode && (
+                    <div className="mt-4 rounded-2xl border border-cyan-400/25 bg-cyan-500/10 p-4 text-sm font-bold leading-6 text-cyan-100">
+                      Wachtwoordherstel geopend. Kies hieronder je nieuwe wachtwoord.
+                    </div>
+                  )}
+
+                  <div className="mt-5 grid gap-3">
+                    <input
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="Nieuw wachtwoord"
+                      className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3.5 text-sm font-bold text-white outline-none placeholder:text-neutral-600 focus:border-blue-400"
+                    />
+                    <input
+                      value={repeatPassword}
+                      onChange={(event) => setRepeatPassword(event.target.value)}
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="Herhaal nieuw wachtwoord"
+                      className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3.5 text-sm font-bold text-white outline-none placeholder:text-neutral-600 focus:border-blue-400"
+                    />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleChangePassword()}
+                      disabled={passwordBusy || !newPassword || !repeatPassword}
+                      className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-black hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {passwordBusy ? "Bezig..." : "Wachtwoord wijzigen"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSendPasswordReset()}
+                      disabled={passwordBusy}
+                      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-black text-neutral-300 hover:bg-white/10 disabled:opacity-40"
+                    >
+                      Resetmail sturen
+                    </button>
+                  </div>
+
+                  {passwordError && (
+                    <div className="mt-4 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm font-bold text-red-100">
+                      {passwordError}
+                    </div>
+                  )}
+                  {passwordMessage && (
+                    <div className="mt-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm font-bold text-emerald-100">
+                      {passwordMessage}
+                    </div>
+                  )}
+                </section>
+              </div>
             </div>
 
             {loading && (

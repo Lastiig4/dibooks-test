@@ -8,6 +8,7 @@ import type {
   PublicSignupPlan,
   RegisterCredentials,
 } from "@/lib/auth";
+import { requestPasswordResetEmail } from "@/lib/auth";
 import { PUBLIC_PLANS, getPublicPlan } from "@/lib/plans";
 
 type AuthMode = "login" | "register";
@@ -82,6 +83,25 @@ export default function AuthModal({
   useEffect(() => {
     setSelectedPlan(initialPlan);
   }, [initialPlan]);
+
+  async function handleForgotPassword() {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const result = await requestPasswordResetEmail(email);
+
+      if (!result.ok) {
+        setError(result.message ?? "Resetmail versturen mislukt.");
+        return;
+      }
+
+      setMessage(result.message ?? "Resetmail verstuurd.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -312,13 +332,25 @@ export default function AuthModal({
                 <label className="block text-sm font-black text-neutral-300">
                   Wachtwoord
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((current) => !current)}
-                  className="text-xs font-black uppercase tracking-widest text-blue-300 hover:text-blue-200"
-                >
-                  {showPassword ? "Verberg" : "Toon"}
-                </button>
+                <div className="flex items-center gap-3">
+                  {!isRegister && (
+                    <button
+                      type="button"
+                      onClick={() => void handleForgotPassword()}
+                      disabled={busy}
+                      className="text-xs font-black text-neutral-400 hover:text-white disabled:opacity-50"
+                    >
+                      Wachtwoord vergeten?
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="text-xs font-black uppercase tracking-widest text-blue-300 hover:text-blue-200"
+                  >
+                    {showPassword ? "Verberg" : "Toon"}
+                  </button>
+                </div>
               </div>
               <input
                 value={password}

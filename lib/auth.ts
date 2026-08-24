@@ -26,9 +26,15 @@ export type RegisterCredentials = {
 export type DemoAuthUser = {
   id: string;
   name: string;
+  authorName?: string;
   email: string;
   role: Exclude<UserRole, "guest">;
   plan: UserPlan;
+};
+
+export type AccountProfileInput = {
+  displayName: string;
+  authorName: string;
 };
 
 export type AuthPermissions = {
@@ -146,7 +152,11 @@ function readCachedUser(): DemoAuthUser | null {
 
     return {
       id: parsed.id,
-      name: parsed.name || parsed.email.split("@")[0] || "Auteur",
+      name: parsed.name || parsed.email.split("@")[0] || "Gebruiker",
+      authorName:
+        typeof parsed.authorName === "string" && parsed.authorName.trim()
+          ? parsed.authorName
+          : parsed.name || parsed.email.split("@")[0] || "Gebruiker",
       email: parsed.email,
       role,
       plan,
@@ -221,14 +231,17 @@ function mapSupabaseUser(user: User | null): DemoAuthUser | null {
         ? "author_pro"
         : "free";
 
+  const displayName = String(
+    metadata.full_name ||
+      metadata.name ||
+      user.email?.split("@")[0] ||
+      "Gebruiker",
+  );
+
   return {
     id: user.id,
-    name: String(
-      metadata.full_name ||
-        metadata.name ||
-        user.email?.split("@")[0] ||
-        "Auteur",
-    ),
+    name: displayName,
+    authorName: String(metadata.author_name || displayName),
     email: user.email ?? "",
     role,
     plan,
@@ -257,7 +270,7 @@ async function applySupabaseProfile(
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("display_name, email, role, plan")
+    .select("display_name, author_name, email, role, plan")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -288,6 +301,11 @@ async function applySupabaseProfile(
   return {
     ...user,
     name: data.display_name || user.name,
+    authorName:
+      data.author_name ||
+      user.authorName ||
+      data.display_name ||
+      user.name,
     email: data.email || user.email,
     role,
     plan,
@@ -398,7 +416,8 @@ function bootAuthOnce() {
       if (
         event === "INITIAL_SESSION" ||
         event === "SIGNED_IN" ||
-        event === "USER_UPDATED"
+        event === "USER_UPDATED" ||
+        event === "PASSWORD_RECOVERY"
       ) {
         window.setTimeout(() => {
           if (logoutInProgress || authSnapshot.user?.id !== mappedUser.id) return;
@@ -463,6 +482,7 @@ export async function ensureSupabaseProfile(
       id: user.id,
       email: user.email,
       display_name: displayName,
+      author_name: user.authorName?.trim() || displayName,
       role:
         user.role === "admin"
           ? "admin"
@@ -492,6 +512,161 @@ export async function ensureSupabaseProfile(
   }
 
   return { ok: true };
+}
+
+
+export async function updateCurrentUserProfile(
+  user: DemoAuthUser,
+  input: AccountProfileInput,
+): Promise<AuthActionResult> {
+  const supabase = getSupabaseOrAlert();
+  if (!supabase) {
+    return { ok: false, message: "Supabase is nog niet ingesteld." };
+  }
+
+  const displayName = input.displayName.trim();
+  const authorName = input.authorName.trim() || displayName;
+
+  if (displayName.length < 2) {
+    return { ok: false, message: "Vul een naam van minimaal 2 tekens in." };
+  }
+
+  if (authorName.length < 2) {
+    return { ok: false, message: "Vul een auteursnaam van minimaal 2 tekens in." };
+  }
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({
+      display_name: displayName,
+      author_name: authorName,
+    })
+    .eq("id", user.id);
+
+  if (profileError) {
+    return { ok: false, message: profileError.message };
+  }
+
+  const { error: authError } = await supabase.auth.updateUser({
+    data: {
+      full_name: displayName,
+      name: displayName,
+      author_name: authorName,
+    },
+  });
+
+  // De database is leidend voor profielweergave. Mocht alleen auth-metadata
+  // niet kunnen worden bijgewerkt, dan blijft het profiel zelf wel opgeslagen.
+  emitAuthSnapshot({
+    user: {
+      ...user,
+      name: displayName,
+      authorName,
+    },
+    loading: false,
+    initialized: true,
+  });
+  broadcastAuthChange();
+
+  if (authError) {
+    console.warn("Auth metadata bijwerken mislukt.", authError);
+    return {
+      ok: true,
+      message:
+        "Profiel opgeslagen. De profielmetadata wordt bij je volgende sessie opnieuw gesynchroniseerd.",
+    };
+  }
+
+  return { ok: true, message: "Profiel opgeslagen." };
+}
+
+export async function updateCurrentUserEmail(
+  nextEmail: string,
+): Promise<AuthActionResult> {
+  const supabase = getSupabaseOrAlert();
+  if (!supabase) {
+    return { ok: false, message: "Supabase is nog niet ingesteld." };
+  }
+
+  const email = nextEmail.trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    return { ok: false, message: "Vul een geldig e-mailadres in." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ email });
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  return {
+    ok: true,
+    message:
+      "E-mailwijziging aangevraagd. Controleer je mailbox; afhankelijk van de beveiligingsinstellingen moet de wijziging eerst bevestigd worden.",
+  };
+}
+
+export async function updateCurrentUserPassword(
+  nextPassword: string,
+): Promise<AuthActionResult> {
+  const supabase = getSupabaseOrAlert();
+  if (!supabase) {
+    return { ok: false, message: "Supabase is nog niet ingesteld." };
+  }
+
+  if (nextPassword.length < 6) {
+    return {
+      ok: false,
+      message: "Gebruik een wachtwoord van minimaal 6 tekens.",
+    };
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: nextPassword,
+  });
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  return { ok: true, message: "Wachtwoord gewijzigd." };
+}
+
+export async function requestPasswordResetEmail(
+  emailAddress: string,
+): Promise<AuthActionResult> {
+  const supabase = getSupabaseOrAlert();
+  if (!supabase) {
+    return { ok: false, message: "Supabase is nog niet ingesteld." };
+  }
+
+  const email = emailAddress.trim().toLowerCase();
+
+  if (!email || !email.includes("@")) {
+    return {
+      ok: false,
+      message: "Vul eerst het e-mailadres van je account in.",
+    };
+  }
+
+  const redirectTo =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/account?recovery=1`
+      : undefined;
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  return {
+    ok: true,
+    message:
+      "Resetmail verstuurd. Open de link in je e-mail en kies daarna op Account een nieuw wachtwoord.",
+  };
 }
 
 async function promptForLogin() {
@@ -678,6 +853,7 @@ export function useDemoAuth() {
         data: {
           full_name: name,
           name,
+          author_name: name,
           // Betaalde rechten worden nooit vanuit de browser toegekend.
           // Zolang billing nog niet gekoppeld is start elk nieuw account veilig
           // als Gratis / Reader. De gekozen betaaloptie blijft wel bewaard als

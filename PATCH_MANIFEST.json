@@ -1,21 +1,26 @@
 {
-  "name": "DiBooks Account Contacts Chat Cleanup V1",
+  "name": "DiBooks Account & Security V1",
   "date": "2026-08-24",
-  "sql_required": false,
+  "sql_required": true,
+  "sql_file": "ACCOUNT_SECURITY_V1_SUPABASE.sql",
   "files": [
+    "lib/auth.ts",
+    "components/AuthModal.tsx",
     "app/account/page.tsx",
-    "app/chat/page.tsx",
+    "app/dashboard/page.tsx",
+    "app/editor/page.tsx",
+    "ACCOUNT_SECURITY_V1_SUPABASE.sql",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Compact account header",
-    "Removed account Continue Reading section",
-    "Favorites retained",
-    "Single clear friends/add-friend panel",
-    "Direct Chat button for friends",
-    "Contacts visible inside Chat",
-    "Add friends directly from Chat",
-    "Account-to-chat contact deep link",
-    "Existing sharing/feedback/revision flows retained"
+    "Editable display name",
+    "Separate author/pen name",
+    "Email change through Supabase Auth",
+    "Password change",
+    "Forgot password/reset email",
+    "Recovery return to Account",
+    "Subscription summary",
+    "Royalty/payout placeholder",
+    "Author name defaults for new books"
   ]
 }

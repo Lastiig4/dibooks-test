@@ -2586,17 +2586,17 @@ export default function Home() {
   }, [editorDarkMode]);
 
   useEffect(() => {
-    if (!user?.name) return;
+    if (!user?.name && !user?.authorName) return;
 
     setDashboardSaveForm((current) =>
       current.author.trim()
         ? current
         : {
             ...current,
-            author: user.name,
+            author: user?.authorName || user?.name || "",
           },
     );
-  }, [user?.name]);
+  }, [user?.authorName, user?.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2766,7 +2766,7 @@ export default function Home() {
 
         setDashboardSaveForm({
           title: dashboardBook.title ?? "",
-          author: dashboardBook.author ?? user.name ?? "",
+          author: dashboardBook.author ?? user.authorName ?? user.name ?? "",
           subtitle: dashboardBook.subtitle ?? "",
           description: "description" in dashboardBook ? (dashboardBook.description ?? "") : "",
           genres: Array.isArray(dashboardBook.genres) && dashboardBook.genres.length > 0 ? dashboardBook.genres : ["Interactief"],
@@ -3394,7 +3394,7 @@ ${formatSaveError(error)}`);
       const savedBook = await saveDashboardBookToSupabase(user, {
         id: null,
         title,
-        author: dashboardSaveForm.author.trim() || user.name || "Onbekende auteur",
+        author: dashboardSaveForm.author.trim() || user.authorName || user.name || "Onbekende auteur",
         subtitle: dashboardSaveForm.subtitle.trim() || "Nieuw interactief boek in concept.",
         description: dashboardSaveForm.description.trim() || "Nog geen beschrijving ingevuld.",
         genres: dashboardSaveForm.genres,

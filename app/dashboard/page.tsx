@@ -2322,7 +2322,7 @@ export default function DashboardPage() {
         savedBook as DashboardBook,
         ...currentBooks.filter((book) => book.id !== savedBook.id),
       ]);
-      setForm({ ...defaultForm, author: user.name ?? "" });
+      setForm({ ...defaultForm, author: user.authorName || user.name || "" });
       setNewBookOpen(false);
     } catch (error) {
       console.error(error);
@@ -2631,7 +2631,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => {
-                setForm({ ...defaultForm, author: user?.name ?? "" });
+                setForm({ ...defaultForm, author: user?.authorName || user?.name || "" });
                 setNewBookOpen(true);
               }}
               className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
@@ -2665,7 +2665,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => {
-                setForm({ ...defaultForm, author: user?.name ?? "" });
+                setForm({ ...defaultForm, author: user?.authorName || user?.name || "" });
                 setNewBookOpen(true);
               }}
               className="mt-6 rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200"
