@@ -3284,6 +3284,9 @@ export default function ReadBookPage() {
                 value={textSize}
                 onChange={(event) => setTextSize(event.target.value as ReaderTextSize)}
                 className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+                style={{
+                  colorScheme: theme === "light" ? "light" : "dark",
+                }}
               >
                 <option value="small">Klein</option>
                 <option value="normal">Normaal</option>
@@ -3297,6 +3300,9 @@ export default function ReadBookPage() {
                 value={pageMode}
                 onChange={(event) => setPageMode(event.target.value as ReaderPageMode)}
                 className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+                style={{
+                  colorScheme: theme === "light" ? "light" : "dark",
+                }}
               >
                 <option value="auto">Automatisch</option>
                 <option value="single">Enkel</option>
@@ -3310,6 +3316,9 @@ export default function ReadBookPage() {
                 value={theme}
                 onChange={(event) => setTheme(event.target.value as ReaderTheme)}
                 className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+                style={{
+                  colorScheme: theme === "light" ? "light" : "dark",
+                }}
               >
                 <option value="dark">Donker</option>
                 <option value="sepia">Oud boek</option>
@@ -3323,6 +3332,9 @@ export default function ReadBookPage() {
                 value={lineSpacing}
                 onChange={(event) => setLineSpacing(event.target.value as ReaderLineSpacing)}
                 className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+                style={{
+                  colorScheme: theme === "light" ? "light" : "dark",
+                }}
               >
                 <option value="compact">Compact</option>
                 <option value="normal">Normaal</option>
@@ -3336,6 +3348,9 @@ export default function ReadBookPage() {
                 value={fontFamily}
                 onChange={(event) => setFontFamily(event.target.value as ReaderFontFamily)}
                 className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+                style={{
+                  colorScheme: theme === "light" ? "light" : "dark",
+                }}
               >
                 <option value="serif">Boek / serif</option>
                 <option value="sans">Strak / sans</option>

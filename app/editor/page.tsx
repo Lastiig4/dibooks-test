@@ -903,10 +903,11 @@ const initialNodes: Node<DiNodeData>[] = [
     type: "bullet",
     position: { x: 256, y: 256 },
     data: {
-      label: "Intro",
-      type: "text",
-      text: "",
-      textHtml: "",
+      label: "Hoofdstuk 1",
+      type: "chapter",
+      chapterNumber: "1",
+      chapterTitle: "",
+      chapterSubtitle: "",
     },
   },
 ];
@@ -6392,7 +6393,7 @@ ${formatSaveError(error)}`);
                         <span className="text-sm text-neutral-300">
                           <strong className="text-white">Reset editor</strong>
                           <br />
-                          Wis bewust de huidige lokale editorsessie en begin opnieuw.
+                          Wis bewust de huidige lokale editorsessie en begin opnieuw met een Hoofdstuk 1-marker.
                         </span>
                       </div>
                     </div>

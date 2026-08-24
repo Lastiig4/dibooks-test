@@ -1,33 +1,46 @@
-DiBooks Patch - Reader Settings + Guide Polish V1
+DiBooks Patch - Dropdown Theme + Start Chapter V1
 ================================================
 
-READER
-- Aa opent nu een compact zwevend menu in plaats van een brede balk.
-- Instellingen staan in echte dropdowns:
-  * Tekstgrootte
-  * Paginaweergave
-  * Thema
-  * Regelafstand
-  * Lettertype
-- Bestaande voorkeuren blijven automatisch onthouden.
+Dit is een gecombineerde patch.
 
-Footer:
-Met hoofdstuk:
-  8% gelezen • Hoofdstuk 4 — The Hallows
+1. READER DROPDOWN THEME FIX
+Bevat de vorige fix die je nog niet had toegepast:
+- Donker thema -> native dropdowns openen donker.
+- Oud boek -> native dropdowns openen donker.
+- Licht thema -> native dropdowns openen licht.
 
-Zonder hoofdstuk:
-  8% gelezen • The Sovereign
+2. NIEUW SCHOON PROJECT START MET HOOFDSTUK-MARKER
+Voorheen:
+- node_1 = normale tekstnode "Intro"
 
-Dus als er geen hoofdstuk-marker actief is, toont de Reader de boektitel
-in plaats van de auteur.
+Voortaan:
+- node_1 = Hoofdstuk-marker
+- label = Hoofdstuk 1
+- chapterNumber = 1
+- deze node is automatisch de start-node
 
-EDITOR HANDLEIDING
-- Nieuwe knop: 'Niet meer automatisch tonen'
-- Keuze wordt in localStorage onthouden.
-- De ?-knop blijft altijd handmatig werken.
-- Nogmaals klikken op '✓ Niet automatisch tonen' zet automatisch openen weer aan.
+Nieuwe workflow:
+Hoofdstuk 1 -> eerste tekstnode -> ...
 
-Geen SQL nodig.
+Reset editor gebruikt dezelfde initialNodes en begint dus ook opnieuw
+met Hoofdstuk 1 in plaats van een lege normale tekstpagina.
+
+De hoofdstuk-marker:
+- telt niet mee als verhaalnode;
+- verschijnt niet als eigen readerpagina;
+- is alleen structuur;
+- gebruikt één vervolgpath.
+
+BEHOUDEN
+- Niet meer automatisch tonen voor de handleiding
+- Volledige editor tutorial
+- Global Page Numbers
+- Reader Readback History
+- Reader instellingen
+- Chapter Marker systeem
+- Moderatie/editor functionaliteit
+
+GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
