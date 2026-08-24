@@ -126,6 +126,8 @@ type LoadState =
 type ReaderTextSize = "small" | "normal" | "large";
 type ReaderPageMode = "auto" | "single" | "double";
 type ReaderTheme = "dark" | "light" | "sepia";
+type ReaderLineSpacing = "compact" | "normal" | "relaxed";
+type ReaderFontFamily = "serif" | "sans";
 
 function escapeHtml(value: string) {
   return value
@@ -737,42 +739,76 @@ function splitHtmlIntoReadableBlocks(html: string) {
   return blocks;
 }
 
+function splitPlainTextIntoSentences(value: string) {
+  const cleanValue = String(value ?? "").trim();
+  if (!cleanValue) return [];
+
+  // Intl.Segmenter begrijpt afkortingen en leestekens beter dan alleen regex.
+  // De any-cast houdt dit compatibel met TypeScript builds die Segmenter nog
+  // niet in hun lib-definities hebben staan.
+  const SegmenterCtor = (Intl as any)?.Segmenter;
+
+  if (SegmenterCtor) {
+    try {
+      const segmenter = new SegmenterCtor("nl", { granularity: "sentence" });
+      const sentences = Array.from(
+        segmenter.segment(cleanValue),
+        (entry: any) => String(entry?.segment ?? "").trim(),
+      ).filter(Boolean);
+
+      if (sentences.length) return sentences;
+    } catch {
+      // Regex fallback hieronder.
+    }
+  }
+
+  return (
+    cleanValue.match(/[^.!?…]+(?:[.!?…]+["'”’)]*)?|.+$/g) ?? [cleanValue]
+  )
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
 function splitLongPlainBlock(blockHtml: string, maxCharacters: number) {
   const plainText = stripHtml(blockHtml);
   if (plainText.length <= maxCharacters) return [blockHtml];
 
-  const chunks = plainText.match(/[^.!?…]+[.!?…"]*|.+$/g) ?? [plainText];
+  const sentences = splitPlainTextIntoSentences(plainText);
   const pages: string[] = [];
   let current = "";
 
-  chunks.forEach((chunk) => {
-    const cleanChunk = chunk.trim();
-    if (!cleanChunk) return;
+  function pushCurrent() {
+    if (!current.trim()) return;
+    pages.push(`<p>${escapeHtml(current.trim())}</p>`);
+    current = "";
+  }
 
-    const next = current ? `${current} ${cleanChunk}` : cleanChunk;
+  sentences.forEach((sentence) => {
+    const cleanSentence = sentence.trim();
+    if (!cleanSentence) return;
+
+    const next = current ? `${current} ${cleanSentence}` : cleanSentence;
+
+    // Normale situatie: hele zin naar de volgende pagina verplaatsen.
     if (next.length > maxCharacters && current) {
-      pages.push(`<p>${escapeHtml(current)}</p>`);
-      current = cleanChunk;
-      return;
+      pushCurrent();
     }
 
-    if (cleanChunk.length > maxCharacters) {
-      cleanChunk.split(/\s+/).forEach((word) => {
+    // Alleen een uitzonderlijk lange zin mag uiteindelijk op woorden worden
+    // gesplitst; zo voorkomen we normale afbrekingen midden in een zin.
+    if (cleanSentence.length > maxCharacters) {
+      cleanSentence.split(/\s+/).forEach((word) => {
         const nextWord = current ? `${current} ${word}` : word;
-        if (nextWord.length > maxCharacters && current) {
-          pages.push(`<p>${escapeHtml(current)}</p>`);
-          current = word;
-        } else {
-          current = nextWord;
-        }
+        if (nextWord.length > maxCharacters && current) pushCurrent();
+        current = current ? `${current} ${word}` : word;
       });
       return;
     }
 
-    current = next;
+    current = current ? `${current} ${cleanSentence}` : cleanSentence;
   });
 
-  if (current) pages.push(`<p>${escapeHtml(current)}</p>`);
+  pushCurrent();
   return pages.length ? pages : [blockHtml];
 }
 
@@ -834,10 +870,29 @@ function paginateTextHtml(html: string, maxCharacters = 1450) {
   return pages.length ? pages : ["<p>Deze pagina is nog leeg.</p>"];
 }
 
-function getReaderContentSize(textSize: ReaderTextSize) {
-  if (textSize === "small") return { fontSize: "18px", lineHeight: "36px" };
-  if (textSize === "large") return { fontSize: "24px", lineHeight: "46px" };
-  return { fontSize: "20px", lineHeight: "40px" };
+function getReaderTypography(
+  textSize: ReaderTextSize,
+  lineSpacing: ReaderLineSpacing,
+  fontFamily: ReaderFontFamily,
+) {
+  const fontSize =
+    textSize === "small" ? 18 : textSize === "large" ? 24 : 20;
+
+  const lineHeightMultiplier =
+    lineSpacing === "compact" ? 1.72 : lineSpacing === "relaxed" ? 2.2 : 2;
+
+  const paragraphGap =
+    lineSpacing === "compact" ? 16 : lineSpacing === "relaxed" ? 32 : 24;
+
+  return {
+    fontSize,
+    lineHeight: Math.round(fontSize * lineHeightMultiplier),
+    paragraphGap,
+    fontFamily:
+      fontFamily === "serif"
+        ? 'Georgia, "Times New Roman", Times, serif'
+        : 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  };
 }
 
 function paginateTextHtmlMeasured(
@@ -848,6 +903,8 @@ function paginateTextHtmlMeasured(
     pageHeight: number;
     textSize: ReaderTextSize;
     theme: ReaderTheme;
+    lineSpacing: ReaderLineSpacing;
+    fontFamily: ReaderFontFamily;
   },
 ) {
   if (typeof document === "undefined") return paginateTextHtml(html, options.maxCharacters);
@@ -877,7 +934,11 @@ function paginateTextHtmlMeasured(
   if (!blocks.length) return [plainTextToReaderHtml(plainText)];
 
   const measuringBox = document.createElement("div");
-  const size = getReaderContentSize(options.textSize);
+  const typography = getReaderTypography(
+    options.textSize,
+    options.lineSpacing,
+    options.fontFamily,
+  );
   measuringBox.className = `dibooks-reader-content prose max-w-none ${options.theme === "light" ? "prose-neutral" : "prose-invert"}`;
   measuringBox.style.position = "fixed";
   measuringBox.style.left = "-100000px";
@@ -887,8 +948,9 @@ function paginateTextHtmlMeasured(
   measuringBox.style.zIndex = "-1";
   measuringBox.style.boxSizing = "border-box";
   measuringBox.style.width = `${Math.max(260, Math.floor(options.pageWidth))}px`;
-  measuringBox.style.fontSize = size.fontSize;
-  measuringBox.style.lineHeight = size.lineHeight;
+  measuringBox.style.fontSize = `${typography.fontSize}px`;
+  measuringBox.style.lineHeight = `${typography.lineHeight}px`;
+  measuringBox.style.fontFamily = typography.fontFamily;
   measuringBox.style.maxWidth = "none";
   measuringBox.style.padding = "0";
   measuringBox.style.margin = "0";
@@ -899,7 +961,7 @@ function paginateTextHtmlMeasured(
     measuringBox.querySelectorAll("p").forEach((paragraph) => {
       const element = paragraph as HTMLElement;
       element.style.marginTop = "0";
-      element.style.marginBottom = "24px";
+      element.style.marginBottom = `${typography.paragraphGap}px`;
     });
     measuringBox.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((heading) => {
       const element = heading as HTMLElement;
@@ -962,6 +1024,8 @@ function BookPageReader({
   textSize,
   pageMode,
   theme,
+  lineSpacing,
+  fontFamily,
   isSpecialPage = false,
 }: {
   html: string;
@@ -972,6 +1036,8 @@ function BookPageReader({
   textSize: ReaderTextSize;
   pageMode: ReaderPageMode;
   theme: ReaderTheme;
+  lineSpacing: ReaderLineSpacing;
+  fontFamily: ReaderFontFamily;
   isSpecialPage?: boolean;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -1024,6 +1090,8 @@ function BookPageReader({
         pageHeight: pageContentHeight,
         textSize,
         theme,
+        lineSpacing,
+        fontFamily,
       });
 
       setPages(nextPages);
@@ -1034,7 +1102,18 @@ function BookPageReader({
     const resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(viewport);
     return () => resizeObserver.disconnect();
-  }, [html, isSpecialPage, onPageCountChange, onVisiblePageCountChange, pageMode, setPageIndex, textSize, theme]);
+  }, [
+    fontFamily,
+    html,
+    isSpecialPage,
+    lineSpacing,
+    onPageCountChange,
+    onVisiblePageCountChange,
+    pageMode,
+    setPageIndex,
+    textSize,
+    theme,
+  ]);
 
   useEffect(() => {
     // Wacht tot de echte paginering klaar is. Anders wordt een opgeslagen
@@ -1058,12 +1137,18 @@ function BookPageReader({
         ? "border-[#8f6b38]/35 bg-[#3a2a19] text-[#f3e4c9] shadow-2xl"
         : "border-white/10 bg-neutral-950/95 text-white shadow-2xl";
 
-  const contentSizeClass =
-    textSize === "small"
-      ? "text-[16px] leading-8 sm:text-[18px] sm:leading-9"
-      : textSize === "large"
-        ? "text-[22px] leading-10 sm:text-[24px] sm:leading-[2.9rem]"
-        : "text-[18px] leading-9 sm:text-[20px] sm:leading-10";
+  const typography = getReaderTypography(
+    textSize,
+    lineSpacing,
+    fontFamily,
+  );
+
+  const paragraphSpacingClass =
+    lineSpacing === "compact"
+      ? "[&_p]:mb-4"
+      : lineSpacing === "relaxed"
+        ? "[&_p]:mb-8"
+        : "[&_p]:mb-6";
 
   return (
     <div className="mx-auto flex h-full w-full flex-col px-3 py-3 sm:px-6">
@@ -1081,7 +1166,12 @@ function BookPageReader({
               className={`h-full overflow-hidden rounded-2xl border px-8 pb-20 pt-8 sm:px-12 sm:pb-24 sm:pt-10 md:px-16 ${pageClass}`}
             >
               <div
-                className={`dibooks-reader-content prose max-w-none ${theme === "light" ? "prose-neutral" : "prose-invert"} ${contentSizeClass} [&_p]:mb-6 [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0`}
+                className={`dibooks-reader-content prose max-w-none ${theme === "light" ? "prose-neutral" : "prose-invert"} ${paragraphSpacingClass} [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0`}
+                style={{
+                  fontSize: `${typography.fontSize}px`,
+                  lineHeight: `${typography.lineHeight}px`,
+                  fontFamily: typography.fontFamily,
+                }}
                 dangerouslySetInnerHTML={{ __html: pageHtml }}
               />
             </article>
@@ -1371,7 +1461,10 @@ export default function ReadBookPage() {
   const [textSize, setTextSize] = useState<ReaderTextSize>("normal");
   const [pageMode, setPageMode] = useState<ReaderPageMode>("auto");
   const [theme, setTheme] = useState<ReaderTheme>("dark");
+  const [lineSpacing, setLineSpacing] = useState<ReaderLineSpacing>("normal");
+  const [fontFamily, setFontFamily] = useState<ReaderFontFamily>("sans");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [cutsceneFading, setCutsceneFading] = useState(false);
   const [resetProgressBusy, setResetProgressBusy] = useState(false);
   const [interactionBusy, setInteractionBusy] = useState(false);
@@ -1382,6 +1475,8 @@ export default function ReadBookPage() {
   const lastExecutedFunctionNodeRef = useRef<string | null>(null);
   const lastEvaluatedConditionNodeRef = useRef<string | null>(null);
   const cutsceneShellRef = useRef<HTMLDivElement | null>(null);
+  const readerShellRef = useRef<HTMLElement | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const { user, loading: authLoading } = useDemoAuth();
 
   useEffect(() => {
@@ -1458,10 +1553,14 @@ export default function ReadBookPage() {
     const savedTextSize = window.localStorage.getItem("dibooks-reader-text-size") as ReaderTextSize | null;
     const savedPageMode = window.localStorage.getItem("dibooks-reader-page-mode") as ReaderPageMode | null;
     const savedTheme = window.localStorage.getItem("dibooks-reader-theme") as ReaderTheme | null;
+    const savedLineSpacing = window.localStorage.getItem("dibooks-reader-line-spacing") as ReaderLineSpacing | null;
+    const savedFontFamily = window.localStorage.getItem("dibooks-reader-font-family") as ReaderFontFamily | null;
 
     if (savedTextSize === "small" || savedTextSize === "normal" || savedTextSize === "large") setTextSize(savedTextSize);
     if (savedPageMode === "auto" || savedPageMode === "single" || savedPageMode === "double") setPageMode(savedPageMode);
     if (savedTheme === "dark" || savedTheme === "light" || savedTheme === "sepia") setTheme(savedTheme);
+    if (savedLineSpacing === "compact" || savedLineSpacing === "normal" || savedLineSpacing === "relaxed") setLineSpacing(savedLineSpacing);
+    if (savedFontFamily === "serif" || savedFontFamily === "sans") setFontFamily(savedFontFamily);
   }, []);
 
   useEffect(() => {
@@ -1475,6 +1574,34 @@ export default function ReadBookPage() {
   useEffect(() => {
     window.localStorage.setItem("dibooks-reader-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem("dibooks-reader-line-spacing", lineSpacing);
+  }, [lineSpacing]);
+
+  useEffect(() => {
+    window.localStorage.setItem("dibooks-reader-font-family", fontFamily);
+  }, [fontFamily]);
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      const fullscreenElement = document.fullscreenElement;
+      const shell = readerShellRef.current;
+
+      setIsFullscreen(
+        !!fullscreenElement &&
+          !!shell &&
+          (fullscreenElement === shell || shell.contains(fullscreenElement)),
+      );
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    handleFullscreenChange();
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
 
   useEffect(() => {
@@ -1565,6 +1692,74 @@ export default function ReadBookPage() {
       outgoingPaths: book.edges.filter((edge) => edge.source === node.id),
     };
   }, [currentNodeId, loadState]);
+
+  useEffect(() => {
+    if (!reader || reader.node.type !== "text" && reader.node.type !== "special") {
+      return;
+    }
+
+    function handleReaderKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+
+      if (
+        target?.isContentEditable ||
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        settingsOpen
+      ) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        if (pageIndex <= 0) return;
+        event.preventDefault();
+        setPageIndex((current) =>
+          Math.max(0, current - readerVisiblePageCount),
+        );
+      }
+
+      if (event.key === "ArrowRight") {
+        const hasNextPage =
+          pageIndex <
+          Math.max(1, readerPageCount) - readerVisiblePageCount;
+
+        if (hasNextPage) {
+          event.preventDefault();
+          setPageIndex((current) =>
+            Math.min(
+              Math.max(0, readerPageCount - 1),
+              current + readerVisiblePageCount,
+            ),
+          );
+          return;
+        }
+
+        if (reader.nextNodeAfterChain) {
+          event.preventDefault();
+          goToNode(reader.nextNodeAfterChain.id);
+          return;
+        }
+
+        // Alleen automatisch doorgaan als er exact één route is.
+        // Bij echte keuzes beslist de lezer via de knoppen.
+        if (reader.branchPaths.length === 1) {
+          event.preventDefault();
+          goToNode(reader.branchPaths[0].target);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleReaderKeyDown);
+    return () => window.removeEventListener("keydown", handleReaderKeyDown);
+  }, [
+    pageIndex,
+    reader,
+    readerPageCount,
+    readerVisiblePageCount,
+    settingsOpen,
+  ]);
 
 
 
@@ -1821,6 +2016,83 @@ export default function ReadBookPage() {
     setPageIndex(0);
   }
 
+  async function toggleReaderFullscreen() {
+    const shell = readerShellRef.current;
+    if (!shell) return;
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else if (shell.requestFullscreen) {
+        await shell.requestFullscreen();
+      }
+    } catch (fullscreenError) {
+      console.warn("Fullscreen kon niet worden gewijzigd.", fullscreenError);
+    }
+  }
+
+  function handleReaderTouchStart(event: React.TouchEvent<HTMLElement>) {
+    if (event.touches.length !== 1) {
+      swipeStartRef.current = null;
+      return;
+    }
+
+    swipeStartRef.current = {
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+    };
+  }
+
+  function handleReaderTouchEnd(event: React.TouchEvent<HTMLElement>) {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+
+    if (!start || !reader || !isTextNode || event.changedTouches.length !== 1) {
+      return;
+    }
+
+    const endTouch = event.changedTouches[0];
+    const deltaX = endTouch.clientX - start.x;
+    const deltaY = endTouch.clientY - start.y;
+
+    // Verticale scroll/touch blijft normaal werken. Alleen duidelijke
+    // horizontale swipes worden als pagina-navigatie gezien.
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+      return;
+    }
+
+    if (deltaX > 0) {
+      if (pageIndex > 0) {
+        setPageIndex((current) =>
+          Math.max(0, current - readerVisiblePageCount),
+        );
+      }
+      return;
+    }
+
+    const hasNextPage =
+      pageIndex < Math.max(1, readerPageCount) - readerVisiblePageCount;
+
+    if (hasNextPage) {
+      setPageIndex((current) =>
+        Math.min(
+          Math.max(0, readerPageCount - 1),
+          current + readerVisiblePageCount,
+        ),
+      );
+      return;
+    }
+
+    if (reader.nextNodeAfterChain) {
+      goToNode(reader.nextNodeAfterChain.id);
+      return;
+    }
+
+    if (reader.branchPaths.length === 1) {
+      goToNode(reader.branchPaths[0].target);
+    }
+  }
+
   async function handleRestartReading() {
     if (loadState.status !== "ready" || !user) return;
 
@@ -1906,8 +2178,18 @@ export default function ReadBookPage() {
         ? "border-[#8f6b38]/35 bg-[#23190f]/90 text-[#f3e4c9]"
         : "border-white/10 bg-[#05070d]/90 text-white";
 
+  const currentProgressPercent = calculateBookProgressPercent(
+    book,
+    currentNodeId,
+    pageIndex,
+    readerPageCount,
+  );
+
   return (
-    <main className={`flex h-screen flex-col overflow-hidden ${readerShellClass}`}>
+    <main
+      ref={readerShellRef}
+      className={`flex h-screen flex-col overflow-hidden ${readerShellClass}`}
+    >
       {!isCutsceneNode && (
       <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
@@ -1923,6 +2205,14 @@ export default function ReadBookPage() {
               title="Reader instellingen"
             >
               Aa
+            </button>
+            <button
+              onClick={() => void toggleReaderFullscreen()}
+              className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10"
+              title={isFullscreen ? "Fullscreen verlaten" : "Fullscreen lezen"}
+              aria-label={isFullscreen ? "Fullscreen verlaten" : "Fullscreen lezen"}
+            >
+              {isFullscreen ? "⤢" : "⛶"}
             </button>
             <Link href={`/books/${book.id}`} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black hover:bg-white/10">
               Boekinfo
@@ -1979,12 +2269,71 @@ export default function ReadBookPage() {
                 </button>
               ))}
             </div>
+            <div className="flex items-center gap-2">
+              <span className="opacity-60">Regels</span>
+              {(["compact", "normal", "relaxed"] as ReaderLineSpacing[]).map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setLineSpacing(value)}
+                  className={`rounded-full px-3 py-2 ${lineSpacing === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
+                >
+                  {value === "compact" ? "Compact" : value === "relaxed" ? "Ruim" : "Normaal"}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="opacity-60">Letter</span>
+              {(["serif", "sans"] as ReaderFontFamily[]).map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setFontFamily(value)}
+                  className={`rounded-full px-3 py-2 ${fontFamily === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
+                  style={{
+                    fontFamily:
+                      value === "serif"
+                        ? 'Georgia, "Times New Roman", serif'
+                        : 'Inter, ui-sans-serif, system-ui, sans-serif',
+                  }}
+                >
+                  {value === "serif" ? "Boek" : "Strak"}
+                </button>
+              ))}
+            </div>
+
+            <div className="ml-auto hidden items-center gap-2 text-[10px] font-black normal-case tracking-normal opacity-50 lg:flex">
+              <span>← → toetsen</span>
+              <span>•</span>
+              <span>swipe op mobiel</span>
+            </div>
           </div>
         )}
       </header>
       )}
 
-      <section className="min-h-0 flex-1 overflow-hidden">
+      {!isCutsceneNode && (
+        <div
+          className={`h-1 shrink-0 ${
+            theme === "light"
+              ? "bg-neutral-300"
+              : theme === "sepia"
+                ? "bg-[#1b130c]"
+                : "bg-white/5"
+          }`}
+          aria-label={`${currentProgressPercent}% gelezen`}
+        >
+          <div
+            className="h-full bg-blue-500 transition-[width] duration-300"
+            style={{ width: `${currentProgressPercent}%` }}
+          />
+        </div>
+      )}
+
+      <section
+        className={`min-h-0 flex-1 overflow-hidden ${isTextNode ? "touch-pan-y" : ""}`}
+        onTouchStart={isTextNode ? handleReaderTouchStart : undefined}
+        onTouchEnd={isTextNode ? handleReaderTouchEnd : undefined}
+      >
         {isTextNode && (
           <BookPageReader
             html={reader.textHtml}
@@ -1995,6 +2344,8 @@ export default function ReadBookPage() {
             textSize={textSize}
             pageMode={pageMode}
             theme={theme}
+            lineSpacing={lineSpacing}
+            fontFamily={fontFamily}
             isSpecialPage={node.type === "special"}
           />
         )}
@@ -2107,7 +2458,11 @@ export default function ReadBookPage() {
         {isTextNode ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
-              onClick={() => setPageIndex((current) => Math.max(0, current - readerVisiblePageCount))}
+              onClick={() =>
+                setPageIndex((current) =>
+                  Math.max(0, current - readerVisiblePageCount),
+                )
+              }
               disabled={!canGoPreviousPage}
               className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
             >
@@ -2116,7 +2471,7 @@ export default function ReadBookPage() {
 
             <div className="text-center text-sm font-bold text-neutral-400">
               <div>{readerVisiblePageCount === 2 && pageIndex + 1 < readerPageCount ? `Pagina ${pageIndex + 1}–${Math.min(pageIndex + 2, readerPageCount)} van ${readerPageCount}` : `Pagina ${pageIndex + 1} van ${readerPageCount}`}</div>
-              <div className="text-xs text-neutral-600">{calculateBookProgressPercent(book, currentNodeId, pageIndex, readerPageCount)}% gelezen • {book.author}</div>
+              <div className="text-xs text-neutral-600">{currentProgressPercent}% gelezen • {book.author}</div>
               <button
                 onClick={handleRestartReading}
                 disabled={resetProgressBusy}

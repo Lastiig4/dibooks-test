@@ -1,14 +1,19 @@
 {
-  "name": "DiBooks Editor UI Categories V1.1",
-  "date": "2026-08-23",
+  "name": "DiBooks Reader UX V1",
+  "date": "2026-08-24",
   "sql_required": false,
-  "changes": [
-    "Move choice menu to Media & interactie",
-    "Restore standalone Play button",
-    "Project menu only save/load"
-  ],
   "files": [
-    "app/editor/page.tsx",
+    "app/books/[bookId]/read/page.tsx",
     "PATCH_INFO.txt"
+  ],
+  "features": [
+    "Sentence-aware pagination",
+    "Paragraph-aware measured pagination",
+    "Keyboard navigation",
+    "Swipe navigation",
+    "Fullscreen reader",
+    "Reading progress bar",
+    "Line spacing preference",
+    "Serif/sans preference"
   ]
 }
