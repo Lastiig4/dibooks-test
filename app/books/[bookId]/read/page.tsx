@@ -3112,6 +3112,20 @@ export default function ReadBookPage() {
         ? "border-[#8f6b38]/35 bg-[#23190f]/90 text-[#f3e4c9]"
         : "border-white/10 bg-[#05070d]/90 text-white";
 
+  const readerSettingsPanelClass =
+    theme === "light"
+      ? "border-neutral-300 bg-[#fffaf0] text-neutral-950"
+      : theme === "sepia"
+        ? "border-[#8f6b38]/40 bg-[#2b2116] text-[#f3e4c9]"
+        : "border-white/10 bg-[#090c13] text-white";
+
+  const readerSettingsFieldClass =
+    theme === "light"
+      ? "border-neutral-300 bg-white text-neutral-950"
+      : theme === "sepia"
+        ? "border-[#8f6b38]/35 bg-[#23190f] text-[#f3e4c9]"
+        : "border-white/10 bg-white/[0.06] text-white";
+
   const currentProgressPercent =
     isReadOnlyReplay && replayReturnPointRef.current
       ? replayReturnPointRef.current.progressPercent
@@ -3235,86 +3249,104 @@ export default function ReadBookPage() {
           </div>
         </div>
 
-        {settingsOpen && (
-          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs font-black uppercase tracking-widest">
-            <div className="flex items-center gap-2">
-              <span className="opacity-60">Tekst</span>
-              {(["small", "normal", "large"] as ReaderTextSize[]).map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setTextSize(value)}
-                  className={`rounded-full px-3 py-2 ${textSize === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
-                >
-                  {value === "small" ? "Klein" : value === "large" ? "Groot" : "Normaal"}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="opacity-60">Pagina</span>
-              {(["auto", "single", "double"] as ReaderPageMode[]).map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setPageMode(value)}
-                  className={`rounded-full px-3 py-2 ${pageMode === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
-                >
-                  {value === "single" ? "Enkel" : value === "double" ? "Dubbel" : "Auto"}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="opacity-60">Thema</span>
-              {(["dark", "sepia", "light"] as ReaderTheme[]).map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setTheme(value)}
-                  className={`rounded-full px-3 py-2 ${theme === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
-                >
-                  {value === "dark" ? "Donker" : value === "sepia" ? "Oud boek" : "Licht"}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="opacity-60">Regels</span>
-              {(["compact", "normal", "relaxed"] as ReaderLineSpacing[]).map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setLineSpacing(value)}
-                  className={`rounded-full px-3 py-2 ${lineSpacing === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
-                >
-                  {value === "compact" ? "Compact" : value === "relaxed" ? "Ruim" : "Normaal"}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="opacity-60">Letter</span>
-              {(["serif", "sans"] as ReaderFontFamily[]).map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setFontFamily(value)}
-                  className={`rounded-full px-3 py-2 ${fontFamily === value ? "bg-blue-600 text-white" : "bg-white/5 hover:bg-white/10"}`}
-                  style={{
-                    fontFamily:
-                      value === "serif"
-                        ? 'Georgia, "Times New Roman", serif'
-                        : 'Inter, ui-sans-serif, system-ui, sans-serif',
-                  }}
-                >
-                  {value === "serif" ? "Boek" : "Strak"}
-                </button>
-              ))}
-            </div>
-
-            <div className="ml-auto hidden items-center gap-2 text-[10px] font-black normal-case tracking-normal opacity-50 lg:flex">
-              <span>← → toetsen</span>
-              <span>•</span>
-              <span>swipe op mobiel</span>
-            </div>
-          </div>
-        )}
       </header>
+      )}
+
+      {settingsOpen && !hideReaderChromeForCutscene && (
+        <div
+          className={`absolute right-4 top-[5.25rem] z-50 w-[min(24rem,calc(100vw-2rem))] rounded-3xl border p-4 shadow-2xl backdrop-blur-xl sm:right-6 ${readerSettingsPanelClass}`}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-400">
+                Reader
+              </p>
+              <h2 className="mt-1 text-xl font-black">Leesinstellingen</h2>
+              <p className="mt-1 text-xs font-semibold opacity-55">
+                Deze voorkeuren worden automatisch onthouden.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(false)}
+              className="rounded-full border border-current/10 px-3 py-2 text-xs font-black opacity-70 hover:opacity-100"
+              aria-label="Sluit leesinstellingen"
+              title="Sluit leesinstellingen"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-3">
+            <label className="grid grid-cols-[1fr_9.5rem] items-center gap-3">
+              <span className="text-sm font-black">Tekstgrootte</span>
+              <select
+                value={textSize}
+                onChange={(event) => setTextSize(event.target.value as ReaderTextSize)}
+                className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+              >
+                <option value="small">Klein</option>
+                <option value="normal">Normaal</option>
+                <option value="large">Groot</option>
+              </select>
+            </label>
+
+            <label className="grid grid-cols-[1fr_9.5rem] items-center gap-3">
+              <span className="text-sm font-black">Paginaweergave</span>
+              <select
+                value={pageMode}
+                onChange={(event) => setPageMode(event.target.value as ReaderPageMode)}
+                className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+              >
+                <option value="auto">Automatisch</option>
+                <option value="single">Enkel</option>
+                <option value="double">Dubbel</option>
+              </select>
+            </label>
+
+            <label className="grid grid-cols-[1fr_9.5rem] items-center gap-3">
+              <span className="text-sm font-black">Thema</span>
+              <select
+                value={theme}
+                onChange={(event) => setTheme(event.target.value as ReaderTheme)}
+                className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+              >
+                <option value="dark">Donker</option>
+                <option value="sepia">Oud boek</option>
+                <option value="light">Licht</option>
+              </select>
+            </label>
+
+            <label className="grid grid-cols-[1fr_9.5rem] items-center gap-3">
+              <span className="text-sm font-black">Regelafstand</span>
+              <select
+                value={lineSpacing}
+                onChange={(event) => setLineSpacing(event.target.value as ReaderLineSpacing)}
+                className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+              >
+                <option value="compact">Compact</option>
+                <option value="normal">Normaal</option>
+                <option value="relaxed">Ruim</option>
+              </select>
+            </label>
+
+            <label className="grid grid-cols-[1fr_9.5rem] items-center gap-3">
+              <span className="text-sm font-black">Lettertype</span>
+              <select
+                value={fontFamily}
+                onChange={(event) => setFontFamily(event.target.value as ReaderFontFamily)}
+                className={`rounded-xl border px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500 ${readerSettingsFieldClass}`}
+              >
+                <option value="serif">Boek / serif</option>
+                <option value="sans">Strak / sans</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-current/10 bg-black/10 px-4 py-3 text-[11px] font-semibold opacity-55">
+            Tip: gebruik ← → op pc of swipe links/rechts op mobiel en tablet.
+          </div>
+        </div>
       )}
 
       {contentsOpen && !hideReaderChromeForCutscene && (
@@ -3791,11 +3823,10 @@ export default function ReadBookPage() {
               </div>
               <div className="text-xs text-neutral-600">
                 {currentProgressPercent}% gelezen
-                {displayedChapter
-                  ? ` • ${formatReaderChapterLabel(displayedChapter)}`
-                  : ""}
                 {" • "}
-                {book.author}
+                {displayedChapter
+                  ? formatReaderChapterLabel(displayedChapter)
+                  : book.title}
               </div>
               <button
                 onClick={handleRestartReading}

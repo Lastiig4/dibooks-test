@@ -1,17 +1,10 @@
 {
-  "name": "DiBooks Editor Handleiding V2",
+  "name": "DiBooks Reader Settings + Guide Polish V1",
   "date": "2026-08-24",
   "sql_required": false,
   "files": [
+    "app/books/[bookId]/read/page.tsx",
     "app/editor/page.tsx",
     "PATCH_INFO.txt"
-  ],
-  "features": [
-    "Grouped quick-reference guide",
-    "Chapter-marker documentation",
-    "Separate full tutorial screen",
-    "Node interaction explanations",
-    "Choice/variable/function/IF tutorial",
-    "Removed old basic workflow"
   ]
 }

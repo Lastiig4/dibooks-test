@@ -1,71 +1,37 @@
-DiBooks Patch - Editor Handleiding V2
-===================================
+DiBooks Patch - Reader Settings + Guide Polish V1
+================================================
 
-De oude Handleiding is vervangen door een handleiding in twee lagen.
+READER
+- Aa opent nu een compact zwevend menu in plaats van een brede balk.
+- Instellingen staan in echte dropdowns:
+  * Tekstgrootte
+  * Paginaweergave
+  * Thema
+  * Regelafstand
+  * Lettertype
+- Bestaande voorkeuren blijven automatisch onthouden.
 
-1. SNEL OVERZICHT
-De node-legenda is nu gegroepeerd zoals de echte linker toolbar:
+Footer:
+Met hoofdstuk:
+  8% gelezen • Hoofdstuk 4 — The Hallows
 
-TEKST & SCHRIJVEN
-- Normale tekst
-- Speciale tekst
-- Hoofdstuk-marker
-- Kladblok / lore
+Zonder hoofdstuk:
+  8% gelezen • The Sovereign
 
-MEDIA & INTERACTIE
-- Cutscene
-- Minigame
-- Keuzemenu
+Dus als er geen hoofdstuk-marker actief is, toont de Reader de boektitel
+in plaats van de auteur.
 
-LOGICA & TOOLS
-- Flags & variabelen
-- Functie
-- Voorwaarde / IF
-
-PROJECT & VASTE KNOPPEN
-- Opslaan
-- Project laden
-- Play / Preview
-- Grid thema
-- Reset editor
-
-'Basis workflow' is verwijderd.
-
-2. VOLLEDIGE TUTORIAL
-Onderaan het overzicht staat:
-'Volledige tutorial openen →'
-
-Dit opent binnen dezelfde handleiding een tweede scherm.
-
-Tutorial bevat:
-1. Hoe DiBooks/nodes werken
-2. Tekst, speciale tekst en hoofdstukken
-3. Keuzemenu
-4. Minigames en cutscenes
-5. Flags & variabelen
-6. Function node
-7. Voorwaarde / IF
-8. Paths en vertakkingen
-9. Testen met Play
-10. Opslaan
-
-De tutorial legt ook combinaties uit zoals:
-Keuze -> variabele -> IF
-en
-Keuze -> Function -> Tekst
-
-Navigatie:
-- Volledige tutorial openen
-- ← Overzicht
-- ← Terug naar overzicht onderaan
-- Sluiten zet de handleiding weer terug op het overzicht voor de volgende keer.
+EDITOR HANDLEIDING
+- Nieuwe knop: 'Niet meer automatisch tonen'
+- Keuze wordt in localStorage onthouden.
+- De ?-knop blijft altijd handmatig werken.
+- Nogmaals klikken op '✓ Niet automatisch tonen' zet automatisch openen weer aan.
 
 Geen SQL nodig.
-Geen Reader- of databasewijzigingen.
 
-Installeren:
+INSTALLEREN
 1. ZIP uitpakken.
 2. Sleep map 'app' over dibooks_author_studio.
 3. Bestanden vervangen.
 4. npm run build.
-5. Commit/push.
+5. Commit/push naar GitHub/Vercel.

@@ -2399,8 +2399,9 @@ export default function Home() {
     useNodesState<Node<DiNodeData>>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [helpOpen, setHelpOpen] = useState(true);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [helpView, setHelpView] = useState<"overview" | "tutorial">("overview");
+  const [helpAutoShowDisabled, setHelpAutoShowDisabled] = useState(false);
   const [editorDarkMode, setEditorDarkMode] = useState(false);
   const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout, user, role } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
@@ -2433,6 +2434,32 @@ export default function Home() {
   const reviewInspectionAsideRef = useRef<HTMLElement | null>(null);
   const [flowViewport, setFlowViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const nodeTypes = useMemo(() => ({ bullet: BulletNode }), []);
+
+  useEffect(() => {
+    const disabled =
+      window.localStorage.getItem(
+        "dibooks-editor-help-auto-show-disabled",
+      ) === "1";
+
+    setHelpAutoShowDisabled(disabled);
+
+    if (!disabled) {
+      setHelpOpen(true);
+    }
+  }, []);
+
+  function toggleHelpAutoShow() {
+    setHelpAutoShowDisabled((current) => {
+      const next = !current;
+
+      window.localStorage.setItem(
+        "dibooks-editor-help-auto-show-disabled",
+        next ? "1" : "0",
+      );
+
+      return next;
+    });
+  }
   const maxNodesForCurrentUser = getMaxNodesForUser(user);
   const runtimeNodeCount = getStoryNodes(nodes).length;
   const functionNodeCount = nodes.filter((node) => node.data.type === "function").length;
@@ -6107,7 +6134,26 @@ ${formatSaveError(error)}`);
                 </h2>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={toggleHelpAutoShow}
+                  className={`rounded-full border px-4 py-2 text-xs font-black transition ${
+                    helpAutoShowDisabled
+                      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
+                      : "border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10"
+                  }`}
+                  title={
+                    helpAutoShowDisabled
+                      ? "Handleiding weer automatisch tonen bij openen"
+                      : "Handleiding niet meer automatisch tonen"
+                  }
+                >
+                  {helpAutoShowDisabled
+                    ? "✓ Niet automatisch tonen"
+                    : "Niet meer automatisch tonen"}
+                </button>
+
                 {helpView === "tutorial" && (
                   <button
                     type="button"
