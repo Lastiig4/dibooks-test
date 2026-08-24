@@ -423,8 +423,14 @@ export function getAuthPermissions(
 
   return {
     canReadLibrary: true,
-    canUseEditor: hasActiveAuthorPlan,
-    canDownloadLocalFiles: hasActiveAuthorPlan,
+
+    // De Auteur Studio is bewust een openbare proefomgeving.
+    // Gast / Gratis / Reader mogen lokaal bouwen tot FREE_NODE_LIMIT.
+    canUseEditor: true,
+    canDownloadLocalFiles: true,
+
+    // Server-side auteurfuncties blijven exclusief voor een actief
+    // Author Pro-account of admin.
     canUseDashboard: hasActiveAuthorPlan,
     canSaveToDashboard: hasActiveAuthorPlan,
     canCreateBook: hasActiveAuthorPlan,
@@ -503,7 +509,7 @@ async function promptForLogin() {
 
 async function promptForRegistration() {
   const name =
-    window.prompt("Naam / pseudoniem:")?.trim() ||
+    window.prompt("Naam / auteursnaam:")?.trim() ||
     "Gebruiker";
 
   const email = window.prompt(

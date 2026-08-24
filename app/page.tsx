@@ -164,9 +164,9 @@ function GuestHero() {
               <a href="#library" className="rounded-2xl border border-white/15 bg-white/[0.045] px-7 py-4 text-base font-black text-white transition hover:bg-white/10">
                 Ontdek boeken
               </a>
-              <a href="#plannen" className="rounded-2xl border border-blue-400/25 bg-blue-500/10 px-7 py-4 text-base font-black text-blue-100 transition hover:bg-blue-500/20">
-                Bekijk plannen
-              </a>
+              <Link href="/editor" className="rounded-2xl border border-cyan-400/25 bg-cyan-500/10 px-7 py-4 text-base font-black text-cyan-100 transition hover:bg-cyan-500/20">
+                Probeer Auteur Studio
+              </Link>
             </div>
             <div className="mt-8 flex flex-wrap gap-2 text-xs font-black uppercase tracking-widest text-neutral-400">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Keuzes</span>
@@ -259,9 +259,17 @@ function GuestAuthorStudio() {
             <span className="rounded-full border border-violet-300/20 bg-violet-500/10 px-3 py-2">Flags & variabelen</span>
             <span className="rounded-full border border-violet-300/20 bg-violet-500/10 px-3 py-2">IF / ELSE</span>
           </div>
-          <button type="button" onClick={() => openDiBooksAuth("register", "author_pro")} className="mt-8 w-fit rounded-2xl bg-cyan-500 px-6 py-4 text-sm font-black text-black transition hover:-translate-y-0.5 hover:bg-cyan-400">
-            Kies Auteur
-          </button>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/editor" className="w-fit rounded-2xl bg-cyan-500 px-6 py-4 text-sm font-black text-black transition hover:-translate-y-0.5 hover:bg-cyan-400">
+              Probeer Studio gratis
+            </Link>
+            <button type="button" onClick={() => openDiBooksAuth("register", "author_pro")} className="w-fit rounded-2xl border border-violet-400/25 bg-violet-500/10 px-6 py-4 text-sm font-black text-violet-100 transition hover:-translate-y-0.5 hover:bg-violet-500/20">
+              Bekijk Auteur-plan
+            </button>
+          </div>
+          <p className="mt-3 text-xs font-semibold leading-5 text-neutral-500">
+            Proefmodus: maximaal 15 verhaalnodes en alleen lokaal opslaan. Author Pro ontgrendelt onbeperkt bouwen, Dashboard en publiceren.
+          </p>
         </div>
 
         <div className="rounded-[1.75rem] border border-white/10 bg-[#080b12] p-5 shadow-2xl">
@@ -480,21 +488,32 @@ export default function LibraryPage() {
             <p className="text-sm font-black uppercase tracking-widest text-cyan-300">Auteur Studio</p>
             <h2 className="mt-2 text-2xl font-black">Van idee naar interactief boek</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
-              {permissions.canUseEditor
-                ? "Je Auteur-plan is actief. Open je Dashboard of ga direct verder in de Auteur Studio."
+              {permissions.canUseDashboard
+                ? "Je Auteur-plan is actief. Je kunt onbeperkt bouwen, online opslaan en publiceren."
                 : isLoggedIn
-                  ? "De Auteur Studio hoort bij het Auteur-plan. Je huidige leesaccount blijft gewoon bruikbaar voor de Library."
-                  : "Kies het Auteur-plan om straks de volledige Studio, het Dashboard en de publicatieflow te gebruiken."}
+                  ? "Je kunt de Auteur Studio nu al proberen met maximaal 15 verhaalnodes en lokaal opslaan. Author Pro ontgrendelt Dashboard en publiceren."
+                  : "Iedereen kan de Auteur Studio gratis proberen met maximaal 15 verhaalnodes. Voor online opslag en publiceren heb je Author Pro nodig."}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            {permissions.canUseDashboard && <Link href="/dashboard" className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-center font-black text-white hover:bg-white/10">Naar Dashboard</Link>}
-            {permissions.canUseEditor ? (
-              <Link href="/editor" className="rounded-2xl bg-cyan-500 px-6 py-4 text-center font-black text-black hover:bg-cyan-400">Naar Auteur Studio</Link>
-            ) : isLoggedIn ? (
-              <Link href="/account" className="rounded-2xl bg-violet-600 px-6 py-4 text-center font-black text-white hover:bg-violet-500">Bekijk Auteur-plan</Link>
-            ) : (
-              <button type="button" onClick={() => openDiBooksAuth("register", "author_pro")} className="rounded-2xl bg-violet-600 px-6 py-4 text-center font-black text-white hover:bg-violet-500">Kies Auteur</button>
+            {permissions.canUseDashboard && (
+              <Link href="/dashboard" className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-center font-black text-white hover:bg-white/10">
+                Naar Dashboard
+              </Link>
+            )}
+            <Link href="/editor" className="rounded-2xl bg-cyan-500 px-6 py-4 text-center font-black text-black hover:bg-cyan-400">
+              {permissions.canUseDashboard ? "Naar Auteur Studio" : "Probeer Auteur Studio"}
+            </Link>
+            {!permissions.canUseDashboard && (
+              isLoggedIn ? (
+                <Link href="/account" className="rounded-2xl bg-violet-600 px-6 py-4 text-center font-black text-white hover:bg-violet-500">
+                  Bekijk Auteur-plan
+                </Link>
+              ) : (
+                <button type="button" onClick={() => openDiBooksAuth("register", "author_pro")} className="rounded-2xl bg-violet-600 px-6 py-4 text-center font-black text-white hover:bg-violet-500">
+                  Kies Auteur
+                </button>
+              )
             )}
           </div>
         </div>

@@ -55,7 +55,7 @@ function IconButton({ children, title, active = false, onClick, buttonRef }: { c
 function GuestAuthButtons({ compact, onLogin, onRegister }: { compact?: boolean; onLogin: () => void; onRegister: () => void }) {
   return (
     <div className={`flex items-center gap-2 ${compact ? "scale-[0.96] origin-right" : ""}`}>
-      <Link href="/#auteur-studio" title="Ontdek Auteur Studio" aria-label="Ontdek Auteur Studio" className="hidden h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20 sm:flex">✒️</Link>
+      <Link href="/editor" title="Probeer Auteur Studio" aria-label="Probeer Auteur Studio" className="hidden h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20 sm:flex">✒️</Link>
       <button type="button" onClick={onLogin} className="rounded-2xl border border-white/12 bg-white/[0.05] px-4 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-white/10 sm:px-5">Login</button>
       <button type="button" onClick={onRegister} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/30 transition hover:-translate-y-0.5 hover:bg-blue-500 sm:px-5">Registreer</button>
     </div>

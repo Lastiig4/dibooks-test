@@ -20,11 +20,12 @@ export const PUBLIC_PLANS: PublicPlanDefinition[] = [
     eyebrow: "Start met DiBooks",
     priceLabel: "€0",
     description:
-      "Ontdek de Library, lees gratis boeken en bewaar je leesvoortgang en favorieten.",
+      "Lees gratis DiBooks en probeer de Auteur Studio lokaal uit met maximaal 15 verhaalnodes.",
     features: [
       "Gratis DiBooks lezen",
-      "Leesvoortgang opslaan",
-      "Favorieten en persoonlijke Library",
+      "Leesvoortgang en favorieten",
+      "Auteur Studio proberen • max. 15 verhaalnodes",
+      "Project lokaal opslaan en later weer laden",
     ],
     accent: "emerald",
     paid: false,
@@ -35,10 +36,11 @@ export const PUBLIC_PLANS: PublicPlanDefinition[] = [
     eyebrow: "Voor fanatieke lezers",
     priceLabel: "Prijs volgt",
     description:
-      "Alles van Gratis plus toegang tot premiumboeken zodra abonnementen live gaan.",
+      "Alles van Gratis plus toegang tot premiumboeken zodra abonnementen live gaan. De Studio-proefmodus blijft beschikbaar.",
     features: [
       "Alles van Gratis",
       "Premium DiBooks",
+      "Studio proberen • max. 15 verhaalnodes",
       "Toekomstige Reader Plus-functies",
     ],
     accent: "blue",
@@ -50,10 +52,11 @@ export const PUBLIC_PLANS: PublicPlanDefinition[] = [
     eyebrow: "Maak je eigen wereld",
     priceLabel: "Prijs volgt",
     description:
-      "Bouw, test en publiceer interactieve boeken met de volledige DiBooks Auteur Studio.",
+      "Bouw zonder proeflimiet, bewaar projecten online en publiceer interactieve boeken via DiBooks.",
     features: [
-      "Volledige Auteur Studio",
-      "Dashboard en publicatieflow",
+      "Onbeperkt bouwen in Auteur Studio",
+      "Dashboard-opslag en online concepten",
+      "Publicatie- en reviewflow",
       "Reader-voordelen inbegrepen",
     ],
     accent: "violet",

@@ -270,6 +270,15 @@ function getStoryNodes(currentNodes: Node<DiNodeData>[]) {
   return currentNodes.filter((node) => !isScratchpadNode(node));
 }
 
+function countLimitedStoryNodes(currentNodes: Node<DiNodeData>[]) {
+  return getStoryNodes(currentNodes).filter(
+    (node) =>
+      node.data.type !== "function" &&
+      node.data.type !== "condition" &&
+      node.data.type !== "chapter",
+  ).length;
+}
+
 function getStoryNodeIds(currentNodes: Node<DiNodeData>[]) {
   return new Set(getStoryNodes(currentNodes).map((node) => node.id));
 }
@@ -1985,6 +1994,7 @@ function SaveToDashboardModal({
   setForm,
   existingBookId,
   isLoggedIn,
+  canUseAuthorTools,
   series,
   onOpenSeries,
   onClose,
@@ -1996,6 +2006,7 @@ function SaveToDashboardModal({
   setForm: React.Dispatch<React.SetStateAction<DashboardSaveForm>>;
   existingBookId: string | null;
   isLoggedIn: boolean;
+  canUseAuthorTools: boolean;
   series: BookSeries[];
   onOpenSeries: () => void;
   onClose: () => void;
@@ -2032,6 +2043,74 @@ function SaveToDashboardModal({
         primaryGenre: current.primaryGenre === genre ? nextGenres[0] ?? "" : current.primaryGenre,
       };
     });
+  }
+
+  if (!canUseAuthorTools) {
+    return (
+      <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
+        <div className="mx-auto max-w-2xl rounded-3xl border border-cyan-400/15 bg-[#080b13] p-5 text-white shadow-2xl sm:p-8">
+          <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.30em] text-cyan-300">
+                Gratis Studio • proefmodus
+              </p>
+              <h2 className="mt-2 text-3xl font-black sm:text-4xl">
+                Lokaal opslaan
+              </h2>
+              <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-neutral-400">
+                {isLoggedIn
+                  ? "Je Reader/Gratis-account mag de Auteur Studio uitproberen met maximaal 15 verhaalnodes."
+                  : "Als gast mag je de Auteur Studio uitproberen met maximaal 15 verhaalnodes."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-500"
+            >
+              Sluiten
+            </button>
+          </div>
+
+          <div className="mt-6 rounded-3xl border border-cyan-400/20 bg-cyan-500/10 p-5">
+            <p className="text-sm font-black uppercase tracking-widest text-cyan-200">
+              Jouw werkbestand
+            </p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-cyan-50/75">
+              Download je project als <strong>.dibooks-project.json</strong>.
+              Je kunt dit bestand later opnieuw laden. Het wordt niet in je
+              DiBooks Dashboard opgeslagen.
+            </p>
+            <button
+              type="button"
+              onClick={onDownloadProject}
+              className="mt-5 w-full rounded-2xl bg-cyan-500 px-5 py-4 text-sm font-black text-black hover:bg-cyan-400"
+            >
+              💾 Download lokaal werkbestand
+            </button>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4">
+            <p className="text-sm font-black text-violet-100">
+              Author Pro ontgrendelt de volledige Studio
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-violet-100/65">
+              Onbeperkt verhaalnodes, Dashboard-opslag, reader-export,
+              seriesbeheer en de publicatie-/reviewflow.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = isLoggedIn ? "/account" : "/#plannen";
+              }}
+              className="mt-4 rounded-xl border border-violet-300/25 bg-violet-500/15 px-4 py-3 text-xs font-black text-violet-100 hover:bg-violet-500/25"
+            >
+              Bekijk Auteur-plan
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (existingBookId) {
@@ -2508,7 +2587,7 @@ export default function Home() {
     let cancelled = false;
 
     async function loadSeries() {
-      if (!user) {
+      if (!user || !permissions.canUseDashboard) {
         setDashboardSeries([]);
         return;
       }
@@ -2525,7 +2604,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [permissions.canUseDashboard, user]);
 
 
   useEffect(() => {
@@ -2631,6 +2710,14 @@ export default function Home() {
       if (!user) {
         restoreEditorAutosaveDraftIfNeeded();
         autosaveReadyRef.current = true;
+        return;
+      }
+
+      if (!permissions.canEditConceptBook) {
+        alert(
+          "Een actief Auteur-plan is nodig om Dashboardboeken of gedeelde concepten in de editor te wijzigen. De gratis Studio blijft beschikbaar voor lokale projecten tot 15 verhaalnodes.",
+        );
+        window.location.href = "/editor";
         return;
       }
 
@@ -3053,6 +3140,16 @@ export default function Home() {
     if (!projectData || projectData.type !== "dibooks-project") return false;
 
     const projectNodes = projectData.nodes ?? [];
+    const maxNodes = getMaxNodesForUser(user);
+    const limitedNodeCount = countLimitedStoryNodes(projectNodes);
+
+    if (maxNodes !== null && limitedNodeCount > maxNodes) {
+      setAutosaveStatus(
+        `Sessiesave geblokkeerd • ${limitedNodeCount}/${maxNodes} verhaalnodes • Auteur-plan nodig`,
+      );
+      return false;
+    }
+
     const safeStartNodeId = getSafeStartNodeId(projectNodes, projectData.startNodeId ?? projectNodes?.[0]?.id ?? "node_1");
     setNodes(projectNodes);
     setEdges(projectData.edges ?? []);
@@ -3198,8 +3295,14 @@ export default function Home() {
     }
 
     if (!user) {
-      alert("Login nodig om op te slaan of een voorstel terug te sturen.");
-      setAuthModalMode("login");
+      alert("Je gebruikt de gratis Studio als gast. Je kunt je project alleen lokaal downloaden. Author Pro is nodig voor Dashboard-opslag.");
+      return;
+    }
+
+    if (!permissions.canSaveToDashboard) {
+      alert(
+        "Dashboard-opslag is onderdeel van Author Pro. Je huidige project kun je wel lokaal als .dibooks-project.json bewaren.",
+      );
       return;
     }
 
@@ -3323,6 +3426,16 @@ ${formatSaveError(error)}`);
         }
 
         const projectNodes = projectData.nodes ?? [];
+        const maxNodes = getMaxNodesForUser(user);
+        const limitedNodeCount = countLimitedStoryNodes(projectNodes);
+
+        if (maxNodes !== null && limitedNodeCount > maxNodes) {
+          alert(
+            `Dit project bevat ${limitedNodeCount} verhaalnodes. De gratis Studio ondersteunt maximaal ${maxNodes}. Activeer Author Pro om grotere projecten te openen en bewerken.`,
+          );
+          return;
+        }
+
         const safeStartNodeId = getSafeStartNodeId(projectNodes, projectData.startNodeId ?? "");
         setNodes(projectNodes);
         setEdges(projectData.edges ?? []);
@@ -3722,8 +3835,10 @@ ${formatSaveError(error)}`);
         return;
       }
 
-      if (!user?.id) {
-        alert("Log eerst in om cutscene-video's veilig op te slaan in DiBooks Storage.");
+      if (!user?.id || !permissions.canSaveToDashboard) {
+        alert(
+          "Uploads naar DiBooks Storage zijn onderdeel van Author Pro. In de gratis Studio kun je voor een proefcutscene wel een externe video-URL gebruiken.",
+        );
         return;
       }
 
@@ -4569,6 +4684,13 @@ ${formatSaveError(error)}`);
   }
 
   function downloadReaderStoryFile() {
+    if (!permissions.canPublishBook) {
+      alert(
+        "Reader-export en publiceren zijn onderdeel van Author Pro. In de gratis Studio kun je alleen het lokale .dibooks-project.json werkbestand downloaden.",
+      );
+      return;
+    }
+
     const storyData = getReaderStoryData();
     const json = JSON.stringify(storyData, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -4868,14 +4990,14 @@ ${formatSaveError(error)}`);
                         ? "🔒 Admin review"
                         : sharedEditBookId
                           ? "Voorstelmodus"
-                          : isLoggedIn
+                          : permissions.canUseDashboard
                             ? "Dashboard"
-                            : "Lokaal"
+                            : "Lokaal • proefmodus"
                     }
                     valueClassName={
                       reviewMode
                         ? "text-purple-300"
-                        : isLoggedIn
+                        : permissions.canUseDashboard
                           ? "text-emerald-300"
                           : "text-yellow-300"
                     }
@@ -6953,6 +7075,7 @@ ${formatSaveError(error)}`);
           setForm={setDashboardSaveForm}
           existingBookId={sharedEditBookId ? sharedEditBookId : dashboardBookId}
           isLoggedIn={isLoggedIn}
+          canUseAuthorTools={permissions.canSaveToDashboard}
           series={dashboardSeries}
           onOpenSeries={() => setSeriesManagerOpen(true)}
           onClose={() => setSaveDashboardOpen(false)}
@@ -6961,7 +7084,7 @@ ${formatSaveError(error)}`);
           onDownloadReaderStory={downloadReaderStoryFile}
         />
       )}
-      {!reviewMode && seriesManagerOpen && user && (
+      {!reviewMode && seriesManagerOpen && user && permissions.canUseDashboard && (
         <BookSeriesManagerModal
           user={user}
           series={dashboardSeries}

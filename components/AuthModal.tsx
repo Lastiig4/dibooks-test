@@ -280,13 +280,13 @@ export default function AuthModal({
             {isRegister && (
               <div>
                 <label className="mb-2 block text-sm font-black text-neutral-300">
-                  Naam / pseudoniem
+                  Naam / auteursnaam
                 </label>
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   autoComplete="name"
-                  placeholder="Jouw naam of pseudoniem"
+                  placeholder="Jouw naam of auteursnaam"
                   className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-4 font-bold text-white outline-none transition placeholder:text-neutral-600 focus:border-blue-400 focus:bg-black/55"
                 />
               </div>
