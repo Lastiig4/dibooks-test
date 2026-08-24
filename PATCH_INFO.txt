@@ -1,85 +1,100 @@
-DiBooks Patch - Dashboard Bookshelf V1
-======================================
+DiBooks Patch - Account Contacts Chat Cleanup V1
+================================================
 
-WAT VERANDERT
+DOEL
+Account en Chat rustiger maken zonder de bestaande Supabase sociale backend
+te vervangen.
 
-Het Auteur Dashboard is omgebouwd van grote beheerkaarten naar een rustige
-boekenplank.
+ACCOUNT
 
-1. Compact dashboard
-De grote uitleg-hero en vijf losse statistiekkaarten zijn verwijderd.
-Bovenaan staat nu alleen:
-- accountrol / plan;
-- Mijn boeken;
-- totaal / live / niet live;
-- Series beheren;
-- + Nieuw boek.
+1. Grote drukte verminderd
+- Grote marketing/introkaart vervangen door compacte Account-header.
+- Profielkaart blijft bestaan.
+- Rol en plan blijven zichtbaar.
+- Auteur Dashboard / Studio blijft bereikbaar.
 
-2. Boeken worden echte coverkaarten
-Elk boek wordt verticaal als een boekcover getoond.
-Op de cover staan compacte labels:
-- Live / Concept / Binnenkort / In beoordeling / Afgewezen;
-- Gratis / Reader;
-- hoofdgenre;
-- bij een serie: Deel X.
+2. Verder lezen verwijderd
+De Account-pagina haalt geen reading_progress-lijst meer op en toont geen
+aparte 'Verder lezen'-kaarten meer.
 
-De eigen geüploade cover wordt gebruikt.
-Zonder cover blijft de bestaande DiBooks cover-template werken.
+Favorieten blijven wel zichtbaar en linken naar /favorites.
 
-3. Klik op boek = beheer
-De dashboardpagina toont niet langer alle knoppen onder ieder boek.
-Klik op een cover en er opent één rustig beheerpanel.
+3. Vrienden veel duidelijker
+Eén centrale Vrienden-kaart:
 
-Daar vind je de bestaande functies:
-- Bewerk in Studio;
-- Cover & banner;
-- Boekgegevens;
-- Deel met contact;
-- Boekpagina;
-- Indienen voor beoordeling;
-- Verwijder concept;
-- Verwijder uit Library.
+Vriend toevoegen
+[ Naam of e-mailadres                     ] [ Zoek ]
 
-De bestaande vergrendeling voor live/in-review boeken blijft bestaan.
+Daaronder alleen wanneer relevant:
+- zoekresultaten;
+- inkomende vriendschapsverzoeken;
+- Mijn vrienden;
+- verstuurde verzoeken, compact ingeklapt.
 
-4. Series bij elkaar
-Iedere bestaande serie krijgt automatisch een eigen sectie.
-Boeken binnen een serie worden op `seriesOrder` / deelnummer gesorteerd.
+Iedere geaccepteerde vriend heeft direct:
+[ Chat ]
 
-Voorbeeld:
-WHITE ASHES
-[Boek 1] [Boek 2] [Boek 3]
+Deze opent:
+/chat?contact=<user id>
 
-Boeken zonder serie staan apart onder:
-Losstaande boeken / Geen serie.
+4. Delen / feedback blijft behouden
+De bestaande sociale auteurfuncties blijven:
+- gedeelde boeken;
+- ontvangen feedback;
+- bewerkingsvoorstellen;
+- voorstellen accepteren/afwijzen.
 
-5. Lege collectie
-Nieuwe auteurs krijgen een eenvoudige lege boekenplank met
-'+ Eerste boek maken'.
+CHAT
+
+5. Contacten zijn nu de hoofdsidebar
+De oude aparte 'Inbox' + 'Nieuwe chat'-blokken zijn samengevoegd.
+
+Links staat:
+- Vriend toevoegen;
+- Mijn vrienden;
+- laatste bericht wanneer er al een gesprek bestaat.
+
+Klik op een vriend:
+- bestaand gesprek opent;
+- of DiBooks maakt automatisch het eerste directe gesprek aan.
+
+6. Mensen toevoegen vanuit Chat
+Chat gebruikt dezelfde bestaande Supabase functies als Account:
+- zoeken op naam/e-mail;
+- vriendschapsverzoek sturen.
+
+Een verstuurd verzoek verschijnt pas als vriend nadat de andere gebruiker
+het heeft geaccepteerd.
+
+7. Deeplink Account -> Chat
+Klik je bij een vriend in Account op Chat, dan opent Chat die persoon direct.
+Bestaat er nog geen gesprek, dan wordt het gesprek aangemaakt.
 
 NIET AANGEPAST
-- Supabase tabellen;
-- series database;
-- moderatie;
+- Supabase tabellen / RPC's;
 - auth;
+- rollen/plannen;
+- boekdelen;
+- feedback/revisions;
+- moderatie;
 - Reader;
-- royaltylogica;
-- Account-pagina;
-- delen/feedback/revisions.
+- Auteur Dashboard.
 
 GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep map `app` over dibooks_author_studio.
-3. Bestand vervangen.
-4. npm run build.
+2. Sleep map `app` over `dibooks_author_studio`.
+3. Bestanden vervangen.
+4. `npm run build`.
 5. Commit/push naar GitHub/Vercel.
 
 TEST
-1. Open Auteur Dashboard.
-2. Controleer dat series aparte groepen zijn.
-3. Controleer volgorde Deel 1, Deel 2, Deel 3.
-4. Klik op een cover.
-5. Test Studio / Cover & banner / Boekgegevens.
-6. Controleer een live boek: Studio moet vergrendeld zijn.
+1. Account openen.
+2. Controleren dat 'Verder lezen' weg is.
+3. Vriend zoeken en verzoek sturen.
+4. Inkomend verzoek met ander testaccount accepteren.
+5. Klik bij vriend op 'Chat'.
+6. Controleer dat juiste gesprek direct opent.
+7. In Chat iemand zoeken en een nieuw verzoek sturen.
+8. Bestaande chatberichten versturen/controleren.

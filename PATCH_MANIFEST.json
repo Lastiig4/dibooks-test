@@ -1,18 +1,21 @@
 {
-  "name": "DiBooks Dashboard Bookshelf V1",
+  "name": "DiBooks Account Contacts Chat Cleanup V1",
   "date": "2026-08-24",
   "sql_required": false,
   "files": [
-    "app/dashboard/page.tsx",
+    "app/account/page.tsx",
+    "app/chat/page.tsx",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Compact author dashboard",
-    "Vertical cover cards",
-    "Status/access badges",
-    "Click-to-manage modal",
-    "Books grouped by series",
-    "Series sorted by seriesOrder",
-    "Standalone book section"
+    "Compact account header",
+    "Removed account Continue Reading section",
+    "Favorites retained",
+    "Single clear friends/add-friend panel",
+    "Direct Chat button for friends",
+    "Contacts visible inside Chat",
+    "Add friends directly from Chat",
+    "Account-to-chat contact deep link",
+    "Existing sharing/feedback/revision flows retained"
   ]
 }
