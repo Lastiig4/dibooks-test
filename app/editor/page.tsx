@@ -107,7 +107,7 @@ const FontSize = Extension.create({
   },
 });
 
-type DiNodeType = "text" | "special" | "cutscene" | "choice" | "minigame" | "function" | "condition" | "scratchpad";
+type DiNodeType = "text" | "special" | "chapter" | "cutscene" | "choice" | "minigame" | "function" | "condition" | "scratchpad";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 
@@ -191,6 +191,9 @@ type DiNodeData = {
   text?: string;
   textHtml?: string;
   specialSubtype?: string;
+  chapterNumber?: string;
+  chapterTitle?: string;
+  chapterSubtitle?: string;
   videoUrl?: string;
   videoStoragePath?: string;
   videoFileName?: string;
@@ -238,6 +241,7 @@ function removeManualPageBreakMarkers(value: string) {
 const nodeColors: Record<DiNodeType, string> = {
   text: "#2563eb",
   special: "#eab308",
+  chapter: "#e11d48",
   cutscene: "#16a34a",
   choice: "#f97316",
   minigame: "#9333ea",
@@ -249,6 +253,7 @@ const nodeColors: Record<DiNodeType, string> = {
 const nodeLabels: Record<DiNodeType, string> = {
   text: "Tekst",
   special: "Speciale pagina",
+  chapter: "Hoofdstuk-marker",
   cutscene: "Cutscene",
   choice: "Keuze",
   minigame: "Mini game",
@@ -963,6 +968,12 @@ function isNodeComplete(node: Node<DiNodeData> | undefined) {
   }
 
   if (node.data.type === "function") {
+    return true;
+  }
+
+  // Hoofdstuk-markers zijn metadata/structuur en blokkeren nooit
+  // boekvereisten of pad-validatie. De reader gebruikt alleen hun metadata.
+  if (node.data.type === "chapter") {
     return true;
   }
 
@@ -2416,7 +2427,11 @@ export default function Home() {
   const runtimeNodeCount = getStoryNodes(nodes).length;
   const functionNodeCount = nodes.filter((node) => node.data.type === "function").length;
   const conditionNodeCount = nodes.filter((node) => node.data.type === "condition").length;
-  const storyNodeCount = runtimeNodeCount - functionNodeCount - conditionNodeCount;
+  const chapterNodeCount = nodes.filter((node) => node.data.type === "chapter").length;
+  // Structuurnodes (functie / IF / hoofdstuk) tellen niet mee voor
+  // verhaalnode-limieten of de vereisten van een boek.
+  const storyNodeCount =
+    runtimeNodeCount - functionNodeCount - conditionNodeCount - chapterNodeCount;
   const scratchpadNodeCount = nodes.length - runtimeNodeCount;
   const nodeLimitReached = maxNodesForCurrentUser !== null && storyNodeCount >= maxNodesForCurrentUser;
   const autosaveReadyRef = useRef(false);
@@ -2710,6 +2725,24 @@ export default function Home() {
 
     return Math.max(1, Math.ceil(totalCharacters / 1800));
   }, [nodes]);
+
+  useEffect(() => {
+    if (!previewOpen || previewNode?.data.type !== "chapter") return;
+
+    const chapterPaths = getStoryEdges(edges, nodes).filter(
+      (edge) => edge.source === previewNode.id,
+    );
+
+    if (chapterPaths.length !== 1) return;
+
+    const nextTarget = nodes.find((node) => node.id === chapterPaths[0].target);
+    if (!nextTarget || isScratchpadNode(nextTarget)) return;
+
+    setPreviewNodeId(nextTarget.id);
+    setPreviewPageIndex(0);
+    setPreviewPageCount(1);
+    setReaderVisiblePageCount(1);
+  }, [edges, nodes, previewNode, previewOpen]);
 
   useEffect(() => {
     if (previewPageIndex > previewPageCount - 1) {
@@ -3128,7 +3161,7 @@ export default function Home() {
 
     const maxNodes = getMaxNodesForUser(user);
     if (!sharedEditBookId && maxNodes !== null && storyNodeCount > maxNodes) {
-      alert(`Gratis accounts kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes opslaan in Dashboard. Kladblok-, functie- en voorwaarde-nodes tellen niet mee. Verwijder verhaalnodes of upgrade later naar Author Pro voor onbeperkt bouwen.`);
+      alert(`Gratis accounts kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes opslaan in Dashboard. Kladblok-, functie-, voorwaarde- en hoofdstuk-markers tellen niet mee. Verwijder verhaalnodes of upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
@@ -3392,9 +3425,13 @@ ${formatSaveError(error)}`);
 
   function createNode(type: DiNodeType) {
     const maxNodes = getMaxNodesForUser(user);
-    const isUtilityNode = type === "scratchpad" || type === "function" || type === "condition";
+    const isUtilityNode =
+      type === "scratchpad" ||
+      type === "function" ||
+      type === "condition" ||
+      type === "chapter";
     if (!isUtilityNode && maxNodes !== null && storyNodeCount >= maxNodes) {
-      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes gebruiken. Kladblok-, functie- en voorwaarde-nodes tellen niet mee. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
+      alert(`Gratis accounts en gasten kunnen maximaal ${FREE_NODE_LIMIT} verhaalnodes gebruiken. Kladblok-, functie-, voorwaarde- en hoofdstuk-markers tellen niet mee. Upgrade later naar Author Pro voor onbeperkt bouwen.`);
       return;
     }
 
@@ -3431,6 +3468,9 @@ ${formatSaveError(error)}`);
         text: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
         textHtml: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
         specialSubtype: type === "special" ? "Logboek" : undefined,
+        chapterNumber: type === "chapter" ? "" : undefined,
+        chapterTitle: type === "chapter" ? "" : undefined,
+        chapterSubtitle: type === "chapter" ? "" : undefined,
         videoUrl: type === "cutscene" ? "" : undefined,
         videoStoragePath: type === "cutscene" ? "" : undefined,
         videoFileName: type === "cutscene" ? "" : undefined,
@@ -3483,6 +3523,44 @@ ${formatSaveError(error)}`);
             }
           : node,
       ),
+    );
+  }
+
+  function updateSelectedChapterData(
+    updates: Pick<
+      Partial<DiNodeData>,
+      "chapterNumber" | "chapterTitle" | "chapterSubtitle"
+    >,
+  ) {
+    if (!selectedNodeId) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        if (node.id !== selectedNodeId || node.data.type !== "chapter") {
+          return node;
+        }
+
+        const nextData = {
+          ...node.data,
+          ...updates,
+        };
+
+        const number = String(nextData.chapterNumber ?? "").trim();
+        const title = String(nextData.chapterTitle ?? "").trim();
+        const generatedLabel = number
+          ? `Hoofdstuk ${number}${title ? ` — ${title}` : ""}`
+          : title
+            ? `Hoofdstuk — ${title}`
+            : "Hoofdstuk";
+
+        return {
+          ...node,
+          data: {
+            ...nextData,
+            label: generatedLabel,
+          },
+        };
+      }),
     );
   }
 
@@ -3647,10 +3725,18 @@ ${formatSaveError(error)}`);
       (edge) => edge.source === selectedNodeId,
     );
 
-    const maxOutgoingPaths = sourceNode?.data.type === "function" ? 1 : 10;
+    const isSinglePathNode =
+      sourceNode?.data.type === "function" || sourceNode?.data.type === "chapter";
+    const maxOutgoingPaths = isSinglePathNode ? 1 : 10;
 
     if (existingOutgoingEdges.length >= maxOutgoingPaths) {
-      alert(sourceNode?.data.type === "function" ? "Een functie-node gebruikt één vervolgpath. Verwijder eerst de bestaande path." : "Deze node heeft al het maximale aantal van 10 paths.");
+      alert(
+        sourceNode?.data.type === "function"
+          ? "Een functie-node gebruikt één vervolgpath. Verwijder eerst de bestaande path."
+          : sourceNode?.data.type === "chapter"
+            ? "Een hoofdstuk-marker gebruikt precies één vervolgpath. Verwijder eerst de bestaande path."
+            : "Deze node heeft al het maximale aantal van 10 paths.",
+      );
       return;
     }
 
@@ -4239,6 +4325,9 @@ ${formatSaveError(error)}`);
           conditionTrueTargetNodeId: node.data.conditionTrueTargetNodeId ?? "",
           conditionFalseTargetNodeId: node.data.conditionFalseTargetNodeId ?? "",
           specialSubtype: node.data.specialSubtype ?? "",
+          chapterNumber: node.data.chapterNumber ?? "",
+          chapterTitle: node.data.chapterTitle ?? "",
+          chapterSubtitle: node.data.chapterSubtitle ?? "",
         },
       })),
       edges: storyEdges.map((edge) => ({
@@ -4490,6 +4579,16 @@ ${formatSaveError(error)}`);
                 onClick={() => {
                   setSidebarGroupOpen(null);
                   createNode("special");
+                }}
+              />
+              <SidebarMenuItem
+                title="Hoofdstuk-marker"
+                description="Markeert een nieuw hoofdstuk zonder een reader-pagina te tonen."
+                accentClass="bg-rose-600 text-white"
+                icon={<span className="text-sm font-black">H</span>}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("chapter");
                 }}
               />
               <SidebarMenuItem
@@ -4760,6 +4859,7 @@ ${formatSaveError(error)}`);
                   <TopMenuRow label="Variabelen" value={storyVariables.length} valueClassName="text-indigo-200" />
                   <TopMenuRow label="Functies" value={functionNodeCount} valueClassName="text-cyan-200" />
                   <TopMenuRow label="Voorwaarden / IF" value={conditionNodeCount} valueClassName="text-teal-200" />
+                  <TopMenuRow label="Hoofdstukken" value={chapterNodeCount} valueClassName="text-rose-200" />
                   <TopMenuRow label="Kladblokken" value={scratchpadNodeCount} />
                   {!reviewMode && (
                     <div className="mt-2 border-t border-white/10 pt-2">
@@ -5141,6 +5241,59 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
+              {selectedNode.data.type === "chapter" && (
+                <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-4">
+                  <div className="mb-4">
+                    <h3 className="font-black text-rose-200">Hoofdstuk-marker</h3>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-rose-100/70">
+                      Onzichtbare structuur-node. De Reader toont de hoofdstukinformatie
+                      bij de pagina's erna en gaat automatisch via één vervolgpath door.
+                      Deze marker telt niet mee als verhaalnode of boekvereiste.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <div>
+                      <label className="mb-2 block text-sm font-bold">Hoofdstuknummer</label>
+                      <input
+                        value={selectedNode.data.chapterNumber ?? ""}
+                        onChange={(event) =>
+                          updateSelectedChapterData({ chapterNumber: event.target.value })
+                        }
+                        placeholder="Bijv. 4, IV of Proloog"
+                        className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-rose-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-bold">Hoofdstuktitel</label>
+                      <input
+                        value={selectedNode.data.chapterTitle ?? ""}
+                        onChange={(event) =>
+                          updateSelectedChapterData({ chapterTitle: event.target.value })
+                        }
+                        placeholder="Bijv. De Hallows"
+                        className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-rose-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-bold">
+                        Ondertitel <span className="text-neutral-500">(optioneel)</span>
+                      </label>
+                      <input
+                        value={selectedNode.data.chapterSubtitle ?? ""}
+                        onChange={(event) =>
+                          updateSelectedChapterData({ chapterSubtitle: event.target.value })
+                        }
+                        placeholder="Bijv. Cycle 64 • Day 83"
+                        className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-rose-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {selectedNode.data.type === "scratchpad" ? (
                 <div className="rounded-xl border border-white/15 bg-white/10 p-3 text-sm text-neutral-300">
                   <div className="font-black text-white">Kladblok-node</div>
@@ -5187,7 +5340,12 @@ ${formatSaveError(error)}`);
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="font-black">Paths</h3>
                   <span className="text-sm text-neutral-400">
-                    {selectedNodePaths.length}/{selectedNode.data.type === "function" ? 1 : 10}
+                    {selectedNodePaths.length}/{
+                      selectedNode.data.type === "function" ||
+                      selectedNode.data.type === "chapter"
+                        ? 1
+                        : 10
+                    }
                   </span>
                 </div>
 
@@ -5198,6 +5356,12 @@ ${formatSaveError(error)}`);
                 {selectedNode.data.type === "function" && (
                   <p className="mb-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs font-bold leading-5 text-cyan-100/80">
                     Functie-nodes zijn onzichtbaar voor lezers. Zodra de reader deze node bereikt, worden de acties uitgevoerd en gaat het verhaal automatisch door via de eerste path.
+                  </p>
+                )}
+
+                {selectedNode.data.type === "chapter" && (
+                  <p className="mb-3 rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-xs font-bold leading-5 text-rose-100/80">
+                    Hoofdstuk-markers zijn onzichtbaar voor lezers en gebruiken precies één vervolgpath. Plaats hem vóór de eerste node van het hoofdstuk.
                   </p>
                 )}
 
@@ -6405,6 +6569,30 @@ ${formatSaveError(error)}`);
                     </div>
                   )}
 
+                  {selectedNode.data.type === "chapter" && (
+                    <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-5">
+                      <p className="text-xs font-black uppercase tracking-widest text-rose-200">
+                        Hoofdstuk-marker
+                      </p>
+                      <p className="mt-3 text-lg font-black text-white">
+                        {selectedNode.data.chapterNumber
+                          ? `Hoofdstuk ${selectedNode.data.chapterNumber}`
+                          : "Hoofdstuk"}
+                        {selectedNode.data.chapterTitle
+                          ? ` — ${selectedNode.data.chapterTitle}`
+                          : ""}
+                      </p>
+                      {selectedNode.data.chapterSubtitle && (
+                        <p className="mt-2 text-sm font-semibold text-rose-100/70">
+                          {selectedNode.data.chapterSubtitle}
+                        </p>
+                      )}
+                      <p className="mt-3 text-xs font-semibold text-rose-100/60">
+                        Structuurmarker; verschijnt niet als aparte pagina en wordt niet door de tekstscanner beoordeeld.
+                      </p>
+                    </div>
+                  )}
+
                   {selectedNode.data.type === "choice" && (
                     <div className="mt-4 rounded-2xl border border-orange-400/20 bg-orange-500/10 p-5">
                       <p className="text-xs font-black uppercase tracking-widest text-orange-200">
@@ -6692,6 +6880,27 @@ ${formatSaveError(error)}`);
               );
             })()}
 
+            {previewNode.data.type === "chapter" && (
+              <div className="flex h-full items-center justify-center p-6">
+                <div className="max-w-xl rounded-3xl border border-rose-500/25 bg-rose-500/10 p-8 text-center text-rose-100 shadow-2xl">
+                  <p className="text-xs font-black uppercase tracking-[0.28em] text-rose-300">
+                    Hoofdstuk-marker
+                  </p>
+                  <h1 className="mt-3 text-3xl font-black">
+                    {previewNode.data.chapterNumber
+                      ? `Hoofdstuk ${previewNode.data.chapterNumber}`
+                      : "Hoofdstuk"}
+                    {previewNode.data.chapterTitle
+                      ? ` — ${previewNode.data.chapterTitle}`
+                      : ""}
+                  </h1>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-rose-100/70">
+                    Deze marker wordt normaal automatisch overgeslagen. Controleer of hij precies één vervolgpath heeft.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {previewNode.data.type === "minigame" && (
               <>
                 {previewNode.data.miniGameType === "stabilize_line" ||
@@ -6860,7 +7069,8 @@ ${formatSaveError(error)}`);
               previewNode.data.type !== "choice" &&
               previewNode.data.type !== "minigame" &&
               previewNode.data.type !== "function" &&
-              previewNode.data.type !== "condition" && (
+              previewNode.data.type !== "condition" &&
+              previewNode.data.type !== "chapter" && (
                 <>
                   {previewPaths.length === 0 && (
                     <div className="rounded-xl bg-neutral-900 p-4 text-neutral-300">

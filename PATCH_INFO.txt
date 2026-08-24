@@ -1,24 +1,70 @@
-DiBooks Reader UX V1.1 - TypeScript Fix
-======================================
+DiBooks Patch - Chapter Marker V1
+================================
 
-Fix voor Vercel TypeScript:
-'reader' is possibly 'null' in handleReaderKeyDown().
+NIEUWE NODE
+Hoofdstuk-marker (onder Tekst & schrijven)
 
-Oorzaak:
-De useEffect controleerde correct of reader bestond, maar TypeScript
-behoudt die narrowing niet betrouwbaar binnen een geneste event callback.
+Velden:
+- Hoofdstuknummer (bijv. 4, IV of Proloog)
+- Hoofdstuktitel
+- Optionele ondertitel
 
-Fix:
-- const activeReader = reader; direct na de guard
-- keyboard handler gebruikt activeReader
+VOORBEELD ROUTE
+Hoofdstuk-marker -> Tekst -> Tekst -> Keuze -> ...
 
-Geen functionele wijzigingen.
-Alle Reader UX V1-features blijven behouden.
+GEDRAG
+- Hoofdstuk-marker is GEEN reader-pagina.
+- Reader gaat automatisch via de ene vervolgpath naar de volgende node.
+- Reader toont het actieve hoofdstuk subtiel onder de boektitel.
+- Footer toont ook het actieve hoofdstuk bij de leesvoortgang.
+- Bij refresh/hervatten zoekt de Reader terug naar de dichtstbijzijnde
+  hoofdstuk-marker, dus hoofdstuktitel blijft zichtbaar.
+- Preview in Auteur Studio slaat de marker automatisch over.
+- De marker mag start-node zijn (handig bij Hoofdstuk 1 / Proloog).
+
+NIET MEETELLEN
+Hoofdstuk-markers tellen NIET mee:
+- voor de verhaalnode-limiet;
+- als verhaalnode voor boekvereisten;
+- in de Reader voortgang als eigen node;
+- voor DeepSeek tekstmoderatie/API-kosten.
+
+PADREGEL
+Een hoofdstuk-marker gebruikt maximaal één vervolgpath.
+Zo blijft de betekenis eenduidig: vanaf hier begint dit hoofdstuk.
+
+STRUCTUURMENU
+Bovenin Structuur staat nu ook:
+- Hoofdstukken: X
+
+MODERATIE
+DeepSeek scanner slaat chapter nodes volledig over.
 Geen SQL nodig.
 
-Installeren:
+BESTAANDE SYSTEMEN BEHOUDEN
+- Reader UX V1
+- swipe / toetsenbord / fullscreen
+- slimme paginering
+- Story State
+- Function / IF
+- variable effects
+- minigames
+- moderation/review
+- incremental DeepSeek scan
+
+INSTALLEREN
 1. ZIP uitpakken.
 2. Sleep de map 'app' over dibooks_author_studio.
 3. Bestanden vervangen.
-4. Commit/push.
-5. Vercel opnieuw laten bouwen.
+4. GEEN SQL uitvoeren.
+5. npm run build
+6. Commit/push naar GitHub/Vercel.
+
+TEST
+1. Voeg Tekst & schrijven -> Hoofdstuk-marker toe.
+2. Vul nummer '1' en titel 'Het Begin' in.
+3. Maak één path naar een tekstnode.
+4. Zet marker eventueel als start-node.
+5. Preview: marker hoort automatisch te verdwijnen.
+6. Public Reader: onder boektitel moet 'Hoofdstuk 1 — Het Begin' staan.
+7. Controleer Structuur: verhaalnode-teller mag door de marker niet omhoog gaan.

@@ -1,9 +1,21 @@
 {
-  "name": "DiBooks Reader UX V1.1 TypeScript Fix",
+  "name": "DiBooks Chapter Marker V1",
   "date": "2026-08-24",
   "sql_required": false,
   "files": [
+    "app/editor/page.tsx",
     "app/books/[bookId]/read/page.tsx",
+    "app/api/moderation/scan-submission/route.ts",
     "PATCH_INFO.txt"
+  ],
+  "features": [
+    "Chapter marker node",
+    "Chapter number/title/subtitle",
+    "Automatic chapter forwarding",
+    "Chapter shown in reader chrome",
+    "Excluded from story node limits",
+    "Excluded from progress node count",
+    "Excluded from DeepSeek moderation scan",
+    "Single outgoing path for chapter markers"
   ]
 }

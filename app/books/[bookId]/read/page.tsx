@@ -15,6 +15,7 @@ type MiniGameDifficulty = "easy" | "normal" | "hard";
 type ReaderNodeType =
   | "text"
   | "special"
+  | "chapter"
   | "cutscene"
   | "choice"
   | "minigame"
@@ -75,6 +76,9 @@ type ReaderNode = {
   text: string;
   textHtml: string;
   specialSubtype?: string;
+  chapterNumber?: string;
+  chapterTitle?: string;
+  chapterSubtitle?: string;
   videoUrl?: string;
   videoStoragePath?: string;
   videoFileName?: string;
@@ -191,6 +195,12 @@ function normalizeNode(rawNode: any): ReaderNode {
     text,
     textHtml,
     specialSubtype: data.specialSubtype ?? content.specialSubtype ?? rawNode?.specialSubtype,
+    chapterNumber:
+      data.chapterNumber ?? content.chapterNumber ?? rawNode?.chapterNumber ?? "",
+    chapterTitle:
+      data.chapterTitle ?? content.chapterTitle ?? rawNode?.chapterTitle ?? "",
+    chapterSubtitle:
+      data.chapterSubtitle ?? content.chapterSubtitle ?? rawNode?.chapterSubtitle ?? "",
     videoUrl: data.videoUrl ?? content.videoUrl ?? rawNode?.videoUrl ?? "",
     videoStoragePath: data.videoStoragePath ?? content.videoStoragePath ?? rawNode?.videoStoragePath ?? "",
     videoFileName: data.videoFileName ?? content.videoFileName ?? rawNode?.videoFileName ?? "",
@@ -643,14 +653,68 @@ function getConditionTargetNodeId(
 
 
 function calculateBookProgressPercent(book: ReaderBook, currentNodeId: string, pageIndex: number, pageCount: number) {
-  const totalNodes = Math.max(1, book.nodes.length);
-  const nodeIndex = Math.max(0, book.nodes.findIndex((node) => node.id === currentNodeId));
+  const progressNodes = book.nodes.filter((node) => node.type !== "chapter");
+  const totalNodes = Math.max(1, progressNodes.length);
+  const nodeIndex = Math.max(
+    0,
+    progressNodes.findIndex((node) => node.id === currentNodeId),
+  );
   const safePageCount = Math.max(1, pageCount);
   const pageFraction = Math.max(0, Math.min(1, (pageIndex + 1) / safePageCount));
   const percent = ((nodeIndex + pageFraction) / totalNodes) * 100;
   return clampProgressPercent(percent);
 }
 
+
+function formatReaderChapterLabel(node: ReaderNode | null | undefined) {
+  if (!node || node.type !== "chapter") return "";
+
+  const number = String(node.chapterNumber ?? "").trim();
+  const title = String(node.chapterTitle ?? "").trim();
+
+  if (number && title) return `Hoofdstuk ${number} — ${title}`;
+  if (number) return `Hoofdstuk ${number}`;
+  if (title) return `Hoofdstuk — ${title}`;
+  return "Hoofdstuk";
+}
+
+function findNearestReaderChapter(
+  book: ReaderBook,
+  currentNodeId: string,
+): ReaderNode | null {
+  const startNode = book.nodes.find((node) => node.id === currentNodeId);
+  if (!startNode) return null;
+  if (startNode.type === "chapter") return startNode;
+
+  const visited = new Set<string>([currentNodeId]);
+  let frontier = [currentNodeId];
+
+  // Zoek per afstandsniveau terug door inkomende paden.
+  // Hierdoor krijgt de reader de dichtstbijzijnde hoofdstuk-marker.
+  for (let depth = 0; depth < Math.max(1, book.nodes.length); depth += 1) {
+    const nextFrontier: string[] = [];
+
+    for (const targetId of frontier) {
+      const incoming = book.edges.filter((edge) => edge.target === targetId);
+
+      for (const edge of incoming) {
+        if (visited.has(edge.source)) continue;
+        visited.add(edge.source);
+
+        const sourceNode = book.nodes.find((node) => node.id === edge.source);
+        if (!sourceNode) continue;
+        if (sourceNode.type === "chapter") return sourceNode;
+
+        nextFrontier.push(sourceNode.id);
+      }
+    }
+
+    if (!nextFrontier.length) break;
+    frontier = nextFrontier;
+  }
+
+  return null;
+}
 
 function plainTextToReaderHtml(value: string) {
   const paragraphs = String(value || "")
@@ -1685,6 +1749,7 @@ export default function ReadBookPage() {
     return {
       book,
       node,
+      activeChapter: findNearestReaderChapter(book, node.id),
       textHtml: htmlParts.join(""),
       textNodes,
       nextNodeAfterChain,
@@ -1767,6 +1832,23 @@ export default function ReadBookPage() {
 
 
 
+
+  useEffect(() => {
+    if (!reader || reader.node.type !== "chapter") return;
+
+    const nextTargetId = reader.outgoingPaths[0]?.target;
+    if (!nextTargetId) {
+      console.warn(
+        `Hoofdstuk-marker "${reader.node.title}" heeft geen vervolgpath.`,
+      );
+      return;
+    }
+
+    lastExecutedFunctionNodeRef.current = null;
+    lastEvaluatedConditionNodeRef.current = null;
+    setCurrentNodeId(nextTargetId);
+    setPageIndex(0);
+  }, [reader]);
 
   useEffect(() => {
     if (
@@ -2198,8 +2280,18 @@ export default function ReadBookPage() {
       <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">DiBooks Reader</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">
+              DiBooks Reader
+            </p>
             <h1 className="truncate text-xl font-black sm:text-2xl">{book.title}</h1>
+            {reader.activeChapter && (
+              <p className="mt-0.5 truncate text-[11px] font-black tracking-wide text-blue-300/80 sm:text-xs">
+                {formatReaderChapterLabel(reader.activeChapter)}
+                {reader.activeChapter.chapterSubtitle
+                  ? ` • ${reader.activeChapter.chapterSubtitle}`
+                  : ""}
+              </p>
+            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -2378,6 +2470,22 @@ export default function ReadBookPage() {
           </div>
         )}
 
+        {node.type === "chapter" && (
+          <div className="flex h-full items-center justify-center p-6">
+            <div className="max-w-xl rounded-3xl border border-rose-500/20 bg-rose-500/10 p-8 text-center text-rose-100 shadow-2xl">
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-rose-300">
+                Hoofdstuk laden
+              </p>
+              <h1 className="mt-3 text-3xl font-black">
+                {formatReaderChapterLabel(node)}
+              </h1>
+              <p className="mt-3 text-sm font-semibold leading-6 text-rose-100/70">
+                Deze structuurmarker hoort automatisch door te sturen. Als dit blijft staan, mist het hoofdstuk een vervolgpath.
+              </p>
+            </div>
+          </div>
+        )}
+
         {node.type === "function" && (
           <div className="flex h-full items-center justify-center p-6">
             <div className="max-w-xl rounded-3xl border border-cyan-500/20 bg-cyan-500/10 p-8 text-center text-cyan-100 shadow-2xl">
@@ -2475,7 +2583,14 @@ export default function ReadBookPage() {
 
             <div className="text-center text-sm font-bold text-neutral-400">
               <div>{readerVisiblePageCount === 2 && pageIndex + 1 < readerPageCount ? `Pagina ${pageIndex + 1}–${Math.min(pageIndex + 2, readerPageCount)} van ${readerPageCount}` : `Pagina ${pageIndex + 1} van ${readerPageCount}`}</div>
-              <div className="text-xs text-neutral-600">{currentProgressPercent}% gelezen • {book.author}</div>
+              <div className="text-xs text-neutral-600">
+                {currentProgressPercent}% gelezen
+                {reader.activeChapter
+                  ? ` • ${formatReaderChapterLabel(reader.activeChapter)}`
+                  : ""}
+                {" • "}
+                {book.author}
+              </div>
               <button
                 onClick={handleRestartReading}
                 disabled={resetProgressBusy}
@@ -2518,7 +2633,8 @@ export default function ReadBookPage() {
         ) : node.type !== "choice" &&
           node.type !== "minigame" &&
           node.type !== "function" &&
-          node.type !== "condition" ? (
+          node.type !== "condition" &&
+          node.type !== "chapter" ? (
           <div className="flex flex-wrap justify-end gap-3">
             {reader.outgoingPaths.length === 0 && <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">Einde bereikt</div>}
             {reader.outgoingPaths.map((edge) => {
@@ -2531,7 +2647,9 @@ export default function ReadBookPage() {
             })}
           </div>
         ) : (
-          <div className="text-center text-xs font-black uppercase tracking-widest text-neutral-600">Interactieve scène</div>
+          <div className="text-center text-xs font-black uppercase tracking-widest text-neutral-600">
+            {node.type === "chapter" ? "Hoofdstuk laden…" : "Interactieve scène"}
+          </div>
         )}
       </footer>
       )}

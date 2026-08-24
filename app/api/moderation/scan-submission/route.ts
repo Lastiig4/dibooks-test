@@ -75,7 +75,12 @@ function extractNodeText(node: any): ScannableNode | null {
   const content = node?.content ?? {};
   const type = getNodeType(node);
 
-  if (type === "function" || type === "condition" || type === "scratchpad") {
+  if (
+    type === "function" ||
+    type === "condition" ||
+    type === "scratchpad" ||
+    type === "chapter"
+  ) {
     return null;
   }
 
