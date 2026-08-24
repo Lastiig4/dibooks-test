@@ -14,10 +14,13 @@ export type LoginCredentials = {
   password: string;
 };
 
+export type PublicSignupPlan = "free" | "reader_plus" | "author_pro";
+
 export type RegisterCredentials = {
   name: string;
   email: string;
   password: string;
+  plan?: PublicSignupPlan;
 };
 
 export type DemoAuthUser = {
@@ -130,9 +133,9 @@ function readCachedUser(): DemoAuthUser | null {
     const role: Exclude<UserRole, "guest"> =
       parsed.role === "admin"
         ? "admin"
-        : parsed.role === "reader"
-          ? "reader"
-          : "author";
+        : parsed.role === "author"
+          ? "author"
+          : "reader";
 
     const plan: UserPlan =
       parsed.plan === "reader_plus"
@@ -206,9 +209,9 @@ function mapSupabaseUser(user: User | null): DemoAuthUser | null {
   const role: Exclude<UserRole, "guest"> =
     metadataRole === "admin"
       ? "admin"
-      : metadataRole === "reader"
-        ? "reader"
-        : "author";
+      : metadataRole === "author"
+        ? "author"
+        : "reader";
 
   const metadataPlan = metadata.plan || appMetadata.plan;
   const plan: UserPlan =
@@ -271,9 +274,9 @@ async function applySupabaseProfile(
   const role: Exclude<UserRole, "guest"> =
     data.role === "admin"
       ? "admin"
-      : data.role === "reader"
-        ? "reader"
-        : "author";
+      : data.role === "author"
+        ? "author"
+        : "reader";
 
   const plan: UserPlan =
     data.plan === "reader_plus"
@@ -412,20 +415,22 @@ export function getAuthPermissions(
   user: DemoAuthUser | null,
 ): AuthPermissions {
   const role: UserRole = user?.role ?? "guest";
-  const isAuthor = role === "author" || role === "admin";
   const isAdmin = role === "admin";
-  const isAuthorPro = isAuthorProUser(user);
+  const hasActiveAuthorPlan =
+    isAdmin ||
+    (role === "author" &&
+      (user?.plan === "author_pro" || user?.plan === "member"));
 
   return {
     canReadLibrary: true,
-    canUseEditor: true,
-    canDownloadLocalFiles: true,
-    canUseDashboard: isAuthor,
-    canSaveToDashboard: isAuthor,
-    canCreateBook: isAuthor,
-    canEditConceptBook: isAuthor,
-    canPublishBook: isAuthorPro,
-    canRemoveFromLibrary: isAuthorPro,
+    canUseEditor: hasActiveAuthorPlan,
+    canDownloadLocalFiles: hasActiveAuthorPlan,
+    canUseDashboard: hasActiveAuthorPlan,
+    canSaveToDashboard: hasActiveAuthorPlan,
+    canCreateBook: hasActiveAuthorPlan,
+    canEditConceptBook: hasActiveAuthorPlan,
+    canPublishBook: hasActiveAuthorPlan,
+    canRemoveFromLibrary: hasActiveAuthorPlan,
     canManageUsers: isAdmin,
     maxNodesPerBook: getMaxNodesForUser(user),
   };
@@ -445,7 +450,7 @@ export async function ensureSupabaseProfile(
   const displayName =
     user.name?.trim() ||
     user.email?.split("@")[0] ||
-    "Auteur";
+    "Gebruiker";
 
   const { error } = await supabase.from("profiles").upsert(
     {
@@ -498,8 +503,8 @@ async function promptForLogin() {
 
 async function promptForRegistration() {
   const name =
-    window.prompt("Naam / auteursnaam:")?.trim() ||
-    "Auteur";
+    window.prompt("Naam / pseudoniem:")?.trim() ||
+    "Gebruiker";
 
   const email = window.prompt(
     "E-mailadres voor je DiBooks account:",
@@ -520,6 +525,7 @@ async function promptForRegistration() {
     name,
     email: email.trim(),
     password,
+    plan: "free" as PublicSignupPlan,
   };
 }
 
@@ -638,8 +644,12 @@ export function useDemoAuth() {
       };
     }
 
-    const name = credentials.name.trim() || "Auteur";
+    const name = credentials.name.trim() || "Gebruiker";
     const email = credentials.email.trim();
+    const requestedPlan: PublicSignupPlan =
+      credentials.plan === "reader_plus" || credentials.plan === "author_pro"
+        ? credentials.plan
+        : "free";
 
     if (!email || !credentials.password) {
       return {
@@ -662,7 +672,13 @@ export function useDemoAuth() {
         data: {
           full_name: name,
           name,
-          role: "author",
+          // Betaalde rechten worden nooit vanuit de browser toegekend.
+          // Zolang billing nog niet gekoppeld is start elk nieuw account veilig
+          // als Gratis / Reader. De gekozen betaaloptie blijft wel bewaard als
+          // signup-intentie voor de latere checkout-flow.
+          role: "reader",
+          plan: "free",
+          signup_plan_intent: requestedPlan,
         },
       },
     });
@@ -678,7 +694,9 @@ export function useDemoAuth() {
       return {
         ok: true,
         message:
-          "Account aangemaakt. Check je e-mail om je account te bevestigen, of zet e-mailbevestiging tijdelijk uit in Supabase tijdens testen.",
+          requestedPlan === "free"
+            ? "Account aangemaakt. Check je e-mail om je account te bevestigen."
+            : "Account aangemaakt. Check je e-mail om je account te bevestigen. Je gekozen betaalplan is opgeslagen; activering volgt zodra betaling aan DiBooks is gekoppeld.",
       };
     }
 
@@ -695,10 +713,13 @@ export function useDemoAuth() {
 
     // Profielverrijking wordt centraal door de auth-listener afgehandeld.
 
-    return {
-      ok: true,
-      message: "Account aangemaakt en ingelogd.",
-    };
+    return requestedPlan === "free"
+      ? { ok: true }
+      : {
+          ok: true,
+          message:
+            "Account aangemaakt en ingelogd. Je gekozen betaalplan is opgeslagen als voorkeur; tot billing actief is blijft je account Gratis / Reader.",
+        };
   }
 
   async function login() {

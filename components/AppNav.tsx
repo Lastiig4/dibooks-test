@@ -5,7 +5,11 @@ import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import AuthModal from "@/components/AuthModal";
 import NotificationBell from "@/components/NotificationBell";
-import { useDemoAuth } from "@/lib/auth";
+import { useDemoAuth, type PublicSignupPlan } from "@/lib/auth";
+import {
+  DIBOOKS_OPEN_AUTH_EVENT,
+  type OpenAuthDetail,
+} from "@/lib/plans";
 
 function DiBooksMiniLogo() {
   return (
@@ -51,7 +55,7 @@ function IconButton({ children, title, active = false, onClick, buttonRef }: { c
 function GuestAuthButtons({ compact, onLogin, onRegister }: { compact?: boolean; onLogin: () => void; onRegister: () => void }) {
   return (
     <div className={`flex items-center gap-2 ${compact ? "scale-[0.96] origin-right" : ""}`}>
-      <Link href="/editor" title="Auteur Studio" aria-label="Auteur Studio" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20">✒️</Link>
+      <Link href="/#auteur-studio" title="Ontdek Auteur Studio" aria-label="Ontdek Auteur Studio" className="hidden h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20 sm:flex">✒️</Link>
       <button type="button" onClick={onLogin} className="rounded-2xl border border-white/12 bg-white/[0.05] px-4 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-white/10 sm:px-5">Login</button>
       <button type="button" onClick={onRegister} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/30 transition hover:-translate-y-0.5 hover:bg-blue-500 sm:px-5">Registreer</button>
     </div>
@@ -63,6 +67,7 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
   const [openMenu, setOpenMenu] = useState<"reader" | "settings" | null>(null);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
+  const [authInitialPlan, setAuthInitialPlan] = useState<PublicSignupPlan>("free");
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const readerButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -82,6 +87,12 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
     setOpenMenu(menu);
   }
 
+  function openAuth(mode: "login" | "register", plan: PublicSignupPlan = "free") {
+    setOpenMenu(null);
+    setAuthInitialPlan(plan);
+    setAuthModalMode(mode);
+  }
+
   useEffect(() => {
     function handleClick(event: MouseEvent) {
       const target = event.target as Node;
@@ -95,6 +106,17 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
       window.removeEventListener("mousedown", handleClick);
       window.removeEventListener("keydown", handleKey);
     };
+  }, []);
+
+  useEffect(() => {
+    function handleOpenAuth(event: Event) {
+      const detail = (event as CustomEvent<OpenAuthDetail>).detail;
+      if (!detail) return;
+      openAuth(detail.mode, detail.plan ?? "free");
+    }
+
+    window.addEventListener(DIBOOKS_OPEN_AUTH_EVENT, handleOpenAuth as EventListener);
+    return () => window.removeEventListener(DIBOOKS_OPEN_AUTH_EVENT, handleOpenAuth as EventListener);
   }, []);
 
   useEffect(() => {
@@ -117,7 +139,9 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
       <div ref={wrapRef} className={`relative flex items-center gap-2 ${compact ? "scale-[0.96] origin-right" : ""}`}>
         {isLoggedIn ? (
           <>
-            <Link href="/editor" title="Auteur Studio" aria-label="Auteur Studio" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20">✒️</Link>
+            {permissions.canUseEditor && (
+              <Link href="/editor" title="Auteur Studio" aria-label="Auteur Studio" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-500/12 text-xl font-black text-cyan-100 shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-500/20">✒️</Link>
+            )}
             <NotificationBell variant="inline" />
             <div className="relative">
               <IconButton title="Menu" active={openMenu === "reader"} buttonRef={readerButtonRef} onClick={() => toggleMenu("reader", readerButtonRef.current)}>👤</IconButton>
@@ -140,7 +164,7 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
                   {user?.role === "admin" && (
                     <MenuLink href="/admin/moderation" icon="🛡️" title="Boekmoderatie" subtitle="Boeken in beoordeling" />
                   )}
-                  <button type="button" onClick={() => { setOpenMenu(null); void logout(); }} className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-3 py-3 text-left text-sm font-black text-red-100 hover:bg-red-500/20">
+                  <button type="button" onClick={() => { setOpenMenu(null); logout(); }} className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-3 py-3 text-left text-sm font-black text-red-100 hover:bg-red-500/20">
                     <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-red-500/15">⎋</span>
                     Uitloggen
                   </button>
@@ -149,11 +173,18 @@ export function AppNavActions({ compact = false }: { compact?: boolean }) {
             </div>
           </>
         ) : (
-          <GuestAuthButtons compact={compact} onLogin={() => setAuthModalMode("login")} onRegister={() => setAuthModalMode("register")} />
+          <GuestAuthButtons compact={compact} onLogin={() => openAuth("login")} onRegister={() => openAuth("register", "free")} />
         )}
       </div>
       {authModalMode && (
-        <AuthModal mode={authModalMode} onModeChange={setAuthModalMode} onClose={() => setAuthModalMode(null)} onLogin={loginWithCredentials} onRegister={registerWithCredentials} />
+        <AuthModal
+          mode={authModalMode}
+          initialPlan={authInitialPlan}
+          onModeChange={setAuthModalMode}
+          onClose={() => { setAuthModalMode(null); setAuthInitialPlan("free"); }}
+          onLogin={loginWithCredentials}
+          onRegister={registerWithCredentials}
+        />
       )}
     </>
   );

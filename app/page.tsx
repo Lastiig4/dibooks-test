@@ -9,6 +9,11 @@ import {
   fetchPublishedDashboardBooksFromSupabase,
 } from "@/lib/supabase/dashboardBooks";
 import { useDemoAuth } from "@/lib/auth";
+import {
+  PUBLIC_PLANS,
+  openDiBooksAuth,
+  type PublicPlanDefinition,
+} from "@/lib/plans";
 
 type DashboardBook = DiBook & {
   source?: "library" | "dashboard";
@@ -22,22 +27,6 @@ type DashboardBook = DiBook & {
 
 const FALLBACK_COVER_CLASS = "from-blue-950 via-slate-950 to-purple-950";
 const FALLBACK_ACCENT_CLASS = "border-blue-500/50";
-
-function DiBooksLogo() {
-  return (
-    <Link href="/" className="group flex items-end leading-none" aria-label="DiBooks home">
-      <span className="text-5xl font-black tracking-tight text-white transition group-hover:text-blue-200 sm:text-6xl">
-        DI
-      </span>
-      <span
-        className="ml-1 text-5xl italic text-white transition group-hover:text-blue-200 sm:text-6xl"
-        style={{ fontFamily: "Georgia, Times New Roman, serif" }}
-      >
-        Books
-      </span>
-    </Link>
-  );
-}
 
 function getBookStatusLabel(book: DashboardBook) {
   if (book.source === "dashboard") return book.published ? "Live" : book.status;
@@ -64,13 +53,7 @@ function AccessBadge({ book }: { book: DashboardBook }) {
 
 function BookBadge({ children, light = false }: { children: React.ReactNode; light?: boolean }) {
   return (
-    <span
-      className={
-        light
-          ? "rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black shadow-sm"
-          : "rounded-full bg-black/45 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white/90 ring-1 ring-white/10 backdrop-blur-sm"
-      }
-    >
+    <span className={light ? "rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black shadow-sm" : "rounded-full bg-black/45 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white/90 ring-1 ring-white/10 backdrop-blur-sm"}>
       {children}
     </span>
   );
@@ -79,11 +62,8 @@ function BookBadge({ children, light = false }: { children: React.ReactNode; lig
 function CoverArtwork({ book, large = false }: { book: DashboardBook; large?: boolean }) {
   const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
   const hasCustomCover = !!book.coverImage;
-
   return (
-    <div
-      className={`relative isolate ${large ? "h-80" : "h-64"} overflow-hidden bg-gradient-to-br ${coverClass}`}
-    >
+    <div className={`relative isolate ${large ? "h-80" : "h-64"} overflow-hidden bg-gradient-to-br ${coverClass}`}>
       {hasCustomCover && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={book.coverImage} alt={`Cover van ${book.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover" />
@@ -103,14 +83,8 @@ function CoverArtwork({ book, large = false }: { book: DashboardBook; large?: bo
 function BookCard({ book, large = false }: { book: DashboardBook; large?: boolean }) {
   const href = `/books/${book.id}`;
   const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
-
   return (
-    <Link
-      href={href}
-      className={`group relative shrink-0 overflow-hidden rounded-2xl border ${accentClass} bg-neutral-950 shadow-2xl transition hover:-translate-y-1 hover:scale-[1.01] hover:border-white/60 ${
-        large ? "w-[330px] sm:w-[400px]" : "w-[250px] sm:w-[290px]"
-      }`}
-    >
+    <Link href={href} className={`group relative shrink-0 overflow-hidden rounded-2xl border ${accentClass} bg-neutral-950 shadow-2xl transition hover:-translate-y-1 hover:scale-[1.01] hover:border-white/60 ${large ? "w-[330px] sm:w-[400px]" : "w-[250px] sm:w-[290px]"}`}>
       <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-4 py-3">
         <BookBadge>{book.primaryGenre}</BookBadge>
         <div className="flex items-center gap-2">
@@ -118,24 +92,13 @@ function BookCard({ book, large = false }: { book: DashboardBook; large?: boolea
           <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
         </div>
       </div>
-
       <CoverArtwork book={book} large={large} />
-
       <div className="flex min-h-[136px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-5 backdrop-blur-[2px]">
-        <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300/80">
-          Interactive story
-        </p>
-        <h3 className="mt-2 line-clamp-2 text-3xl font-black leading-none text-white">
-          {book.title}
-        </h3>
-
+        <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300/80">Interactief verhaal</p>
+        <h3 className="mt-2 line-clamp-2 text-3xl font-black leading-none text-white">{book.title}</h3>
         <div className="mt-5 flex items-center justify-between gap-3">
-          <span className="truncate text-xs font-black uppercase tracking-widest text-neutral-500">
-            {book.author}
-          </span>
-          <span className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white group-hover:bg-blue-500">
-            Bekijk
-          </span>
+          <span className="truncate text-xs font-black uppercase tracking-widest text-neutral-500">{book.author}</span>
+          <span className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white group-hover:bg-blue-500">Bekijk</span>
         </div>
       </div>
     </Link>
@@ -146,7 +109,6 @@ function FeaturedPanel({ book }: { book: DashboardBook }) {
   const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
   const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
   const hasCustomCover = !!book.coverImage;
-
   return (
     <Link href={`/books/${book.id}`} className="hidden w-[190px] justify-self-end xl:block">
       <div className={`overflow-hidden rounded-[1.25rem] border ${accentClass} bg-neutral-950/80 shadow-xl backdrop-blur-md transition hover:-translate-y-1`}>
@@ -177,22 +139,210 @@ function FeaturedPanel({ book }: { book: DashboardBook }) {
   );
 }
 
-function GuestLibraryStrip() {
+function GuestHero() {
   return (
-    <section className="px-4 pt-5 sm:px-6 lg:px-8">
-      <div className="rounded-3xl border border-blue-300/15 bg-blue-500/[0.06] p-5 shadow-xl shadow-blue-950/10 sm:flex sm:items-center sm:justify-between sm:gap-6">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.28em] text-blue-200">Nog geen account?</p>
-          <p className="mt-2 max-w-3xl text-sm font-bold leading-6 text-neutral-300">
-            Maak gratis een account om boeken te lezen, voortgang op te slaan en favorieten te bewaren. Login en registreer staan rechtsboven los in de balk.
+    <section className="px-4 pt-7 sm:px-6 sm:pt-10 lg:px-8">
+      <div className="relative isolate overflow-hidden rounded-[2rem] border border-blue-300/15 bg-[#080c18] shadow-2xl shadow-blue-950/20">
+        <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_10%_10%,rgba(37,99,235,0.30),transparent_34%),radial-gradient(circle_at_88%_18%,rgba(168,85,247,0.20),transparent_30%),linear-gradient(135deg,#080c18_0%,#070912_52%,#05070d_100%)]" />
+        <div className="absolute -right-32 -top-32 -z-10 h-[430px] w-[430px] rounded-full border border-blue-300/10" />
+        <div className="absolute -right-12 top-10 -z-10 h-[360px] w-[360px] rounded-full border border-violet-300/10" />
+        <div className="grid min-h-[520px] items-center gap-10 p-6 sm:p-10 lg:grid-cols-[1.08fr_0.92fr] lg:p-14">
+          <div className="max-w-4xl">
+            <div className="inline-flex rounded-full border border-cyan-300/25 bg-cyan-400/10 px-4 py-2 text-xs font-black uppercase tracking-[0.30em] text-cyan-100">
+              Boeken die met je meebewegen
+            </div>
+            <h1 className="mt-7 text-5xl font-black leading-[0.94] sm:text-7xl lg:text-8xl">
+              Lees geen verhaal. <span className="text-blue-300">Beleef jouw versie.</span>
+            </h1>
+            <p className="mt-6 max-w-2xl text-base font-semibold leading-8 text-neutral-300 sm:text-xl">
+              DiBooks combineert lezen met keuzes, verschillende verhaalroutes, cutscenes en interactieve momenten. Jouw beslissingen bepalen hoe het verhaal verdergaat.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button type="button" onClick={() => openDiBooksAuth("register", "free")} className="rounded-2xl bg-white px-7 py-4 text-base font-black text-black shadow-xl transition hover:-translate-y-0.5 hover:bg-neutral-200">
+                Gratis beginnen
+              </button>
+              <a href="#library" className="rounded-2xl border border-white/15 bg-white/[0.045] px-7 py-4 text-base font-black text-white transition hover:bg-white/10">
+                Ontdek boeken
+              </a>
+              <a href="#plannen" className="rounded-2xl border border-blue-400/25 bg-blue-500/10 px-7 py-4 text-base font-black text-blue-100 transition hover:bg-blue-500/20">
+                Bekijk plannen
+              </a>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-2 text-xs font-black uppercase tracking-widest text-neutral-400">
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Keuzes</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Meerdere routes</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Cutscenes</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">Minigames</span>
+            </div>
+          </div>
+
+          <div className="relative mx-auto w-full max-w-xl">
+            <div className="rounded-[2rem] border border-white/12 bg-black/35 p-5 shadow-2xl backdrop-blur-xl sm:p-7">
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.30em] text-cyan-300">Een DiBook</p>
+                  <p className="mt-1 text-xl font-black">Jouw route door het verhaal</p>
+                </div>
+                <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-200">Interactief</span>
+              </div>
+              <div className="mt-6 grid gap-4">
+                <div className="mx-auto w-[78%] rounded-2xl border border-blue-400/30 bg-blue-500/12 p-4 text-center">
+                  <p className="text-xs font-black uppercase tracking-widest text-blue-200">Lees</p>
+                  <p className="mt-1 text-sm font-bold text-neutral-200">Een geheim wordt ontdekt...</p>
+                </div>
+                <div className="mx-auto h-6 w-px bg-white/20" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4 text-center">
+                    <p className="text-xs font-black uppercase tracking-widest text-violet-200">Keuze A</p>
+                    <p className="mt-2 text-sm font-bold">Vertel de waarheid</p>
+                  </div>
+                  <div className="rounded-2xl border border-orange-400/30 bg-orange-500/10 p-4 text-center">
+                    <p className="text-xs font-black uppercase tracking-widest text-orange-200">Keuze B</p>
+                    <p className="mt-2 text-sm font-bold">Hou het geheim</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="mx-auto h-6 w-px bg-violet-300/25" />
+                  <div className="mx-auto h-6 w-px bg-orange-300/25" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center text-sm font-black text-neutral-300">Route verandert</div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center text-sm font-black text-neutral-300">Andere gevolgen</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GuestHowItWorks() {
+  const cards = [
+    { number: "01", title: "Lees", text: "Een DiBook voelt als een echt boek, maar kan op precies het juiste moment interactief worden." },
+    { number: "02", title: "Kies & speel", text: "Maak keuzes, bekijk korte cutscenes of voltooi een minigame zonder uit het verhaal te worden gehaald." },
+    { number: "03", title: "Leef met de gevolgen", text: "Flags en verhaalroutes onthouden wat jij hebt gedaan. Een volgende scène kan daardoor compleet anders verlopen." },
+  ];
+  return (
+    <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:px-10">
+      <div className="max-w-3xl">
+        <p className="text-xs font-black uppercase tracking-[0.32em] text-blue-300">Meer dan een ebook</p>
+        <h2 className="mt-3 text-4xl font-black sm:text-6xl">Een verhaal dat op jou reageert.</h2>
+      </div>
+      <div className="mt-8 grid gap-4 md:grid-cols-3">
+        {cards.map((card) => (
+          <article key={card.number} className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 shadow-xl">
+            <p className="text-3xl font-black text-white/15">{card.number}</p>
+            <h3 className="mt-5 text-2xl font-black">{card.title}</h3>
+            <p className="mt-3 text-sm font-semibold leading-7 text-neutral-400">{card.text}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function GuestAuthorStudio() {
+  return (
+    <section id="auteur-studio" className="scroll-mt-28 px-5 pb-16 sm:px-8 lg:px-10">
+      <div className="mx-auto grid max-w-7xl gap-8 overflow-hidden rounded-[2rem] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,145,178,0.10),rgba(8,10,18,0.96)_45%,rgba(124,58,237,0.10))] p-6 sm:p-9 lg:grid-cols-[0.9fr_1.1fr] lg:p-12">
+        <div className="flex flex-col justify-center">
+          <p className="text-xs font-black uppercase tracking-[0.32em] text-cyan-300">DiBooks Auteur Studio</p>
+          <h2 className="mt-4 text-4xl font-black leading-none sm:text-6xl">Schrijf niet alleen een boek. Bouw een verhaalwereld.</h2>
+          <p className="mt-5 max-w-2xl text-base font-semibold leading-8 text-neutral-300">
+            Maak tekst, keuzes, media en logica visueel aan elkaar vast. Met nodes, paths, variabelen en IF-voorwaarden bouw je vertakkingen zonder zelf te programmeren.
+          </p>
+          <div className="mt-7 flex flex-wrap gap-2 text-xs font-black uppercase tracking-widest text-neutral-400">
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3 py-2">Nodes</span>
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3 py-2">Paths</span>
+            <span className="rounded-full border border-violet-300/20 bg-violet-500/10 px-3 py-2">Flags & variabelen</span>
+            <span className="rounded-full border border-violet-300/20 bg-violet-500/10 px-3 py-2">IF / ELSE</span>
+          </div>
+          <button type="button" onClick={() => openDiBooksAuth("register", "author_pro")} className="mt-8 w-fit rounded-2xl bg-cyan-500 px-6 py-4 text-sm font-black text-black transition hover:-translate-y-0.5 hover:bg-cyan-400">
+            Kies Auteur
+          </button>
+        </div>
+
+        <div className="rounded-[1.75rem] border border-white/10 bg-[#080b12] p-5 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.30em] text-neutral-500">Auteur Studio</p>
+              <p className="mt-1 text-lg font-black">Visuele verhaalmap</p>
+            </div>
+            <span className="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-200">No-code</span>
+          </div>
+          <div className="relative mt-5 min-h-[330px] overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(rgba(51,65,85,0.35)_1px,transparent_1px),linear-gradient(90deg,rgba(51,65,85,0.35)_1px,transparent_1px)] bg-[size:42px_42px] p-5">
+            <div className="absolute left-[42%] top-10 rounded-2xl border border-blue-400/40 bg-blue-600 px-5 py-3 text-sm font-black shadow-xl">Hoofdstuk 1</div>
+            <div className="absolute left-[47%] top-[83px] h-10 w-1 bg-blue-400/40" />
+            <div className="absolute left-[36%] top-[120px] rounded-2xl border border-white/15 bg-neutral-900 px-6 py-4 text-sm font-black shadow-xl">Tekstscene</div>
+            <div className="absolute left-[47%] top-[170px] h-9 w-1 bg-violet-400/40" />
+            <div className="absolute left-[37%] top-[205px] rounded-2xl border border-orange-400/35 bg-orange-500/15 px-5 py-4 text-sm font-black text-orange-100 shadow-xl">Keuzemenu</div>
+            <div className="absolute left-[29%] top-[257px] h-10 w-1 -rotate-[38deg] bg-white/20" />
+            <div className="absolute left-[65%] top-[257px] h-10 w-1 rotate-[38deg] bg-white/20" />
+            <div className="absolute bottom-5 left-[10%] rounded-xl border border-cyan-400/35 bg-cyan-500/15 px-4 py-3 text-xs font-black text-cyan-100">Fx: vertrouwen +1</div>
+            <div className="absolute bottom-5 right-[7%] rounded-xl border border-teal-400/35 bg-teal-500/15 px-4 py-3 text-xs font-black text-teal-100">IF: geheim bekend?</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function planAccent(plan: PublicPlanDefinition) {
+  if (plan.accent === "emerald") return "border-emerald-400/25 bg-emerald-500/[0.07]";
+  if (plan.accent === "blue") return "border-blue-400/30 bg-blue-500/[0.08]";
+  return "border-violet-400/30 bg-violet-500/[0.08]";
+}
+
+function planButton(plan: PublicPlanDefinition) {
+  if (plan.accent === "emerald") return "bg-emerald-400 text-black hover:bg-emerald-300";
+  if (plan.accent === "blue") return "bg-blue-600 text-white hover:bg-blue-500";
+  return "bg-violet-600 text-white hover:bg-violet-500";
+}
+
+function GuestPlans() {
+  return (
+    <section id="plannen" className="scroll-mt-28 px-5 pb-20 sm:px-8 lg:px-10">
+      <div className="mx-auto max-w-7xl">
+        <div className="text-center">
+          <p className="text-xs font-black uppercase tracking-[0.32em] text-blue-300">Kies jouw DiBooks</p>
+          <h2 className="mt-4 text-4xl font-black sm:text-6xl">Eén account. Drie manieren om te beginnen.</h2>
+          <p className="mx-auto mt-4 max-w-3xl text-sm font-semibold leading-7 text-neutral-400 sm:text-base">
+            Gratis en Reader zijn allebei gemaakt om te lezen. Reader voegt straks premiumboeken toe, terwijl Auteur ook de volledige Auteur Studio en publicatieflow opent.
           </p>
         </div>
-        <Link
-          href="/editor"
-          className="mt-4 inline-flex rounded-2xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-neutral-200 sm:mt-0"
-        >
-          Probeer Auteur Studio
-        </Link>
+        <div className="mt-9 grid gap-5 lg:grid-cols-3">
+          {PUBLIC_PLANS.map((plan) => (
+            <article key={plan.id} className={`relative flex min-h-[420px] flex-col rounded-[2rem] border p-7 shadow-2xl ${planAccent(plan)}`}>
+              {plan.id === "reader_plus" && (
+                <span className="absolute right-5 top-5 rounded-full border border-blue-300/25 bg-blue-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-100">Voor lezers</span>
+              )}
+              {plan.id === "author_pro" && (
+                <span className="absolute right-5 top-5 rounded-full border border-violet-300/25 bg-violet-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-100">Studio</span>
+              )}
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-neutral-500">{plan.eyebrow}</p>
+              <h3 className="mt-3 text-4xl font-black">{plan.name}</h3>
+              <p className="mt-3 text-xl font-black text-white/80">{plan.priceLabel}</p>
+              {plan.paid && <p className="mt-1 text-xs font-bold text-neutral-500">Betaling wordt later gekoppeld.</p>}
+              <p className="mt-5 text-sm font-semibold leading-7 text-neutral-300">{plan.description}</p>
+              <div className="mt-6 grid gap-3">
+                {plan.features.map((feature) => (
+                  <div key={feature} className="flex items-start gap-3 text-sm font-bold text-neutral-200">
+                    <span className="mt-0.5 text-emerald-300">✓</span>
+                    <span>{feature}</span>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={() => openDiBooksAuth("register", plan.id)} className={`mt-auto rounded-2xl px-5 py-4 text-sm font-black transition hover:-translate-y-0.5 ${planButton(plan)}`}>
+                {plan.id === "free" ? "Gratis account maken" : `${plan.name} kiezen`}
+              </button>
+            </article>
+          ))}
+        </div>
+        <p className="mt-5 text-center text-xs font-bold leading-6 text-neutral-600">
+          Admin is een interne beheerrol en verschijnt nooit als registratieoptie.
+        </p>
       </div>
     </section>
   );
@@ -200,19 +350,14 @@ function GuestLibraryStrip() {
 
 function BookRow({ title, rowBooks }: { title: string; rowBooks: DashboardBook[] }) {
   if (rowBooks.length === 0) return null;
-
   return (
     <section className="mt-10">
       <div className="mb-4 flex items-center justify-between gap-4 px-5 sm:px-8 lg:px-10">
         <h2 className="text-xl font-black text-white sm:text-2xl">{title}</h2>
-        <button className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-neutral-300 hover:border-white/30 hover:text-white">
-          Meer bekijken
-        </button>
+        <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-neutral-500">{rowBooks.length} boeken</span>
       </div>
       <div className="flex gap-5 overflow-x-auto px-5 pb-3 sm:px-8 lg:px-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {rowBooks.map((book) => (
-          <BookCard key={`${title}-${book.source ?? "library"}-${book.id}`} book={book} />
-        ))}
+        {rowBooks.map((book) => <BookCard key={`${title}-${book.source ?? "library"}-${book.id}`} book={book} />)}
       </div>
     </section>
   );
@@ -220,12 +365,8 @@ function BookRow({ title, rowBooks }: { title: string; rowBooks: DashboardBook[]
 
 function makeGenreRows(allBooks: DashboardBook[]) {
   const preferredGenres = ["Sci-fi", "Mystery", "Fantasy", "Thriller", "Keuzeverhaal", "Interactief"];
-
   return preferredGenres
-    .map((genre) => ({
-      genre,
-      books: allBooks.filter((book) => book.genres.includes(genre)),
-    }))
+    .map((genre) => ({ genre, books: allBooks.filter((book) => book.genres.includes(genre)) }))
     .filter((row) => row.books.length > 0);
 }
 
@@ -236,14 +377,12 @@ export default function LibraryPage() {
 
   useEffect(() => {
     let cancelled = false;
-
     async function loadDashboardBooks() {
       try {
         const [nextPublishedBooks, nextComingSoonBooks] = await Promise.all([
           fetchPublishedDashboardBooksFromSupabase(),
           fetchComingSoonDashboardBooksFromSupabase(),
         ]);
-
         if (!cancelled) {
           setPublishedBooks(nextPublishedBooks as DashboardBook[]);
           setComingSoonBooks(nextComingSoonBooks as DashboardBook[]);
@@ -252,23 +391,12 @@ export default function LibraryPage() {
         console.error("Kon gepubliceerde dashboardboeken niet laden uit Supabase.", error);
       }
     }
-
     void loadDashboardBooks();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  const allBooks = useMemo<DashboardBook[]>(() => {
-    return [...publishedBooks, ...comingSoonBooks];
-  }, [publishedBooks, comingSoonBooks]);
-
-  const liveBooks = useMemo(
-    () => publishedBooks.filter((book) => book.published),
-    [publishedBooks],
-  );
-
+  const allBooks = useMemo<DashboardBook[]>(() => [...publishedBooks, ...comingSoonBooks], [publishedBooks, comingSoonBooks]);
+  const liveBooks = useMemo(() => publishedBooks.filter((book) => book.published), [publishedBooks]);
   const featuredBook = liveBooks[0] ?? comingSoonBooks[0] ?? null;
   const mostReadBooks = liveBooks.filter((book) => book.mostRead || book.source === "dashboard").slice(0, 12);
   const genreRows = makeGenreRows(liveBooks);
@@ -276,107 +404,98 @@ export default function LibraryPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#05070d] text-white">
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_36%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.12),transparent_35%),linear-gradient(180deg,#05070d_0%,#05070d_45%,#020308_100%)]" />
-      <AppNav title="Library" subtitle="Ontdek interactieve boeken" />
+      <AppNav title={isLoggedIn ? "Library" : "DiBooks"} subtitle={isLoggedIn ? "Ontdek interactieve boeken" : "Lees, kies en bouw interactieve verhalen"} />
 
-      {featuredBook ? (
-      <section className="px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-        <div className={`relative isolate overflow-hidden rounded-[1.5rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
-          {featuredBook.bannerImage && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={featuredBook.bannerImage} alt={`Banner van ${featuredBook.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover opacity-85" />
-          )}
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.08),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(37,99,235,0.10),transparent_34%),linear-gradient(90deg,rgba(0,0,0,0.88),rgba(0,0,0,0.72),rgba(0,0,0,0.50))]" />
-          <div className="absolute -right-20 top-8 -z-10 h-[280px] w-[280px] rounded-full border border-white/8" />
-          <div className="absolute -right-4 top-20 -z-10 h-[380px] w-[380px] rounded-full border border-white/5" />
-
-          <div className="relative grid min-h-[285px] items-center gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_210px] lg:p-9">
-            <div className="max-w-3xl">
-              {featuredBook.source === "dashboard" && (
-                <div className="mb-4 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-emerald-200">
-                  Nieuw gepubliceerd vanuit Dashboard
-                </div>
-              )}
-              <div className="mb-5 flex flex-wrap gap-2">
-                {featuredBook.genres.map((genre) => (
-                  <BookBadge key={genre}>{genre}</BookBadge>
-                ))}
-                <AccessBadge book={featuredBook} />
-                <BookBadge light>{getBookStatusLabel(featuredBook)}</BookBadge>
-              </div>
-              <h1 className="max-w-4xl text-4xl font-black leading-none sm:text-5xl lg:text-6xl">
-                {featuredBook.title}
-              </h1>
-              <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">
-                {featuredBook.subtitle}
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                {featuredBook.published ? (
-                  <Link
-                    href={`/books/${featuredBook.id}/read`}
-                    className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200"
-                  >
-                    Lees nu
-                  </Link>
-                ) : (
-                  <span className="rounded-2xl bg-neutral-700 px-7 py-4 text-lg font-black text-neutral-300">
-                    Binnenkort
-                  </span>
-                )}
-                <Link
-                  href={`/books/${featuredBook.id}`}
-                  className="rounded-2xl border border-white/15 bg-black/30 px-7 py-4 text-lg font-black text-white hover:bg-white/10"
-                >
-                  Meer informatie
-                </Link>
-              </div>
-            </div>
-
-            <FeaturedPanel book={featuredBook} />
-          </div>
-        </div>
-      </section>
-      ) : (
-        <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-8 shadow-2xl sm:p-12">
-            <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">DiBooks Library</p>
-            <h1 className="mt-4 max-w-4xl text-5xl font-black leading-none sm:text-7xl">Nog geen boeken live.</h1>
-            <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">
-              De standaard testboeken zijn weggehaald. Publiceer straks je eigen boeken vanuit het Dashboard, of zet een concept op Binnenkort om hem hier alvast aan te kondigen.
-            </p>
-          </div>
-        </section>
+      {!isLoggedIn && (
+        <>
+          <GuestHero />
+          <GuestHowItWorks />
+          <GuestAuthorStudio />
+          <GuestPlans />
+        </>
       )}
 
-      {!isLoggedIn && <GuestLibraryStrip />}
+      <div id="library" className="scroll-mt-28">
+        {!isLoggedIn && (
+          <div className="mx-auto max-w-7xl px-5 pt-2 sm:px-8 lg:px-10">
+            <p className="text-xs font-black uppercase tracking-[0.32em] text-blue-300">DiBooks Library</p>
+            <h2 className="mt-3 text-4xl font-black sm:text-6xl">Ontdek wat er nu te lezen is.</h2>
+          </div>
+        )}
 
-      {comingSoonBooks.length > 0 && <BookRow title="Binnenkort" rowBooks={comingSoonBooks} />}
+        {featuredBook ? (
+          <section className="px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+            <div className={`relative isolate overflow-hidden rounded-[1.5rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
+              {featuredBook.bannerImage && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={featuredBook.bannerImage} alt={`Banner van ${featuredBook.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover opacity-85" />
+              )}
+              <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.08),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(37,99,235,0.10),transparent_34%),linear-gradient(90deg,rgba(0,0,0,0.88),rgba(0,0,0,0.72),rgba(0,0,0,0.50))]" />
+              <div className="absolute -right-20 top-8 -z-10 h-[280px] w-[280px] rounded-full border border-white/8" />
+              <div className="absolute -right-4 top-20 -z-10 h-[380px] w-[380px] rounded-full border border-white/5" />
+              <div className="relative grid min-h-[285px] items-center gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_210px] lg:p-9">
+                <div className="max-w-3xl">
+                  {featuredBook.source === "dashboard" && (
+                    <div className="mb-4 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-emerald-200">Nieuw gepubliceerd vanuit Dashboard</div>
+                  )}
+                  <div className="mb-5 flex flex-wrap gap-2">
+                    {featuredBook.genres.map((genre) => <BookBadge key={genre}>{genre}</BookBadge>)}
+                    <AccessBadge book={featuredBook} />
+                    <BookBadge light>{getBookStatusLabel(featuredBook)}</BookBadge>
+                  </div>
+                  <h1 className="max-w-4xl text-4xl font-black leading-none sm:text-5xl lg:text-6xl">{featuredBook.title}</h1>
+                  <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">{featuredBook.subtitle}</p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    {featuredBook.published ? (
+                      <Link href={`/books/${featuredBook.id}/read`} className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200">Lees nu</Link>
+                    ) : (
+                      <span className="rounded-2xl bg-neutral-700 px-7 py-4 text-lg font-black text-neutral-300">Binnenkort</span>
+                    )}
+                    <Link href={`/books/${featuredBook.id}`} className="rounded-2xl border border-white/15 bg-black/30 px-7 py-4 text-lg font-black text-white hover:bg-white/10">Meer informatie</Link>
+                  </div>
+                </div>
+                <FeaturedPanel book={featuredBook} />
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
+            <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-8 shadow-2xl sm:p-12">
+              <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">DiBooks Library</p>
+              <h1 className="mt-4 max-w-4xl text-5xl font-black leading-none sm:text-7xl">Nog geen boeken live.</h1>
+              <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">Zodra auteurs hun eerste DiBooks publiceren, verschijnen ze hier automatisch in de Library.</p>
+            </div>
+          </section>
+        )}
 
-      {liveBooks.length > 0 && <BookRow title="Nieuw in de Library" rowBooks={liveBooks} />}
+        {comingSoonBooks.length > 0 && <BookRow title="Binnenkort" rowBooks={comingSoonBooks} />}
+        {liveBooks.length > 0 && <BookRow title="Nieuw in de Library" rowBooks={liveBooks} />}
+        <BookRow title="Meest gelezen boeken" rowBooks={mostReadBooks} />
+        {genreRows.map((row) => <BookRow key={row.genre} title={row.genre} rowBooks={row.books} />)}
+      </div>
 
-      <BookRow title="Meest gelezen boeken" rowBooks={mostReadBooks} />
-
-      {genreRows.map((row) => (
-        <BookRow key={row.genre} title={row.genre} rowBooks={row.books} />
-      ))}
-
-      <section className="mx-5 mb-12 mt-12 rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:mx-8 lg:mx-10">
+      <section className="mx-5 mb-12 mt-14 rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:mx-8 lg:mx-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-widest text-blue-300">Auteur?</p>
-            <h2 className="mt-2 text-2xl font-black">Open je Dashboard of Auteur Studio</h2>
+            <p className="text-sm font-black uppercase tracking-widest text-cyan-300">Auteur Studio</p>
+            <h2 className="mt-2 text-2xl font-black">Van idee naar interactief boek</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
-              Iedereen kan in de Auteur Studio een boek maken en lokaal opslaan. Met account krijg je Dashboard-opslag en publicatie naar de Library.
+              {permissions.canUseEditor
+                ? "Je Auteur-plan is actief. Open je Dashboard of ga direct verder in de Auteur Studio."
+                : isLoggedIn
+                  ? "De Auteur Studio hoort bij het Auteur-plan. Je huidige leesaccount blijft gewoon bruikbaar voor de Library."
+                  : "Kies het Auteur-plan om straks de volledige Studio, het Dashboard en de publicatieflow te gebruiken."}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            {permissions.canUseDashboard && (
-              <Link href="/dashboard" className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-center font-black text-white hover:bg-white/10">
-                Naar Dashboard
-              </Link>
+            {permissions.canUseDashboard && <Link href="/dashboard" className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-center font-black text-white hover:bg-white/10">Naar Dashboard</Link>}
+            {permissions.canUseEditor ? (
+              <Link href="/editor" className="rounded-2xl bg-cyan-500 px-6 py-4 text-center font-black text-black hover:bg-cyan-400">Naar Auteur Studio</Link>
+            ) : isLoggedIn ? (
+              <Link href="/account" className="rounded-2xl bg-violet-600 px-6 py-4 text-center font-black text-white hover:bg-violet-500">Bekijk Auteur-plan</Link>
+            ) : (
+              <button type="button" onClick={() => openDiBooksAuth("register", "author_pro")} className="rounded-2xl bg-violet-600 px-6 py-4 text-center font-black text-white hover:bg-violet-500">Kies Auteur</button>
             )}
-            <Link href="/editor" className="rounded-2xl bg-blue-600 px-6 py-4 text-center font-black text-white hover:bg-blue-500">
-              Naar Auteur Studio
-            </Link>
           </div>
         </div>
       </section>
@@ -384,7 +503,6 @@ export default function LibraryPage() {
       <footer className="border-t border-white/5 px-5 py-8 text-sm font-bold text-neutral-500 sm:px-8 lg:px-10">
         DiBooks Library • {allBooks.length} boeken in catalogus • {liveBooks.length} live • {comingSoonBooks.length} binnenkort
       </footer>
-
     </main>
   );
 }

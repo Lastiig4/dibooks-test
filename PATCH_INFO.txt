@@ -1,50 +1,92 @@
-DiBooks Patch - Dropdown Theme + Start Chapter V1
-================================================
+DiBooks Patch - Guest Library & Plans V1
+========================================
 
-Dit is een gecombineerde patch.
+BELANGRIJK: RUN EERST DE SQL
+-----------------------------
+Voer eerst dit bestand uit in Supabase -> SQL Editor:
 
-1. READER DROPDOWN THEME FIX
-Bevat de vorige fix die je nog niet had toegepast:
-- Donker thema -> native dropdowns openen donker.
-- Oud boek -> native dropdowns openen donker.
-- Licht thema -> native dropdowns openen licht.
+GUEST_LIBRARY_PLANS_V1_SUPABASE.sql
 
-2. NIEUW SCHOON PROJECT START MET HOOFDSTUK-MARKER
-Voorheen:
-- node_1 = normale tekstnode "Intro"
+Daarna pas de mappen app / components / lib over je project heen slepen.
 
-Voortaan:
-- node_1 = Hoofdstuk-marker
-- label = Hoofdstuk 1
-- chapterNumber = 1
-- deze node is automatisch de start-node
+WAT DEZE UPDATE DOET
+--------------------
+1. Nieuwe gast-home / Library
+- Uitgelogde bezoekers krijgen een uitnodigende DiBooks-intro.
+- Uitleg over keuzes, routes, cutscenes en minigames.
+- Groot Auteur Studio-blok met nodes / paths / flags / IF.
+- Echte Library blijft onder de introductie zichtbaar.
+- Ingelogde gebruikers houden de compacte normale Library-ervaring.
 
-Nieuwe workflow:
-Hoofdstuk 1 -> eerste tekstnode -> ...
+2. Drie openbare plannen
+- Gratis
+- Reader
+- Auteur
 
-Reset editor gebruikt dezelfde initialNodes en begint dus ook opnieuw
-met Hoofdstuk 1 in plaats van een lege normale tekstpagina.
+Admin is GEEN registratieoptie.
 
-De hoofdstuk-marker:
-- telt niet mee als verhaalnode;
-- verschijnt niet als eigen readerpagina;
-- is alleen structuur;
-- gebruikt één vervolgpath.
+3. Registratie-flow vernieuwd
+- Registreer toont drie duidelijke plan-kaarten.
+- Gratis -> uiteindelijk plan free + role reader.
+- Reader -> uiteindelijk plan reader_plus + role reader.
+- Auteur -> uiteindelijk plan author_pro + role author.
 
-BEHOUDEN
-- Niet meer automatisch tonen voor de handleiding
-- Volledige editor tutorial
-- Global Page Numbers
-- Reader Readback History
-- Reader instellingen
-- Chapter Marker systeem
-- Moderatie/editor functionaliteit
+Omdat er nog geen betaalprovider gekoppeld is, geeft de browser NOOIT zelf
+betaalde rechten. Reader/Auteur worden nu opgeslagen als signup-intentie.
+Het account start veilig als free / reader.
 
-GEEN SQL NODIG.
+4. Plan en role blijven gescheiden
+- plan bepaalt abonnement/toegang tot betaalde functies.
+- role bepaalt technische gebruikersrechten.
+- reader is dus correct voor zowel free als reader_plus.
 
-INSTALLEREN
-1. ZIP uitpakken.
-2. Sleep map 'app' over dibooks_author_studio.
-3. Bestanden vervangen.
-4. npm run build.
-5. Commit/push naar GitHub/Vercel.
+5. Database synchroniseert role zodra een betaald plan echt actief wordt
+- plan free        -> role reader
+- plan reader_plus -> role reader
+- plan author_pro  -> role author
+- admin blijft altijd admin
+
+Een toekomstige Stripe/Mollie/payment-webhook hoeft alleen `profiles.plan`
+server-side te wijzigen. De database zet role daarna automatisch goed.
+
+6. Stoppen met Auteur
+Als author_pro later wordt teruggezet naar free:
+- role wordt reader
+- Auteur Studio/Dashboard schrijven wordt geblokkeerd
+- bestaande gepubliceerde boeken/eigenaarschap worden NIET verwijderd
+- dit vormt de basis voor een toekomstige read-only royalties/payout omgeving
+
+7. Navigatie
+- Gast krijgt geen directe Auteur Studio-link meer; het pennetje springt naar
+  de Studio-uitleg op de homepage.
+- Alleen een actief Auteur-plan (of admin) krijgt de Studio/Dashboard knop.
+- Moderatie-link voor admin blijft behouden.
+- NotificationBell blijft behouden.
+
+8. Auth performance fix behouden
+De Instant Auth V4 aanpak blijft intact:
+- INITIAL_SESSION
+- geen parallelle getSession startup race
+- geen Supabase DB-calls binnen onAuthStateChange
+
+TESTEN
+------
+1. Run SQL.
+2. Vervang app / components / lib.
+3. npm run build.
+4. Deploy.
+5. Log uit -> nieuwe guest landing moet zichtbaar zijn.
+6. Klik Gratis -> registratie met Gratis geselecteerd.
+7. Klik Reader/Auteur op homepage -> registratie opent direct met dat plan.
+8. Nieuw account hoort in profiles als free / reader te starten.
+9. Simuleer later een betaling in Supabase door ALLEEN plan te wijzigen:
+   author_pro -> role wordt automatisch author
+   reader_plus -> role blijft/wordt reader
+   free -> role wordt reader
+10. Controleer admin: role admin blijft admin bij planwijzigingen.
+
+GEEN BETALINGSPROVIDER IN DEZE PATCH
+------------------------------------
+De architectuur is payment-ready, maar deze patch doet bewust geen nepbetaling
+en activeert Reader/Auteur niet client-side. Dat koppelen we later veilig aan
+bijvoorbeeld Stripe of Mollie.
