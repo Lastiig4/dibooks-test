@@ -1,16 +1,18 @@
 {
-  "name": "DiBooks Editor Tab Focus Stability V1.1",
+  "name": "DiBooks Editor Safety + Scene Info V1",
   "date": "2026-08-25",
   "sql_required": false,
   "files": [
-    "lib/auth.ts",
     "app/editor/page.tsx",
+    "app/books/[bookId]/read/page.tsx",
     "PATCH_INFO.txt"
   ],
-  "fixes": [
-    "Grace period for unexpected SIGNED_OUT during tab resume",
-    "Immediate explicit logout retained",
-    "Editor scope no longer depends on role/plan",
-    "No Author Pro alert for transient entitlement refresh"
+  "features": [
+    "Blank scene info clears context",
+    "Legacy chapter info fallback for old nodes",
+    "Editor lock mode",
+    "Multi-step undo up to 50 actions",
+    "Ctrl/Cmd+Z canvas undo",
+    "Undo deleted nodes and paths"
   ]
 }

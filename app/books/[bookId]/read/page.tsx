@@ -94,6 +94,7 @@ type ReaderNode = {
   text: string;
   textHtml: string;
   specialSubtype?: string;
+  sceneInfo?: string;
   chapterNumber?: string;
   chapterTitle?: string;
   chapterSubtitle?: string;
@@ -198,6 +199,41 @@ function escapeHtml(value: string) {
 
 
 const MANUAL_PAGE_BREAK_MARKER = "[[NIEUWE_PAGINA]]";
+const SCENE_INFO_MARKER_ATTR = "data-dibooks-scene-info";
+
+function createSceneInfoMarker(value: string) {
+  const encodedValue = encodeURIComponent(String(value ?? "").trim());
+  return `<div ${SCENE_INFO_MARKER_ATTR}="${encodedValue}" style="display:none" aria-hidden="true"></div>`;
+}
+
+function extractSceneInfoMarker(html: string) {
+  const expression = new RegExp(
+    `${SCENE_INFO_MARKER_ATTR}="([^"]*)"`,
+    "gi",
+  );
+  let match: RegExpExecArray | null = null;
+  let latestValue: string | null = null;
+
+  while ((match = expression.exec(html)) !== null) {
+    try {
+      latestValue = decodeURIComponent(match[1] ?? "");
+    } catch {
+      latestValue = match[1] ?? "";
+    }
+  }
+
+  return latestValue;
+}
+
+function buildPageSceneInfos(pages: string[], initialSceneInfo = "") {
+  let activeSceneInfo = initialSceneInfo;
+
+  return pages.map((pageHtml) => {
+    const markerValue = extractSceneInfoMarker(pageHtml);
+    if (markerValue !== null) activeSceneInfo = markerValue;
+    return activeSceneInfo;
+  });
+}
 const MANUAL_PAGE_BREAK_BLOCK_REGEX = /<p[^>]*>\s*(?:<(?:code|strong|em|span)[^>]*>\s*)*\[\[NIEUWE_PAGINA\]\](?:\s*<\/(?:code|strong|em|span)>)*\s*<\/p>/gi;
 
 function normalizeManualPageBreakMarkers(value: string) {
@@ -249,6 +285,12 @@ function normalizeNode(rawNode: any): ReaderNode {
     text,
     textHtml,
     specialSubtype: data.specialSubtype ?? content.specialSubtype ?? rawNode?.specialSubtype,
+    sceneInfo:
+      data.sceneInfo !== undefined
+        ? data.sceneInfo
+        : content.sceneInfo !== undefined
+          ? content.sceneInfo
+          : rawNode?.sceneInfo,
     chapterNumber:
       data.chapterNumber ?? content.chapterNumber ?? rawNode?.chapterNumber ?? "",
     chapterTitle:
@@ -1110,6 +1152,25 @@ function findNearestReaderChapter(
   return null;
 }
 
+function getLegacyReaderChapterSceneInfo(
+  book: ReaderBook,
+  currentNodeId: string,
+) {
+  const chapter = findNearestReaderChapter(book, currentNodeId);
+  return String(chapter?.chapterSubtitle ?? "").trim();
+}
+
+function getReaderNodeSceneInfo(
+  book: ReaderBook,
+  node: ReaderNode,
+) {
+  if (node.sceneInfo !== undefined) {
+    return String(node.sceneInfo ?? "").trim();
+  }
+
+  return getLegacyReaderChapterSceneInfo(book, node.id);
+}
+
 function plainTextToReaderHtml(value: string) {
   const paragraphs = String(value || "")
     .split(/\n{2,}/)
@@ -1162,6 +1223,16 @@ function splitHtmlIntoReadableBlocks(html: string) {
 
   function pushHtmlBlock(value: string) {
     const withoutMarkers = removeManualPageBreakMarkers(value);
+
+    if (
+      new RegExp(`${SCENE_INFO_MARKER_ATTR}="`, "i").test(
+        withoutMarkers,
+      )
+    ) {
+      blocks.push(withoutMarkers);
+      return;
+    }
+
     if (!stripHtml(withoutMarkers)) return;
     blocks.push(withoutMarkers);
   }
@@ -1486,6 +1557,8 @@ function BookPageReader({
   fontFamily,
   globalPageOffset,
   isSpecialPage = false,
+  initialSceneInfo = "",
+  onSceneInfoChange,
 }: {
   html: string;
   pageIndex: number;
@@ -1499,10 +1572,13 @@ function BookPageReader({
   fontFamily: ReaderFontFamily;
   globalPageOffset: number;
   isSpecialPage?: boolean;
+  initialSceneInfo?: string;
+  onSceneInfoChange?: (sceneInfo: string) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<string[]>([]);
   const [visiblePageCount, setVisiblePageCount] = useState(1);
+  const [pageSceneInfos, setPageSceneInfos] = useState<string[]>([]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -1555,6 +1631,7 @@ function BookPageReader({
       });
 
       setPages(nextPages);
+      setPageSceneInfos(buildPageSceneInfos(nextPages, initialSceneInfo));
       onPageCountChange(nextPages.length);
     };
 
@@ -1573,6 +1650,18 @@ function BookPageReader({
     setPageIndex,
     textSize,
     theme,
+    initialSceneInfo,
+  ]);
+
+  useEffect(() => {
+    onSceneInfoChange?.(
+      pageSceneInfos[pageIndex] ?? initialSceneInfo ?? "",
+    );
+  }, [
+    initialSceneInfo,
+    onSceneInfoChange,
+    pageIndex,
+    pageSceneInfos,
   ]);
 
   useEffect(() => {
@@ -1944,6 +2033,7 @@ export default function ReadBookPage() {
   const [interactionBusy, setInteractionBusy] = useState(false);
   const interactionBusyRef = useRef(false);
   const [storyState, setStoryState] = useState<ReaderStoryState>({});
+  const [activeSceneInfo, setActiveSceneInfo] = useState("");
   const [readerFeedbacks, setReaderFeedbacks] = useState<ReaderFeedbackToast[]>([]);
   const storyStateRef = useRef<ReaderStoryState>({});
   const storyStateReadyRef = useRef(false);
@@ -2185,6 +2275,8 @@ export default function ReadBookPage() {
     const textNodes: ReaderNode[] = [];
     const htmlParts: string[] = [];
     const visited = new Set<string>();
+    const initialSceneInfo = getReaderNodeSceneInfo(book, node);
+    let activeSceneInfo = initialSceneInfo;
     let cursor: ReaderNode | undefined = node;
     let nextNodeAfterChain: ReaderNode | null = null;
 
@@ -2196,6 +2288,20 @@ export default function ReadBookPage() {
     while (cursor && (cursor.type === "text" || cursor.type === "special") && !visited.has(cursor.id)) {
       visited.add(cursor.id);
       textNodes.push(cursor);
+
+      const nodeSceneInfo = getReaderNodeSceneInfo(book, cursor);
+
+      if (nodeSceneInfo !== activeSceneInfo) {
+        if (htmlParts.length > 0) {
+          // Ook een overgang naar lege scène-info begint op een nieuwe pagina.
+          // Daardoor hoort de bovenregel altijd bij één duidelijke tekstnode.
+          htmlParts.push(MANUAL_PAGE_BREAK_MARKER);
+        }
+
+        activeSceneInfo = nodeSceneInfo;
+        htmlParts.push(createSceneInfoMarker(activeSceneInfo));
+      }
+
       const nodeHtml = cursor.textHtml || cursor.text || "Deze tekst-node is nog leeg.";
       const className = cursor.type === "special" ? "dibooks-special-page" : "dibooks-reader-section";
       htmlParts.push(`<section class="${className}" data-node-type="${cursor.type}">${nodeHtml}</section>`);
@@ -2221,6 +2327,7 @@ export default function ReadBookPage() {
       book,
       node,
       activeChapter: findNearestReaderChapter(book, node.id),
+      initialSceneInfo,
       textHtml: htmlParts.join(""),
       textNodes,
       nextNodeAfterChain,
@@ -2228,6 +2335,15 @@ export default function ReadBookPage() {
       outgoingPaths: book.edges.filter((edge) => edge.source === node.id),
     };
   }, [currentNodeId, loadState]);
+
+  useEffect(() => {
+    if (!reader) {
+      setActiveSceneInfo("");
+      return;
+    }
+
+    setActiveSceneInfo(reader.initialSceneInfo ?? "");
+  }, [reader?.node.id, reader?.initialSceneInfo]);
 
   useEffect(() => {
     if (!reader || reader.node.type !== "text" && reader.node.type !== "special") {
@@ -3193,6 +3309,9 @@ export default function ReadBookPage() {
         replayStepIndex ?? 0,
       )
     : reader.activeChapter;
+  const displayedSceneInfo = isTextNode
+    ? activeSceneInfo
+    : "";
 
   const reachedChapters = (() => {
     const seen = new Set<string>();
@@ -3312,11 +3431,13 @@ export default function ReadBookPage() {
               DiBooks Reader
             </p>
             <h1 className="truncate text-xl font-black sm:text-2xl">{book.title}</h1>
-            {displayedChapter && (
+            {(displayedChapter || displayedSceneInfo) && (
               <p className="mt-0.5 truncate text-[11px] font-black tracking-wide text-blue-300/80 sm:text-xs">
-                {formatReaderChapterLabel(displayedChapter)}
-                {displayedChapter.chapterSubtitle
-                  ? ` • ${displayedChapter.chapterSubtitle}`
+                {displayedChapter
+                  ? formatReaderChapterLabel(displayedChapter)
+                  : ""}
+                {displayedSceneInfo
+                  ? `${displayedChapter ? " • " : ""}${displayedSceneInfo}`
                   : ""}
               </p>
             )}
@@ -3629,6 +3750,8 @@ export default function ReadBookPage() {
             fontFamily={fontFamily}
             globalPageOffset={globalPageOffset}
             isSpecialPage={node.type === "special"}
+            initialSceneInfo={reader.initialSceneInfo}
+            onSceneInfoChange={setActiveSceneInfo}
           />
         )}
 

@@ -1,62 +1,72 @@
-DiBooks Patch - Editor Tab Focus Stability V1.1
-================================================
+DiBooks Patch - Editor Safety + Scene Info V1
+=============================================
 
-Deze patch is een vervolg op V1.
+SCÈNE-INFO
+Leeg betekent nu echt leeg.
 
-WAT DE SCREENSHOT LIET ZIEN
-Het canvas bleef inmiddels staan, maar bij terugkeer naar een browser-tab
-verscheen nog kort:
+Voor nieuwe Tekst/Speciale nodes:
+- ingevuld: toon info zolang die node actief is;
+- leeg: toon niets extra's zolang die node actief is.
 
-'Een actief Auteur-plan is nodig...'
+Voorbeeld:
+Node A = Cycle 64 • Day 83
+Node B = leeg
+Node C = Cycle 64 • Day 84
 
-Dat betekende dat Supabase tijdens tab-focus nog heel kort een
-SIGNED_OUT / entitlement-refresh kon afvuren.
+Reader:
+A -> Hoofdstuk ... • Cycle 64 • Day 83
+B -> alleen Hoofdstuk ...
+C -> Hoofdstuk ... • Cycle 64 • Day 84
 
-FIX 1
-Onverwachte SIGNED_OUT krijgt nu 1,8 seconde grace.
+Als de context verandert, ook van ingevuld naar leeg, begint de volgende
+context op een nieuwe reader-pagina.
 
-Komt binnen die tijd dezelfde geldige sessie terug:
-- SIGNED_OUT wordt volledig genegeerd;
-- gebruiker blijft visueel ingelogd;
-- role/plan blijven stabiel;
-- editor ziet geen tijdelijke downgrade.
+Alleen OUDE nodes zonder sceneInfo-property gebruiken nog het oude
+Hoofdstukinfo/chapterSubtitle als backwards-compatible fallback.
 
-Klik je zelf expliciet op Uitloggen:
-- logout blijft direct;
-- geen grace;
-- normale beveiliging blijft intact.
+EDITOR LOCK
+Nieuw slotje links onderaan.
 
-FIX 2
-De Editor bepaalt zijn geladen projectscope nu uitsluitend op:
+Vergrendeld:
+- nodes niet verslepen;
+- geen node/edge wijzigingen via ReactFlow;
+- rechter instellingenpaneel geblokkeerd;
+- nieuwe nodes toevoegen geblokkeerd;
+- variabelen openen geblokkeerd;
+- lokaal project laden geblokkeerd;
+- Reset editor geblokkeerd.
 
-user-id + editor-route
+Nog wel mogelijk:
+- selecteren/kijken;
+- pan/zoom;
+- Preview;
+- opslaan/exporteren;
+- Help/theme.
 
-NIET meer op:
-role / plan / compleet user-object.
+Bovenin staat duidelijk: 🔒 Vergrendeld.
 
-Dus:
-Author -> tijdelijke Reader -> Author
-of
-Author Pro -> tijdelijke free -> Author Pro
+UNDO
+Nieuwe Undo-knop links.
 
-kan NOOIT meer het actieve canvas opnieuw laden.
+- bewaart maximaal 50 recente editorstappen;
+- verwijderde nodes + paths kunnen terug;
+- nodeverplaatsingen kunnen terug;
+- tekst/metadata/logica/variabelen kunnen terug;
+- Ctrl+Z / Cmd+Z werkt op het canvas;
+- in input/textarea blijft Ctrl+Z gewoon lokale tekst-undo.
 
-FIX 3
-De melding 'Author Pro nodig' wordt alleen nog gebruikt bij de echte eerste
-poging om een Dashboardboek zonder rechten te openen.
-
-Een reeds geladen project reageert niet op tijdelijke entitlement-refreshes.
-
-BELANGRIJK
-Save/publish beveiliging blijft bestaan.
-Als een abonnement echt is beëindigd, worden server-side/auteur-permissions
-bij opslaan/publiceren nog steeds afgedwongen.
+Undo is uitgeschakeld zolang Editor Lock actief is.
 
 GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. `app` en `lib` vervangen.
-3. npm run build.
-4. Push/deploy.
-5. Zelfde tab-wisseltest opnieuw uitvoeren.
+2. Sleep map app over dibooks_author_studio.
+3. Bestanden vervangen.
+4. npm run build.
+5. Push/deploy.
+
+TEST
+- Scene: Day 1 -> lege node -> Day 2.
+- Lock: probeer node te slepen/verwijderen/wijzigen.
+- Undo: verwijder node, wacht ±0,3 sec, klik Undo.

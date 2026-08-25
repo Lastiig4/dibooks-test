@@ -215,6 +215,7 @@ type DiNodeData = {
   text?: string;
   textHtml?: string;
   specialSubtype?: string;
+  sceneInfo?: string;
   chapterNumber?: string;
   chapterTitle?: string;
   chapterSubtitle?: string;
@@ -247,6 +248,41 @@ type DiNodeData = {
 };
 
 const MANUAL_PAGE_BREAK_MARKER = "[[NIEUWE_PAGINA]]";
+const SCENE_INFO_MARKER_ATTR = "data-dibooks-scene-info";
+
+function createSceneInfoMarker(value: string) {
+  const encodedValue = encodeURIComponent(String(value ?? "").trim());
+  return `<div ${SCENE_INFO_MARKER_ATTR}="${encodedValue}" style="display:none" aria-hidden="true"></div>`;
+}
+
+function extractSceneInfoMarker(html: string) {
+  const expression = new RegExp(
+    `${SCENE_INFO_MARKER_ATTR}="([^"]*)"`,
+    "gi",
+  );
+  let match: RegExpExecArray | null = null;
+  let latestValue: string | null = null;
+
+  while ((match = expression.exec(html)) !== null) {
+    try {
+      latestValue = decodeURIComponent(match[1] ?? "");
+    } catch {
+      latestValue = match[1] ?? "";
+    }
+  }
+
+  return latestValue;
+}
+
+function buildPageSceneInfos(pages: string[], initialSceneInfo = "") {
+  let activeSceneInfo = initialSceneInfo;
+
+  return pages.map((pageHtml) => {
+    const markerValue = extractSceneInfoMarker(pageHtml);
+    if (markerValue !== null) activeSceneInfo = markerValue;
+    return activeSceneInfo;
+  });
+}
 const MANUAL_PAGE_BREAK_BLOCK_REGEX = /<p[^>]*>\s*(?:<(?:code|strong|em|span)[^>]*>\s*)*\[\[NIEUWE_PAGINA\]\](?:\s*<\/(?:code|strong|em|span)>)*\s*<\/p>/gi;
 
 function normalizeManualPageBreakMarkers(value: string) {
@@ -623,18 +659,21 @@ function SidebarButton({
   label,
   className,
   onClick,
+  disabled = false,
 }: {
   icon: React.ReactNode;
   label: string;
   className: string;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className={`group flex h-14 w-14 items-center justify-center rounded-2xl font-black shadow-sm transition hover:scale-[1.06] active:scale-[0.96] ${className}`}
+      className={`group flex h-14 w-14 items-center justify-center rounded-2xl font-black shadow-sm transition hover:scale-[1.06] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:scale-100 disabled:active:scale-100 ${className}`}
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center transition group-hover:scale-110">
         {icon}
@@ -925,6 +964,37 @@ function MoonIcon({ darkMode }: { darkMode: boolean }) {
       ) : (
         <path d="M20.2 15.3A8.1 8.1 0 0 1 8.7 3.8 8.7 8.7 0 1 0 20.2 15.3Z" />
       )}
+    </svg>
+  );
+}
+
+function LockEditorIcon({ locked }: { locked: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-8 w-8 fill-none stroke-current stroke-[2.4]"
+      aria-hidden="true"
+    >
+      <rect x="5" y="10" width="14" height="11" rx="2.5" />
+      {locked ? (
+        <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      ) : (
+        <path d="M9 10V7a4 4 0 0 1 7.7-1.6" />
+      )}
+      <path d="M12 14v3" />
+    </svg>
+  );
+}
+
+function UndoEditorIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-8 w-8 fill-none stroke-current stroke-[2.4]"
+      aria-hidden="true"
+    >
+      <path d="M9 6 4 11l5 5" />
+      <path d="M5 11h8a6 6 0 1 1 0 12" transform="translate(0 -5)" />
     </svg>
   );
 }
@@ -1574,6 +1644,12 @@ function paginateHtml(html: string, maxCharacters: number) {
     const tagName = element.tagName.toLowerCase();
     const elementHtml = element.outerHTML;
     const elementLength = (element.textContent || "").trim().length;
+    const sceneInfoMarker = element.getAttribute(SCENE_INFO_MARKER_ATTR);
+
+    if (sceneInfoMarker !== null) {
+      appendBlock(elementHtml, 0);
+      return;
+    }
 
     if (!elementLength && tagName !== "br") return;
 
@@ -1617,6 +1693,8 @@ function BookPageReader({
   onPageCountChange,
   onVisiblePageCountChange,
   globalPageOffset,
+  initialSceneInfo = "",
+  onSceneInfoChange,
 }: {
   html: string;
   pageIndex: number;
@@ -1624,12 +1702,15 @@ function BookPageReader({
   onPageCountChange: (pageCount: number) => void;
   onVisiblePageCountChange: (visiblePageCount: number) => void;
   globalPageOffset: number;
+  initialSceneInfo?: string;
+  onSceneInfoChange?: (sceneInfo: string) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<string[]>([
     "<p>Deze tekst is nog leeg.</p>",
   ]);
   const [visiblePageCount, setVisiblePageCount] = useState(1);
+  const [pageSceneInfos, setPageSceneInfos] = useState<string[]>([]);
 
   useEffect(() => {
     setPageIndex(0);
@@ -1680,6 +1761,7 @@ function BookPageReader({
 
       const nextPages = paginateHtml(html, maxCharacters);
       setPages(nextPages);
+      setPageSceneInfos(buildPageSceneInfos(nextPages, initialSceneInfo));
       onPageCountChange(nextPages.length);
     };
 
@@ -1689,7 +1771,24 @@ function BookPageReader({
     resizeObserver.observe(viewport);
 
     return () => resizeObserver.disconnect();
-  }, [html, onPageCountChange, onVisiblePageCountChange, setPageIndex]);
+  }, [
+    html,
+    initialSceneInfo,
+    onPageCountChange,
+    onVisiblePageCountChange,
+    setPageIndex,
+  ]);
+
+  useEffect(() => {
+    onSceneInfoChange?.(
+      pageSceneInfos[pageIndex] ?? initialSceneInfo ?? "",
+    );
+  }, [
+    initialSceneInfo,
+    onSceneInfoChange,
+    pageIndex,
+    pageSceneInfos,
+  ]);
 
   useEffect(() => {
     if (pageIndex > pages.length - 1) {
@@ -2652,6 +2751,8 @@ export default function Home() {
   const [helpView, setHelpView] = useState<"overview" | "tutorial">("overview");
   const [helpAutoShowDisabled, setHelpAutoShowDisabled] = useState(false);
   const [editorDarkMode, setEditorDarkMode] = useState(false);
+  const [editorLocked, setEditorLocked] = useState(false);
+  const [undoDepth, setUndoDepth] = useState(0);
   const {
     isLoggedIn,
     permissions,
@@ -2687,6 +2788,7 @@ export default function Home() {
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [previewPageCount, setPreviewPageCount] = useState(1);
   const [previewGlobalPageOffset, setPreviewGlobalPageOffset] = useState(0);
+  const [previewSceneInfo, setPreviewSceneInfo] = useState("");
   const [previewFeedbacks, setPreviewFeedbacks] = useState<ReaderFeedbackToast[]>([]);
   const [readerVisiblePageCount, setReaderVisiblePageCount] = useState(1);
   const flowWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -2734,6 +2836,9 @@ export default function Home() {
   const autosaveReadyRef = useRef(false);
   const lastAutosavePayloadRef = useRef<string>("");
   const loadedEditorScopeRef = useRef<string | null>(null);
+  const undoHistoryRef = useRef<string[]>([]);
+  const lastUndoSnapshotRef = useRef<string | null>(null);
+  const undoApplyingRef = useRef(false);
   const [autosaveStatus, setAutosaveStatus] = useState("Sessiesave wordt geladen...");
   const [cutsceneUploadStatus, setCutsceneUploadStatus] = useState("");
   const [storyVariables, setStoryVariables] = useState<StoryVariable[]>([]);
@@ -3027,6 +3132,46 @@ export default function Home() {
   }, [authLoading, setEdges, setNodes, user?.id]);
 
   useEffect(() => {
+    if (reviewMode || !autosaveReadyRef.current) return;
+
+    const timeout = window.setTimeout(() => {
+      const serialized = getUndoSnapshotSerialized();
+
+      if (undoApplyingRef.current) {
+        undoApplyingRef.current = false;
+        lastUndoSnapshotRef.current = serialized;
+        return;
+      }
+
+      const previous = lastUndoSnapshotRef.current;
+
+      if (previous === null) {
+        lastUndoSnapshotRef.current = serialized;
+        return;
+      }
+
+      if (previous === serialized) return;
+
+      undoHistoryRef.current = [
+        ...undoHistoryRef.current,
+        previous,
+      ].slice(-50);
+      lastUndoSnapshotRef.current = serialized;
+      setUndoDepth(undoHistoryRef.current.length);
+    }, 220);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    nodes,
+    edges,
+    startNodeId,
+    dashboardSaveForm,
+    storyVariables,
+    autosaveStatus,
+    reviewMode,
+  ]);
+
+  useEffect(() => {
     if (reviewMode) return;
     if (!autosaveReadyRef.current) return;
 
@@ -3058,7 +3203,48 @@ export default function Home() {
     };
   }, [nodes, edges, startNodeId, selectedNodeId, dashboardSaveForm, dashboardBookId, sharedEditBookId, sharedEditOwnerName, sharedEditPermission, flowViewport, storyVariables, reviewMode]);
 
+  useEffect(() => {
+    function handleEditorUndoShortcut(event: KeyboardEvent) {
+      if (
+        reviewMode ||
+        editorLocked ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.key.toLowerCase() !== "z" ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+
+      if (
+        target?.isContentEditable ||
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select"
+      ) {
+        return;
+      }
+
+      if (undoHistoryRef.current.length === 0) return;
+
+      event.preventDefault();
+      undoLastEditorChange();
+    }
+
+    window.addEventListener("keydown", handleEditorUndoShortcut);
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        handleEditorUndoShortcut,
+      );
+  }, [editorLocked, reviewMode]);
+
   const previewNode = nodes.find((node) => node.id === previewNodeId);
+  const previewActiveChapter = previewNode
+    ? findNearestEditorChapter(previewNode.id)
+    : null;
 
   const textChain =
     previewNode?.data.type === "text" || previewNode?.data.type === "special"
@@ -3066,6 +3252,7 @@ export default function Home() {
       : {
           textNodes: [] as Node<DiNodeData>[],
           html: "",
+          initialSceneInfo: "",
           nextNodeAfterChain: null as Node<DiNodeData> | null,
         };
 
@@ -3093,6 +3280,17 @@ export default function Home() {
   );
   const previewGlobalPageEnd =
     previewGlobalPageStart + previewVisibleGlobalPageCount - 1;
+
+  useEffect(() => {
+    if (!previewOpen || !previewNode) return;
+
+    setPreviewSceneInfo(
+      previewNode.data.type === "text" ||
+      previewNode.data.type === "special"
+        ? getEditorNodeSceneInfo(previewNode)
+        : "",
+    );
+  }, [previewNode?.id, previewOpen]);
 
   useEffect(() => {
     if (!previewOpen || previewNode?.data.type !== "chapter") return;
@@ -3177,7 +3375,7 @@ export default function Home() {
 
     return {
       ...node,
-      draggable: !reviewMode,
+      draggable: !reviewMode && !editorLocked,
       data: {
         ...node.data,
         isStart: node.id === startNodeId,
@@ -3237,11 +3435,84 @@ export default function Home() {
     });
   }
 
+  function formatEditorChapterLabel(
+    node: Node<DiNodeData> | null | undefined,
+  ) {
+    if (!node || node.data.type !== "chapter") return "";
+
+    const number = String(node.data.chapterNumber ?? "").trim();
+    const title = String(node.data.chapterTitle ?? "").trim();
+
+    if (number && title) return `Hoofdstuk ${number} — ${title}`;
+    if (number) return `Hoofdstuk ${number}`;
+    if (title) return `Hoofdstuk — ${title}`;
+    return "Hoofdstuk";
+  }
+
+  function findNearestEditorChapter(startId: string | null) {
+    if (!startId) return null;
+
+    const startNode = nodes.find((node) => node.id === startId);
+    if (!startNode) return null;
+    if (startNode.data.type === "chapter") return startNode;
+
+    const visited = new Set<string>([startId]);
+    let frontier = [startId];
+
+    for (let depth = 0; depth < Math.max(1, nodes.length); depth += 1) {
+      const nextFrontier: string[] = [];
+
+      for (const targetId of frontier) {
+        const incoming = getStoryEdges(edges, nodes).filter(
+          (edge) => edge.target === targetId,
+        );
+
+        for (const edge of incoming) {
+          if (visited.has(edge.source)) continue;
+          visited.add(edge.source);
+
+          const sourceNode = nodes.find(
+            (node) => node.id === edge.source,
+          );
+          if (!sourceNode) continue;
+          if (sourceNode.data.type === "chapter") return sourceNode;
+
+          nextFrontier.push(sourceNode.id);
+        }
+      }
+
+      if (!nextFrontier.length) break;
+      frontier = nextFrontier;
+    }
+
+    return null;
+  }
+
+  function getLegacyEditorChapterSceneInfo(
+    startId: string | null,
+  ) {
+    const chapter = findNearestEditorChapter(startId);
+    return String(chapter?.data.chapterSubtitle ?? "").trim();
+  }
+
+  function getEditorNodeSceneInfo(
+    node: Node<DiNodeData> | null | undefined,
+  ) {
+    if (!node) return "";
+
+    if (node.data.sceneInfo !== undefined) {
+      return String(node.data.sceneInfo ?? "").trim();
+    }
+
+    return getLegacyEditorChapterSceneInfo(node.id);
+  }
+
   function collectTextChain(startId: string | null) {
     if (!startId) {
       return {
         textNodes: [] as Node<DiNodeData>[],
         html: "",
+        initialSceneInfo: "",
         nextNodeAfterChain: null as Node<DiNodeData> | null,
       };
     }
@@ -3251,6 +3522,8 @@ export default function Home() {
     const visited = new Set<string>();
 
     let currentNode = nodes.find((node) => node.id === startId);
+    const initialSceneInfo = getEditorNodeSceneInfo(currentNode);
+    let activeSceneInfo = initialSceneInfo;
 
     while (
       currentNode &&
@@ -3260,6 +3533,17 @@ export default function Home() {
 
       visited.add(currentNode.id);
       textNodes.push(currentNode);
+
+      const nodeSceneInfo = getEditorNodeSceneInfo(currentNode);
+
+      if (nodeSceneInfo !== activeSceneInfo) {
+        if (htmlParts.length > 0) {
+          htmlParts.push(MANUAL_PAGE_BREAK_MARKER);
+        }
+
+        activeSceneInfo = nodeSceneInfo;
+        htmlParts.push(createSceneInfoMarker(activeSceneInfo));
+      }
 
       const nodeHtml =
         currentNode.data.textHtml ||
@@ -3286,6 +3570,7 @@ export default function Home() {
         return {
           textNodes,
           html: htmlParts.join(""),
+          initialSceneInfo,
           nextNodeAfterChain: null,
         };
       }
@@ -3298,6 +3583,7 @@ export default function Home() {
         return {
           textNodes,
           html: htmlParts.join(""),
+          initialSceneInfo,
           nextNodeAfterChain: null,
         };
       }
@@ -3306,6 +3592,7 @@ export default function Home() {
         return {
           textNodes,
           html: htmlParts.join(""),
+          initialSceneInfo,
           nextNodeAfterChain: nextNode,
         };
       }
@@ -3316,6 +3603,7 @@ export default function Home() {
     return {
       textNodes,
       html: htmlParts.join(""),
+      initialSceneInfo,
       nextNodeAfterChain:
         currentNode &&
         currentNode.data.type !== "text" &&
@@ -3364,6 +3652,110 @@ export default function Home() {
       dashboardSaveForm,
       projectData: getCurrentProjectData(),
     };
+  }
+
+  function getUndoSnapshotSerialized() {
+    const cleanNodes = nodes.map((node) => ({
+      ...node,
+      selected: false,
+      dragging: false,
+    }));
+
+    return JSON.stringify({
+      startNodeId: getSafeStartNodeId(cleanNodes, startNodeId),
+      dashboardSaveForm: {
+        ...dashboardSaveForm,
+        genreInput: "",
+      },
+      projectData: {
+        ...getCurrentProjectData(),
+        savedAt: undefined,
+        nodes: cleanNodes,
+        edges,
+        variables: storyVariables,
+      },
+    });
+  }
+
+  function applyUndoSnapshot(snapshot: any) {
+    const projectData = snapshot?.projectData;
+    if (!projectData || projectData.type !== "dibooks-project") return false;
+
+    const projectNodes = Array.isArray(projectData.nodes)
+      ? projectData.nodes
+      : [];
+    const safeStartNodeId = getSafeStartNodeId(
+      projectNodes,
+      snapshot.startNodeId ??
+        projectData.startNodeId ??
+        projectNodes[0]?.id ??
+        "node_1",
+    );
+
+    setNodes(projectNodes);
+    setEdges(Array.isArray(projectData.edges) ? projectData.edges : []);
+    setStoryVariables(
+      Array.isArray(projectData.variables) ? projectData.variables : [],
+    );
+    setStartNodeId(safeStartNodeId);
+    setSelectedNodeId((current) =>
+      current &&
+      projectNodes.some(
+        (node: Node<DiNodeData>) => node.id === current,
+      )
+        ? current
+        : safeStartNodeId || projectNodes[0]?.id || null,
+    );
+    setDashboardSaveForm((current) => ({
+      ...current,
+      ...(snapshot.dashboardSaveForm ?? {}),
+      genreInput: "",
+    }));
+
+    return true;
+  }
+
+  function undoLastEditorChange() {
+    if (reviewMode || editorLocked) return;
+
+    const previousSnapshot = undoHistoryRef.current.pop();
+    if (!previousSnapshot) return;
+
+    try {
+      const parsed = JSON.parse(previousSnapshot);
+      undoApplyingRef.current = true;
+
+      if (!applyUndoSnapshot(parsed)) {
+        undoApplyingRef.current = false;
+        return;
+      }
+
+      lastUndoSnapshotRef.current = previousSnapshot;
+      setUndoDepth(undoHistoryRef.current.length);
+      setAutosaveStatus("↶ Laatste wijziging ongedaan gemaakt");
+    } catch (error) {
+      undoApplyingRef.current = false;
+      console.warn(
+        "Kon editor-wijziging niet ongedaan maken.",
+        error,
+      );
+    }
+  }
+
+  function toggleEditorLock() {
+    if (reviewMode) return;
+
+    setEditorLocked((current) => {
+      const next = !current;
+
+      if (next) {
+        setSidebarGroupOpen(null);
+        setVariablesOpen(false);
+        setEditingTextNodeId(null);
+      }
+
+      return next;
+    });
   }
 
   function applyEditorAutosaveDraft(draft: any) {
@@ -3453,6 +3845,8 @@ export default function Home() {
 
 
   function resetEditorToBlankProject() {
+    if (editorLocked) return;
+
     const confirmed = window.confirm(
       "Weet je zeker dat je de editor wilt resetten? Je huidige sessiesave wordt gewist en je krijgt weer een leeg startproject.",
     );
@@ -3646,6 +4040,11 @@ ${formatSaveError(error)}`);
 
 
   function loadProject(event: React.ChangeEvent<HTMLInputElement>) {
+    if (editorLocked) {
+      event.target.value = "";
+      return;
+    }
+
     const file = event.target.files?.[0];
 
     if (!file) return;
@@ -3876,6 +4275,8 @@ ${formatSaveError(error)}`);
   }
 
   function createNode(type: DiNodeType) {
+    if (reviewMode || editorLocked) return;
+
     const maxNodes = getMaxNodesForUser(user);
     const isUtilityNode =
       type === "scratchpad" ||
@@ -3920,6 +4321,8 @@ ${formatSaveError(error)}`);
         text: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
         textHtml: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
         specialSubtype: type === "special" ? "Logboek" : undefined,
+        sceneInfo:
+          type === "text" || type === "special" ? "" : undefined,
         chapterNumber: type === "chapter" ? "" : undefined,
         chapterTitle: type === "chapter" ? "" : undefined,
         chapterSubtitle: type === "chapter" ? "" : undefined,
@@ -4013,6 +4416,25 @@ ${formatSaveError(error)}`);
           },
         };
       }),
+    );
+  }
+
+  function updateSelectedSceneInfo(sceneInfo: string) {
+    if (!selectedNodeId) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedNodeId &&
+        (node.data.type === "text" || node.data.type === "special")
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                sceneInfo,
+              },
+            }
+          : node,
+      ),
     );
   }
 
@@ -4782,6 +5204,7 @@ ${formatSaveError(error)}`);
           conditionTrueTargetNodeId: node.data.conditionTrueTargetNodeId ?? "",
           conditionFalseTargetNodeId: node.data.conditionFalseTargetNodeId ?? "",
           specialSubtype: node.data.specialSubtype ?? "",
+          sceneInfo: node.data.sceneInfo ?? "",
           chapterNumber: node.data.chapterNumber ?? "",
           chapterTitle: node.data.chapterTitle ?? "",
           chapterSubtitle: node.data.chapterSubtitle ?? "",
@@ -5018,9 +5441,12 @@ ${formatSaveError(error)}`);
           <div className="grid justify-items-center gap-3">
             <SidebarGroupButton
               open={sidebarGroupOpen === "text"}
-              onToggle={() =>
-                setSidebarGroupOpen((current) => (current === "text" ? null : "text"))
-              }
+              onToggle={() => {
+                if (editorLocked) return;
+                setSidebarGroupOpen((current) =>
+                  current === "text" ? null : "text",
+                );
+              }}
               label="Tekst & schrijven"
               className="bg-blue-600 text-white hover:bg-blue-500"
               icon={<BookIcon />}
@@ -5069,9 +5495,12 @@ ${formatSaveError(error)}`);
 
             <SidebarGroupButton
               open={sidebarGroupOpen === "media"}
-              onToggle={() =>
-                setSidebarGroupOpen((current) => (current === "media" ? null : "media"))
-              }
+              onToggle={() => {
+                if (editorLocked) return;
+                setSidebarGroupOpen((current) =>
+                  current === "media" ? null : "media",
+                );
+              }}
               label="Media & interactie"
               className="bg-emerald-600 text-white hover:bg-emerald-500"
               icon={<VideoIcon />}
@@ -5112,9 +5541,12 @@ ${formatSaveError(error)}`);
 
             <SidebarGroupButton
               open={sidebarGroupOpen === "logic"}
-              onToggle={() =>
-                setSidebarGroupOpen((current) => (current === "logic" ? null : "logic"))
-              }
+              onToggle={() => {
+                if (editorLocked) return;
+                setSidebarGroupOpen((current) =>
+                  current === "logic" ? null : "logic",
+                );
+              }}
               label="Logica & tools"
               className="bg-cyan-600 text-white hover:bg-cyan-500"
               icon={<FunctionIcon />}
@@ -5125,6 +5557,7 @@ ${formatSaveError(error)}`);
                 accentClass="bg-indigo-600 text-white"
                 icon={<FlagVariablesIcon />}
                 onClick={() => {
+                  if (editorLocked) return;
                   setSidebarGroupOpen(null);
                   setVariablesOpen(true);
                 }}
@@ -5171,7 +5604,13 @@ ${formatSaveError(error)}`);
                 }}
               />
 
-              <label className="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-white/8 bg-white/[0.035] p-3 text-left transition hover:border-white/15 hover:bg-white/[0.075]">
+              <label
+                className={`group flex w-full items-center gap-3 rounded-xl border border-white/8 bg-white/[0.035] p-3 text-left transition ${
+                  editorLocked
+                    ? "cursor-not-allowed opacity-40"
+                    : "cursor-pointer hover:border-white/15 hover:bg-white/[0.075]"
+                }`}
+              >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-700 text-white">
                   <span className="flex h-6 w-6 items-center justify-center">
                     <FolderIcon />
@@ -5186,6 +5625,7 @@ ${formatSaveError(error)}`);
                 <input
                   type="file"
                   accept=".json,.dibooks-project.json"
+                  disabled={editorLocked}
                   onChange={(event) => {
                     setSidebarGroupOpen(null);
                     loadProject(event);
@@ -5228,7 +5668,40 @@ ${formatSaveError(error)}`);
 
 
             <SidebarButton
+              onClick={toggleEditorLock}
+              label={
+                editorLocked
+                  ? "Editor ontgrendelen"
+                  : "Editor vergrendelen"
+              }
+              className={
+                editorLocked
+                  ? "bg-amber-400 text-black hover:bg-amber-300"
+                  : "bg-neutral-800 text-white hover:bg-neutral-700"
+              }
+              icon={<LockEditorIcon locked={editorLocked} />}
+            />
+
+            <SidebarButton
+              onClick={undoLastEditorChange}
+              disabled={
+                reviewMode ||
+                editorLocked ||
+                undoDepth === 0
+              }
+              label={
+                undoDepth > 0
+                  ? `Undo laatste wijziging (${undoDepth})`
+                  : "Geen wijziging om ongedaan te maken"
+              }
+              className="bg-indigo-700 text-white hover:bg-indigo-600"
+              icon={<UndoEditorIcon />}
+            />
+
+
+            <SidebarButton
               onClick={resetEditorToBlankProject}
+              disabled={editorLocked}
               label="Reset editor"
               className="bg-red-950 text-red-100 hover:bg-red-900"
               icon={<ResetEditorIcon />}
@@ -5261,6 +5734,11 @@ ${formatSaveError(error)}`);
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {editorLocked && !reviewMode && (
+                <span className="rounded-xl border border-amber-300/25 bg-amber-500/15 px-3 py-2 text-xs font-black text-amber-100">
+                  🔒 Vergrendeld
+                </span>
+              )}
               {isStudioTrial && (
                 <>
                   <div
@@ -5606,8 +6084,12 @@ ${formatSaveError(error)}`);
           <ReactFlow
             nodes={flowNodes}
             edges={getValidatedEdges(edges, nodes)}
-            onNodesChange={reviewMode ? undefined : onNodesChange}
-            onEdgesChange={reviewMode ? undefined : onEdgesChange}
+            onNodesChange={
+              reviewMode || editorLocked ? undefined : onNodesChange
+            }
+            onEdgesChange={
+              reviewMode || editorLocked ? undefined : onEdgesChange
+            }
             onNodeClick={(_, node) => {
               setSelectedNodeId(node.id);
               if (reviewMode) setReviewInspectorOpen(true);
@@ -5617,7 +6099,7 @@ ${formatSaveError(error)}`);
             }}
             onMoveEnd={(_, viewport) => { if (!reviewMode) setFlowViewport(viewport); }}
             nodesConnectable={false}
-            nodesDraggable={!reviewMode}
+            nodesDraggable={!reviewMode && !editorLocked}
             elementsSelectable={true}
             defaultViewport={{ x: 0, y: 0, zoom: 1 }}
             minZoom={0.4}
@@ -5639,7 +6121,23 @@ ${formatSaveError(error)}`);
           </div>
         </section>
 
-        <aside ref={reviewInspectionAsideRef} className="w-80 overflow-y-auto border-l-4 border-black bg-neutral-950 p-4">
+        <aside
+          ref={reviewInspectionAsideRef}
+          className="relative w-80 overflow-y-auto border-l-4 border-black bg-neutral-950 p-4"
+        >
+          {editorLocked && !reviewMode && (
+            <div className="absolute inset-0 z-[80] flex items-start justify-center bg-neutral-950/55 p-4 pt-16 backdrop-blur-[1px]">
+              <div className="rounded-2xl border border-amber-300/25 bg-amber-500/15 px-4 py-3 text-center shadow-2xl">
+                <p className="text-sm font-black text-amber-100">
+                  🔒 Editor vergrendeld
+                </p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-amber-100/65">
+                  Ontgrendel via het slotje links om instellingen te wijzigen.
+                </p>
+              </div>
+            </div>
+          )}
+
           <h2 className="mb-4 text-xl font-black">{reviewMode ? "Review inspectie" : "Node instellingen"}</h2>
 
           {reviewMode ? (
@@ -5797,16 +6295,21 @@ ${formatSaveError(error)}`);
 
                     <div>
                       <label className="mb-2 block text-sm font-bold">
-                        Ondertitel <span className="text-neutral-500">(optioneel)</span>
+                        Hoofdstukinfo <span className="text-neutral-500">(fallback)</span>
                       </label>
                       <input
                         value={selectedNode.data.chapterSubtitle ?? ""}
                         onChange={(event) =>
                           updateSelectedChapterData({ chapterSubtitle: event.target.value })
                         }
-                        placeholder="Bijv. Cycle 64 • Day 83"
+                        placeholder="Optioneel standaardcontext voor het hoofdstuk"
                         className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-rose-500"
                       />
+                      <p className="mt-2 text-xs font-semibold leading-5 text-rose-100/55">
+                        Alleen als hoofdstuk-fallback. Voor tijd, datum, locatie
+                        of context die tijdens een hoofdstuk verandert gebruik je
+                        voortaan Scène-info op gewone/speciale tekstnodes.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -5938,6 +6441,29 @@ ${formatSaveError(error)}`);
                 </div>
               </div>
 
+              )}
+
+              {(selectedNode.data.type === "text" ||
+                selectedNode.data.type === "special") && (
+                <div className="rounded-xl border border-blue-400/20 bg-blue-500/[0.07] p-4">
+                  <label className="mb-2 block text-sm font-black text-blue-100">
+                    Scène-info <span className="text-neutral-500">(optioneel)</span>
+                  </label>
+                  <input
+                    value={selectedNode.data.sceneInfo ?? ""}
+                    onChange={(event) =>
+                      updateSelectedSceneInfo(event.target.value)
+                    }
+                    placeholder="Bijv. Cycle 64 • Day 83 • 19:05 SST"
+                    maxLength={160}
+                    className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none placeholder:text-neutral-600 focus:border-blue-400"
+                  />
+                  <p className="mt-2 text-xs font-semibold leading-5 text-blue-100/60">
+                    Wordt in de Reader achter het actieve hoofdstuk getoond
+                    zolang deze tekstnode actief is. Laat leeg als je op deze
+                    node bewust géén extra tijd, datum of locatie wilt tonen.
+                  </p>
+                </div>
               )}
 
               {(selectedNode.data.type === "text" ||
@@ -7746,6 +8272,16 @@ ${formatSaveError(error)}`);
                   ? dashboardSaveForm.title.trim() || "Naamloos boek"
                   : previewNode.data.label}
               </h2>
+              {(previewActiveChapter || previewSceneInfo) && (
+                <p className="mt-0.5 text-xs font-black tracking-wide text-blue-300/80">
+                  {previewActiveChapter
+                    ? formatEditorChapterLabel(previewActiveChapter)
+                    : ""}
+                  {previewSceneInfo
+                    ? `${previewActiveChapter ? " • " : ""}${previewSceneInfo}`
+                    : ""}
+                </p>
+              )}
             </div>
 
             <button
@@ -7766,6 +8302,8 @@ ${formatSaveError(error)}`);
                 onPageCountChange={setPreviewPageCount}
                 onVisiblePageCountChange={setReaderVisiblePageCount}
                 globalPageOffset={previewGlobalPageOffset}
+                initialSceneInfo={textChain.initialSceneInfo}
+                onSceneInfoChange={setPreviewSceneInfo}
               />
             )}
 
