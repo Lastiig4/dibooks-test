@@ -2652,7 +2652,16 @@ export default function Home() {
   const [helpView, setHelpView] = useState<"overview" | "tutorial">("overview");
   const [helpAutoShowDisabled, setHelpAutoShowDisabled] = useState(false);
   const [editorDarkMode, setEditorDarkMode] = useState(false);
-  const { isLoggedIn, permissions, loginWithCredentials, registerWithCredentials, logout, user, role } = useDemoAuth();
+  const {
+    isLoggedIn,
+    permissions,
+    loginWithCredentials,
+    registerWithCredentials,
+    logout,
+    user,
+    role,
+    loading: authLoading,
+  } = useDemoAuth();
   const [authModalMode, setAuthModalMode] = useState<"login" | "register" | null>(null);
   const [authInitialPlan, setAuthInitialPlan] = useState<PublicSignupPlan>("free");
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false);
@@ -2724,6 +2733,7 @@ export default function Home() {
   const nodeLimitReached = maxNodesForCurrentUser !== null && storyNodeCount >= maxNodesForCurrentUser;
   const autosaveReadyRef = useRef(false);
   const lastAutosavePayloadRef = useRef<string>("");
+  const loadedEditorScopeRef = useRef<string | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState("Sessiesave wordt geladen...");
   const [cutsceneUploadStatus, setCutsceneUploadStatus] = useState("");
   const [storyVariables, setStoryVariables] = useState<StoryVariable[]>([]);
@@ -2790,6 +2800,32 @@ export default function Home() {
       const reviewId = params.get("review");
       const sharedBookId = params.get("shared");
       const bookId = params.get("book");
+
+      // Wacht bij een koude page-load eerst op Supabase INITIAL_SESSION.
+      // Anders kan een dashboardboek één render als "guest" openen en daarna
+      // opnieuw als auteur, wat dezelfde soort canvas-reset veroorzaakt.
+      if (authLoading) {
+        autosaveReadyRef.current = false;
+        setAutosaveStatus("Accountsessie controleren...");
+        return;
+      }
+
+      const routeScope = reviewId
+        ? `review:${reviewId}`
+        : sharedBookId
+          ? `shared:${sharedBookId}`
+          : bookId
+            ? `book:${bookId}`
+            : "new";
+      const userScope = user?.id ?? "guest";
+      const loadScope = `${userScope}:${role}:${routeScope}`;
+
+      // Een profielrefresh/tokenrefresh maakt soms een nieuw JS user-object,
+      // maar zolang ID + rol + route hetzelfde zijn is er niets opnieuw te
+      // laden. De actieve editorstate blijft dan onaangeraakt.
+      if (loadedEditorScopeRef.current === loadScope) {
+        return;
+      }
 
       if (reviewId) {
         setReviewSubmissionId(reviewId);
@@ -2862,6 +2898,7 @@ export default function Home() {
           setSelectedNodeId((safeStartNodeId || projectNodes?.[0]?.id) ?? null);
           setStoryVariables(Array.isArray(projectData?.variables) ? projectData.variables : []);
           autosaveReadyRef.current = false;
+          loadedEditorScopeRef.current = loadScope;
           setAutosaveStatus("🔒 Reviewmodus • geen wijzigingen opgeslagen");
           return;
         } catch (reviewError) {
@@ -2878,13 +2915,19 @@ export default function Home() {
       if (!bookId && !sharedBookId) {
         restoreEditorAutosaveDraftIfNeeded();
         autosaveReadyRef.current = true;
-        setAutosaveStatus((current) => current === "Sessiesave wordt geladen..." ? "Sessiesave actief" : current);
+        loadedEditorScopeRef.current = loadScope;
+        setAutosaveStatus((current) =>
+          current === "Sessiesave wordt geladen..." ||
+          current === "Accountsessie controleren..."
+            ? "Sessiesave actief"
+            : current,
+        );
         return;
       }
 
       if (!user) {
-        restoreEditorAutosaveDraftIfNeeded();
-        autosaveReadyRef.current = true;
+        autosaveReadyRef.current = false;
+        setAutosaveStatus("Login nodig om dit Dashboardboek te openen...");
         return;
       }
 
@@ -2954,7 +2997,13 @@ export default function Home() {
 
         restoreEditorAutosaveDraftIfNeeded();
         autosaveReadyRef.current = true;
-        setAutosaveStatus((current) => current === "Sessiesave wordt geladen..." ? "Sessiesave actief" : current);
+        loadedEditorScopeRef.current = loadScope;
+        setAutosaveStatus((current) =>
+          current === "Sessiesave wordt geladen..." ||
+          current === "Accountsessie controleren..."
+            ? "Sessiesave actief"
+            : current,
+        );
       } catch (error) {
         console.error("Kon boek niet openen in de editor", error);
         alert(error instanceof Error ? `Kon boek niet openen: ${error.message}` : "Kon boek niet openen.");
@@ -2968,7 +3017,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [role, setEdges, setNodes, user]);
+  }, [authLoading, role, setEdges, setNodes, user?.id]);
 
   useEffect(() => {
     if (reviewMode) return;
@@ -3422,6 +3471,7 @@ export default function Home() {
     setPreviewNodeId(null);
     setFlowViewport({ x: 0, y: 0, zoom: 1 });
     lastAutosavePayloadRef.current = "";
+    loadedEditorScopeRef.current = null;
     autosaveReadyRef.current = true;
     setAutosaveStatus("Nieuwe sessie gestart");
   }

@@ -1,106 +1,80 @@
-DiBooks Patch - Reader Feedback V1
-==================================
+DiBooks Patch - Editor Tab Focus Stability V1
+==============================================
 
-DOEL
-Variable-effect wijzigingen kunnen nu optioneel een zichtbare melding aan de
-lezer geven.
+BUG
+Wanneer de Auteur Studio open stond en je naar een ander browsertabblad ging,
+kon bij terugkeren de auth kort refreshen.
 
-BELANGRIJK
-Reader feedback is ALTIJD opt-in per effect.
-Geheime flags/variabelen blijven dus onzichtbaar zolang
-'Reader feedback' uit staat.
+De editor luisterde naar het HELE user-object.
+Een Supabase token/profile refresh kan voor dezelfde gebruiker een nieuw
+JavaScript user-object opleveren.
 
-ONDERSTEUND OP
-- Keuze effects
-- Minigame success effects
-- Minigame fail effects
-- Function node actions
-- Studio Preview
-- Publieke Reader
+Gevolg:
+- editor dacht dat accountcontext veranderd was;
+- Dashboardboek werd opnieuw geladen;
+- autosave-scope kon kort naar guest springen;
+- actieve canvas kon blanco / teruggezet lijken.
 
-READER FEEDBACK TYPES
-- 🎒 Item ontvangen
-- 🗑️ Item verloren
-- ❤️ Relatie verbeterd
-- 💔 Relatie verslechterd
-- ⬆️ Stat omhoog
-- ⬇️ Stat omlaag
-- ℹ️ Eigen / algemene melding
+FIX 1 - AUTH STABIEL BIJ TAB FOCUS
+lib/auth.ts:
+- alleen een echte Supabase SIGNED_OUT logt de UI direct uit;
+- INITIAL_SESSION zonder session blijft correct een gast;
+- tijdelijke lege sessie bij tab/browser resume wordt genegeerd;
+- bij dezelfde user-ID blijven de verrijkte DB role + plan behouden tijdens
+  TOKEN_REFRESHED/session refresh.
 
-PER EFFECT
-In de Studio staat nu:
-Reader feedback [aan/uit]
+De bestaande snelle INITIAL_SESSION architectuur blijft intact.
+Er is GEEN getSession()+listener race opnieuw geïntroduceerd.
 
-Wanneer aan:
-1. kies type;
-2. optioneel eigen tekst, bijv.
-   'Mattias vertrouwt je meer.'
+FIX 2 - EDITOR RELOADT NIET OP USER OBJECT REFRESH
+app/editor/page.tsx:
+- load effect hangt niet meer van heel `user` af;
+- alleen stabiele velden:
+  authLoading + user.id + role;
+- editor onthoudt welke combinatie user/role/route al geladen is;
+- dezelfde scope wordt niet nogmaals over het actieve canvas geladen.
 
-Als eigen tekst leeg blijft gebruikt DiBooks de naam van de variabele als
-fallback.
+FIX 3 - KOUDE AUTH BOOT
+Bij een echte browser-refresh wacht een Dashboardboek eerst totdat Supabase
+INITIAL_SESSION klaar is.
 
-VOORBEELD
-Keuze:
-'Vertel Mattias de waarheid'
+Daardoor wordt een Dashboardboek niet eerst één render als guest geladen.
 
-Effect 1:
-mattias_relation +2
-Reader feedback:
-❤️ Relatie verbeterd
-'Mattias vertrouwt je meer.'
+FIX 4 - DASHBOARD ROUTE + GEEN USER
+Als een echte login ontbreekt op `/editor?book=...`, wordt niet langer een
+guest-autosave over die Dashboardroute geladen.
 
-Effect 2:
-mattias_knows_secret = true
-Reader feedback UIT
+De editor wacht op login/context in plaats van de actieve projectstate te
+vervangen.
 
-De lezer ziet dan alleen de relatie-update en niet de geheime flag.
-
-TOASTS
-- verschijnen rechtsboven;
-- verdwijnen automatisch na ongeveer 3,6 seconden;
-- meerdere zichtbare effecten worden onder elkaar gezet.
-
-TERUGLEESMODUS
-Reader feedback wordt NIET opnieuw uitgevoerd of getoond tijdens
-Terugleesmodus.
-
-De bestaande read-only history/story-state bescherming blijft intact.
-
-FUNCTION NODES
-Function nodes blijven onzichtbaar.
-Als een function-action Reader feedback aan heeft, verschijnt de toast pas
-nadat de function state/progress succesvol is opgeslagen en de route doorgaat.
-
-STUDIO PREVIEW
-Dezelfde toast verschijnt ook in Preview, zodat auteurs het resultaat direct
-kunnen testen.
-
-OPSLAG / COMPATIBILITEIT
-De feedbackvelden worden in de bestaande project JSON opgeslagen als onderdeel
-van een FunctionAction:
-- notifyReader
-- notificationType
-- notificationText
-
-Oude boeken blijven volledig werken omdat alle velden optioneel zijn.
+BEHOUDEN
+- save on visibility hidden;
+- sessionStorage editor autosave;
+- Reader Feedback V1;
+- Function/IF/variables;
+- 15-node gratis proefmodus;
+- hoofdstuk-marker start;
+- Account auteursnaam;
+- moderatie/review;
+- Dashboard-opslag;
+- Reader globale paginanummers/readback.
 
 GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep map `app` over `dibooks_author_studio`.
+2. Sleep `app` en `lib` over `dibooks_author_studio`.
 3. Bestanden vervangen.
 4. npm run build.
 5. Commit/push naar Vercel.
 
 TEST
-1. Maak getalvariabele `mattias_relation`.
-2. Geef keuze effect `+1`.
-3. Zet Reader feedback aan.
-4. Kies ❤️ Relatie verbeterd.
-5. Tekst: `Mattias vertrouwt je meer.`
-6. Preview -> maak keuze.
-7. Controleer toast.
-8. Public/test Reader -> controleer toast.
-9. Blader terug -> toast mag NIET opnieuw verschijnen.
-10. Test daarnaast een geheime flag met Reader feedback UIT.
+1. Open een bestaand Dashboardboek in Studio.
+2. Wijzig tekst of plaats een node.
+3. Wacht 1-2 sec zodat sessiesave geschreven is.
+4. Ga 20-60 sec naar een ander browser-tabblad.
+5. Ga terug.
+6. Canvas moet EXACT blijven staan.
+7. Herhaal een paar keer.
+8. Laat tab eventueel 5+ minuten op achtergrond staan en test opnieuw.
+9. Controleer daarna expliciet uitloggen: dat moet nog steeds echt uitloggen.

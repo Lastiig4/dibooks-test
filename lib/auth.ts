@@ -389,7 +389,13 @@ function bootAuthOnce() {
     supabase.auth.onAuthStateChange((event, session) => {
       if (logoutInProgress && session) return;
 
-      if (event === "SIGNED_OUT" || !session) {
+      // Alleen een ECHTE Supabase SIGNED_OUT mag een bestaande sessie
+      // onmiddellijk uit de UI verwijderen.
+      //
+      // Bij tab-focus / browser-resume kan de client tijdens een refresh
+      // heel kort een event zonder session doorgeven. Dat is geen logout en
+      // mag de editor nooit naar de guest-scope laten springen.
+      if (event === "SIGNED_OUT") {
         logoutInProgress = false;
         emitAuthSnapshot({
           user: null,
@@ -400,12 +406,54 @@ function bootAuthOnce() {
         return;
       }
 
+      // Eerste boot zonder sessie = echte gast.
+      if (event === "INITIAL_SESSION" && !session) {
+        emitAuthSnapshot({
+          user: null,
+          loading: false,
+          initialized: true,
+        });
+        broadcastAuthChange();
+        return;
+      }
+
+      // Elke andere tijdelijke null-session negeren we. Als de sessie echt
+      // ongeldig is, volgt Supabase met SIGNED_OUT.
+      if (!session) {
+        console.info(
+          `[DiBooks Auth] Tijdelijke lege sessie genegeerd tijdens ${event}.`,
+        );
+        return;
+      }
+
       const mappedUser = mapSupabaseUser(session.user);
       if (!mappedUser) return;
 
+      const existingUser = authSnapshot.user;
+
+      // TOKEN_REFRESHED (en vergelijkbare sessie-events) bevat vaak alleen
+      // auth-metadata. Onze actuele role/plan komen uit public.profiles.
+      // Bewaar daarom de reeds verrijkte profiel-/entitlementdata zolang het
+      // om exact dezelfde user-ID gaat. Dit voorkomt een korte Author->Reader
+      // of ingelogd->guest flits bij terugkeren naar een tab.
+      const stableUser =
+        existingUser?.id === mappedUser.id
+          ? {
+              ...mappedUser,
+              name: existingUser.name || mappedUser.name,
+              authorName:
+                existingUser.authorName ||
+                mappedUser.authorName ||
+                existingUser.name ||
+                mappedUser.name,
+              role: existingUser.role,
+              plan: existingUser.plan,
+            }
+          : mappedUser;
+
       // Alleen lokale state in deze callback. Geen Supabase databasecall.
       emitAuthSnapshot({
-        user: mappedUser,
+        user: stableUser,
         loading: false,
         initialized: true,
       });

@@ -1,21 +1,17 @@
 {
-  "name": "DiBooks Reader Feedback V1",
-  "date": "2026-08-24",
+  "name": "DiBooks Editor Tab Focus Stability V1",
+  "date": "2026-08-25",
   "sql_required": false,
   "files": [
+    "lib/auth.ts",
     "app/editor/page.tsx",
-    "app/books/[bookId]/read/page.tsx",
     "PATCH_INFO.txt"
   ],
-  "features": [
-    "Opt-in reader notifications per variable effect",
-    "Item gained/lost notification types",
-    "Relationship up/down notification types",
-    "Stat up/down notification types",
-    "Custom/info notification",
-    "Choice and minigame notifications",
-    "Function node notifications",
-    "Studio Preview notifications",
-    "No replay notification re-trigger"
+  "fixes": [
+    "Ignore transient null auth session during tab resume",
+    "Preserve enriched role and plan through token refresh",
+    "Prevent editor book reload on same-user object refresh",
+    "Wait for INITIAL_SESSION before dashboard editor load",
+    "Prevent dashboard route from restoring guest autosave"
   ]
 }
