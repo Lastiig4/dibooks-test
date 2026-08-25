@@ -1,68 +1,86 @@
-DiBooks Patch - Reader Feedback Queue V1.1
-==========================================
+DiBooks Patch - Reader Global Progress V1
+=========================================
 
 PROBLEEM
-Bij meerdere Reader Feedback meldingen kregen alle meldingen vrijwel tegelijk
-een timer. Daardoor verdwenen melding 2, 3 en 4 te snel nadat de eerste weg was.
+De blauwe progressiebalk gebruikte de positie van de huidige node in de
+project-JSON/node-array.
 
-NIEUWE WERKING: FIFO WACHTRIJ
-Alle meldingen verschijnen nog steeds netjes onder elkaar.
+Daardoor kon de balk bij een volgende node of vertakking ineens teruglopen of
+opnieuw lijken te beginnen.
 
-Maar alleen de BOVENSTE melding heeft een actieve verdwijn-timer.
+NIEUW
+De blauwe balk is nu BOEK-/RUN-VOORTGANG.
 
-Voorbeeld met 3 meldingen:
+Hij gebruikt:
+1. wat de lezer in deze daadwerkelijke run al heeft afgelegd;
+2. de voortgang binnen de huidige tekstflow;
+3. de langste nog bereikbare route vanaf de huidige positie.
 
-0 sec
-[❤️ Relatie verbeterd]
-[🎒 Item ontvangen]
-[⬆️ Reputatie verhoogd]
+Daardoor:
+- de balk reset niet meer bij een nieuwe node;
+- een keuze kan een korter/langer toekomstig pad kiezen;
+- de voortgang blijft gebaseerd op de daadwerkelijk gekozen route;
+- bij een echt einde komt de balk op 100%.
 
-na ±4,8 sec:
-[🎒 Item ontvangen]      <- schuift naar boven
-[⬆️ Reputatie verhoogd]
+VERTAKKINGEN
+We tellen bewust NIET alle alternatieve branches bij elkaar op.
 
-De Item-melding krijgt NU pas zijn eigen ±4,8 sec leestijd.
+Als een boek bijvoorbeeld:
+A -> keuze -> B of C
 
-Daarna:
-[⬆️ Reputatie verhoogd]
+heeft, hoeft iemand niet zowel B als C te lezen om 100% te halen.
 
-Ook die krijgt vervolgens zijn eigen ±4,8 sec.
+Voor toekomstige, nog niet gemaakte keuzes gebruikt DiBooks de langste nog
+bereikbare route als conservatieve schatting.
 
-Dus:
-- first in = first out;
-- geen meldingen die tegelijk verdwijnen;
-- iedere melding krijgt volledige leestijd zodra hij bovenaan staat.
+Na een keuze wordt alleen het gekozen vervolg nog relevant.
 
-STUDIO PREVIEW
-Exact dezelfde wachtrijlogica.
+TEKSTFLOWS
+Opeenvolgende tekstnodes die automatisch als één Reader-flow worden
+samengevoegd, worden ook als één voortgangssegment behandeld.
 
-PUBLIEKE READER
-Exact dezelfde wachtrijlogica.
+De onderliggende tekstnodes tellen wel mee in het gewicht, en de huidige
+pagina bepaalt hoe ver de lezer binnen die flow is.
 
-TERUGLEESMODUS
-Blijft ongewijzigd: Reader Feedback wordt daar niet opnieuw getriggerd.
+TECHNISCHE NODES
+Deze tellen niet als extra leesprogressie:
+- Hoofdstuk-marker
+- Function
+- IF / Condition
 
-BEHOUDEN
-- Reader Feedback types;
-- custom notification text;
-- Function/choice/minigame effects;
-- Scene Info;
-- Editor Lock;
-- Undo;
-- tab-focus fix;
-- globale paginanummers;
-- terugleesmodus.
+Wel zichtbaar/interactief en dus wel onderdeel van voortgang:
+- Tekst
+- Speciale pagina
+- Keuze
+- Cutscene
+- Minigame
+- andere zichtbare story nodes
+
+LOOPS
+Er zit cycle-protection in de toekomstige-routeberekening zodat een eventuele
+loop in een verhaal geen oneindige progressieberekening veroorzaakt.
+
+READBACK
+Terugleesmodus blijft de voortgang van het echte live-leespunt tonen en
+verandert de echte voortgang niet.
+
+OPSLAG
+`reading_progress.progress_percent` gebruikt vanaf nu dezelfde globale
+route-aware berekening. Dus Library/Favorieten percentages blijven hiermee
+ook consistent.
 
 GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
 2. Sleep map `app` over dibooks_author_studio.
-3. Bestanden vervangen.
+3. Bestand vervangen.
 4. npm run build.
 5. Push/deploy.
 
 TEST
-Maak een keuze met minimaal 3 zichtbare effects.
-De eerste melding moet na ±4,8 sec verdwijnen.
-De tweede schuift omhoog en blijft daarna opnieuw ±4,8 sec staan.
+1. Begin vooraan in een boek.
+2. Lees door meerdere tekstflows.
+3. Passeer een keuze/minigame/hoofdstuk.
+4. Balk moet blijven oplopen en niet resetten.
+5. Voltooi een route -> balk moet op 100% eindigen.

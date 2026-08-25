@@ -1084,16 +1084,231 @@ function getConditionTargetNodeId(
 }
 
 
-function calculateBookProgressPercent(book: ReaderBook, currentNodeId: string, pageIndex: number, pageCount: number) {
-  const progressNodes = book.nodes.filter((node) => node.type !== "chapter");
-  const totalNodes = Math.max(1, progressNodes.length);
-  const nodeIndex = Math.max(
-    0,
-    progressNodes.findIndex((node) => node.id === currentNodeId),
+function getReaderProgressSegment(
+  book: ReaderBook,
+  startNodeId: string,
+) {
+  const startNode = book.nodes.find(
+    (node) => node.id === startNodeId,
   );
+
+  if (!startNode) {
+    return {
+      weight: 0,
+      exitNodeId: startNodeId,
+    };
+  }
+
+  // Hoofdstuk-, Function- en IF-nodes zijn technische route-nodes.
+  // Ze moeten de leesprogressie niet kunstmatig oprekken.
+  if (
+    startNode.type === "chapter" ||
+    startNode.type === "function" ||
+    startNode.type === "condition"
+  ) {
+    return {
+      weight: 0,
+      exitNodeId: startNode.id,
+    };
+  }
+
+  // Opeenvolgende normale tekstnodes worden door de Reader als één flow
+  // afgespeeld. Voor de progressiebalk behandelen we die daarom ook als
+  // één segment met het aantal onderliggende tekstnodes als gewicht.
+  if (startNode.type === "text") {
+    const visited = new Set<string>();
+    let cursor: ReaderNode | undefined = startNode;
+    let textNodeCount = 0;
+    let exitNodeId = startNode.id;
+
+    while (
+      cursor &&
+      cursor.type === "text" &&
+      !visited.has(cursor.id)
+    ) {
+      visited.add(cursor.id);
+      textNodeCount += 1;
+      exitNodeId = cursor.id;
+
+      const outgoing = book.edges.filter(
+        (edge) => edge.source === cursor!.id,
+      );
+
+      if (outgoing.length !== 1) break;
+
+      const nextNode = book.nodes.find(
+        (node) => node.id === outgoing[0].target,
+      );
+
+      if (!nextNode || nextNode.type !== "text") break;
+      cursor = nextNode;
+    }
+
+    return {
+      weight: Math.max(1, textNodeCount),
+      exitNodeId,
+    };
+  }
+
+  // Speciale pagina, keuze, cutscene, minigame, enz. zijn één zichtbare
+  // verhaalstap.
+  return {
+    weight: 1,
+    exitNodeId: startNode.id,
+  };
+}
+
+function getReaderProgressNextTargets(
+  book: ReaderBook,
+  startNodeId: string,
+) {
+  const segment = getReaderProgressSegment(book, startNodeId);
+
+  return book.edges
+    .filter((edge) => edge.source === segment.exitNodeId)
+    .map((edge) => edge.target)
+    .filter((targetId) =>
+      book.nodes.some((node) => node.id === targetId),
+    );
+}
+
+function getLongestRemainingReaderProgressWeight(
+  book: ReaderBook,
+  currentNodeId: string,
+) {
+  const memo = new Map<string, number>();
+  const visiting = new Set<string>();
+
+  function visit(nodeId: string): number {
+    if (visiting.has(nodeId)) {
+      // Bescherming tegen eventuele loop-routes.
+      return 0;
+    }
+
+    const memoized = memo.get(nodeId);
+    if (memoized !== undefined) return memoized;
+
+    visiting.add(nodeId);
+
+    let longest = 0;
+    const nextTargets = getReaderProgressNextTargets(book, nodeId);
+
+    for (const targetId of nextTargets) {
+      const targetSegment = getReaderProgressSegment(
+        book,
+        targetId,
+      );
+      const candidate =
+        targetSegment.weight + visit(targetId);
+
+      if (candidate > longest) longest = candidate;
+    }
+
+    visiting.delete(nodeId);
+    memo.set(nodeId, longest);
+    return longest;
+  }
+
+  return visit(currentNodeId);
+}
+
+function getCompletedReaderRunProgressWeight(
+  book: ReaderBook,
+  history: ReaderRunStep[],
+  currentNodeId: string,
+) {
+  let currentStepIndex = -1;
+
+  for (
+    let index = history.length - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    if (history[index]?.nodeId === currentNodeId) {
+      currentStepIndex = index;
+      break;
+    }
+  }
+
+  const completedSteps =
+    currentStepIndex >= 0
+      ? history.slice(0, currentStepIndex)
+      : history;
+
+  return completedSteps.reduce(
+    (total, step) =>
+      total +
+      getReaderProgressSegment(book, step.nodeId).weight,
+    0,
+  );
+}
+
+function calculateBookProgressPercent(
+  book: ReaderBook,
+  currentNodeId: string,
+  pageIndex: number,
+  pageCount: number,
+  history: ReaderRunStep[] = [],
+) {
+  const currentNode = book.nodes.find(
+    (node) => node.id === currentNodeId,
+  );
+
+  if (!currentNode) return 0;
+
+  const currentSegment = getReaderProgressSegment(
+    book,
+    currentNodeId,
+  );
+  const completedWeight =
+    getCompletedReaderRunProgressWeight(
+      book,
+      history,
+      currentNodeId,
+    );
+  const remainingWeight =
+    getLongestRemainingReaderProgressWeight(
+      book,
+      currentNodeId,
+    );
+
   const safePageCount = Math.max(1, pageCount);
-  const pageFraction = Math.max(0, Math.min(1, (pageIndex + 1) / safePageCount));
-  const percent = ((nodeIndex + pageFraction) / totalNodes) * 100;
+  const currentFraction =
+    currentNode.type === "text" ||
+    currentNode.type === "special"
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            (Math.max(0, pageIndex) + 1) / safePageCount,
+          ),
+        )
+      : currentSegment.weight > 0
+        ? 1
+        : 0;
+
+  const completedCurrentWeight =
+    currentSegment.weight * currentFraction;
+
+  const totalRouteWeight =
+    completedWeight +
+    currentSegment.weight +
+    remainingWeight;
+
+  if (totalRouteWeight <= 0) {
+    return getReaderProgressNextTargets(
+      book,
+      currentNodeId,
+    ).length === 0
+      ? 100
+      : 0;
+  }
+
+  const percent =
+    ((completedWeight + completedCurrentWeight) /
+      totalRouteWeight) *
+    100;
+
   return clampProgressPercent(percent);
 }
 
@@ -2234,13 +2449,6 @@ export default function ReadBookPage() {
     }
 
     const timeout = window.setTimeout(() => {
-      const progressPercent = calculateBookProgressPercent(
-        loadState.book,
-        currentNodeId,
-        pageIndex,
-        readerPageCount,
-      );
-
       const historyWithPageMetrics =
         withCurrentReaderPageMetrics(
           runHistoryRef.current,
@@ -2249,6 +2457,14 @@ export default function ReadBookPage() {
           pageIndex,
           readerPageCount,
         );
+
+      const progressPercent = calculateBookProgressPercent(
+        loadState.book,
+        currentNodeId,
+        pageIndex,
+        readerPageCount,
+        historyWithPageMetrics,
+      );
 
       runHistoryRef.current = historyWithPageMetrics;
 
@@ -2517,6 +2733,7 @@ export default function ReadBookPage() {
             nextTargetId,
             0,
             1,
+            nextHistory,
           ),
           storyStateRef.current,
           nextHistory,
@@ -2584,15 +2801,8 @@ export default function ReadBookPage() {
       let functionStateSaved = false;
 
       try {
-        const progressPercent = calculateBookProgressPercent(
-          activeReader.book,
-          nextTargetId,
-          0,
-          1,
-        );
-
-        // Eerst status + volgende node opslaan. Daardoor kan een refresh op een
-        // functie-node een +1/increment niet per ongeluk dubbel uitvoeren.
+        // Eerst status + volgende node opbouwen. Daardoor kan progressie
+        // dezelfde daadwerkelijk gekozen run gebruiken.
         const nextHistory = buildNextRunHistory(
           activeReader.book,
           activeReader.node.id,
@@ -2603,6 +2813,16 @@ export default function ReadBookPage() {
           },
         );
 
+        const progressPercent = calculateBookProgressPercent(
+          activeReader.book,
+          nextTargetId,
+          0,
+          1,
+          nextHistory,
+        );
+
+        // Eerst status + volgende node opslaan. Daardoor kan een refresh op een
+        // functie-node een +1/increment niet per ongeluk dubbel uitvoeren.
         await saveReaderProgressSnapshot(
           activeUser.id,
           activeReader.book.id,
@@ -2687,13 +2907,6 @@ export default function ReadBookPage() {
 
     async function continueFromCondition() {
       try {
-        const progressPercent = calculateBookProgressPercent(
-          activeReader.book,
-          nextTargetId,
-          0,
-          1,
-        );
-
         const nextHistory = buildNextRunHistory(
           activeReader.book,
           activeReader.node.id,
@@ -2703,6 +2916,14 @@ export default function ReadBookPage() {
             exitKind: "condition",
             conditionResult: result,
           },
+        );
+
+        const progressPercent = calculateBookProgressPercent(
+          activeReader.book,
+          nextTargetId,
+          0,
+          1,
+          nextHistory,
         );
 
         await saveReaderProgressSnapshot(
@@ -2903,6 +3124,7 @@ export default function ReadBookPage() {
           currentNodeId,
           pageIndex,
           readerPageCount,
+          runHistoryRef.current,
         ),
       };
     }
@@ -3086,6 +3308,7 @@ export default function ReadBookPage() {
         targetNodeId,
         0,
         1,
+        nextHistory,
       );
 
       // Effect + routekeuze + nieuwe node worden samen opgeslagen.
@@ -3385,6 +3608,7 @@ export default function ReadBookPage() {
           currentNodeId,
           pageIndex,
           readerPageCount,
+          runHistory,
         );
 
   const hideReaderChromeForCutscene =

@@ -1,17 +1,18 @@
 {
-  "name": "DiBooks Reader Feedback Queue V1.1",
+  "name": "DiBooks Reader Global Progress V1",
   "date": "2026-08-25",
   "sql_required": false,
   "files": [
-    "app/editor/page.tsx",
     "app/books/[bookId]/read/page.tsx",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "FIFO Reader Feedback queue",
-    "4.8 seconds reading time per top notification",
-    "Sequential dismissal",
-    "Next notification moves upward before its timer starts",
-    "Same behavior in Studio Preview and public Reader"
+    "Whole-run reader progress bar",
+    "No reset between nodes",
+    "Branch-aware progress",
+    "Longest remaining route estimation",
+    "Merged text-flow weighting",
+    "100 percent at actual route ending",
+    "Saved progress_percent uses same model"
   ]
 }
