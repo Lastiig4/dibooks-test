@@ -202,6 +202,7 @@ const authSubscribers = new Set<() => void>();
 // onAuthStateChange vrijwel tegelijkertijd dezelfde gebruiker doorgeven.
 const profileRefreshes = new Map<string, Promise<void>>();
 let logoutInProgress = false;
+let pendingSignedOutTimer: number | null = null;
 
 function emitAuthSnapshot(next: Partial<AuthSnapshot>) {
   authSnapshot = { ...authSnapshot, ...next };
@@ -389,20 +390,47 @@ function bootAuthOnce() {
     supabase.auth.onAuthStateChange((event, session) => {
       if (logoutInProgress && session) return;
 
-      // Alleen een ECHTE Supabase SIGNED_OUT mag een bestaande sessie
-      // onmiddellijk uit de UI verwijderen.
-      //
-      // Bij tab-focus / browser-resume kan de client tijdens een refresh
-      // heel kort een event zonder session doorgeven. Dat is geen logout en
-      // mag de editor nooit naar de guest-scope laten springen.
+      // Expliciet uitloggen door de gebruiker blijft onmiddellijk.
+      // Een onverwachte SIGNED_OUT tijdens tab-focus/browser-resume krijgt
+      // daarentegen een korte grace-periode. Supabase kan rond token refresh
+      // namelijk kort SIGNED_OUT -> SIGNED_IN/TOKEN_REFRESHED afvuren.
       if (event === "SIGNED_OUT") {
-        logoutInProgress = false;
-        emitAuthSnapshot({
-          user: null,
-          loading: false,
-          initialized: true,
-        });
-        broadcastAuthChange();
+        if (logoutInProgress) {
+          logoutInProgress = false;
+
+          if (pendingSignedOutTimer !== null) {
+            window.clearTimeout(pendingSignedOutTimer);
+            pendingSignedOutTimer = null;
+          }
+
+          emitAuthSnapshot({
+            user: null,
+            loading: false,
+            initialized: true,
+          });
+          broadcastAuthChange();
+          return;
+        }
+
+        if (pendingSignedOutTimer !== null) {
+          window.clearTimeout(pendingSignedOutTimer);
+        }
+
+        pendingSignedOutTimer = window.setTimeout(() => {
+          pendingSignedOutTimer = null;
+
+          // Alleen uitvoeren wanneer er in de tussentijd niet alweer een
+          // geldige Supabase sessie is binnengekomen.
+          if (!authSnapshot.user) return;
+
+          emitAuthSnapshot({
+            user: null,
+            loading: false,
+            initialized: true,
+          });
+          broadcastAuthChange();
+        }, 1800);
+
         return;
       }
 
@@ -424,6 +452,11 @@ function bootAuthOnce() {
           `[DiBooks Auth] Tijdelijke lege sessie genegeerd tijdens ${event}.`,
         );
         return;
+      }
+
+      if (pendingSignedOutTimer !== null) {
+        window.clearTimeout(pendingSignedOutTimer);
+        pendingSignedOutTimer = null;
       }
 
       const mappedUser = mapSupabaseUser(session.user);

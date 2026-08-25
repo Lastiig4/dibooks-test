@@ -1,80 +1,62 @@
-DiBooks Patch - Editor Tab Focus Stability V1
-==============================================
+DiBooks Patch - Editor Tab Focus Stability V1.1
+================================================
 
-BUG
-Wanneer de Auteur Studio open stond en je naar een ander browsertabblad ging,
-kon bij terugkeren de auth kort refreshen.
+Deze patch is een vervolg op V1.
 
-De editor luisterde naar het HELE user-object.
-Een Supabase token/profile refresh kan voor dezelfde gebruiker een nieuw
-JavaScript user-object opleveren.
+WAT DE SCREENSHOT LIET ZIEN
+Het canvas bleef inmiddels staan, maar bij terugkeer naar een browser-tab
+verscheen nog kort:
 
-Gevolg:
-- editor dacht dat accountcontext veranderd was;
-- Dashboardboek werd opnieuw geladen;
-- autosave-scope kon kort naar guest springen;
-- actieve canvas kon blanco / teruggezet lijken.
+'Een actief Auteur-plan is nodig...'
 
-FIX 1 - AUTH STABIEL BIJ TAB FOCUS
-lib/auth.ts:
-- alleen een echte Supabase SIGNED_OUT logt de UI direct uit;
-- INITIAL_SESSION zonder session blijft correct een gast;
-- tijdelijke lege sessie bij tab/browser resume wordt genegeerd;
-- bij dezelfde user-ID blijven de verrijkte DB role + plan behouden tijdens
-  TOKEN_REFRESHED/session refresh.
+Dat betekende dat Supabase tijdens tab-focus nog heel kort een
+SIGNED_OUT / entitlement-refresh kon afvuren.
 
-De bestaande snelle INITIAL_SESSION architectuur blijft intact.
-Er is GEEN getSession()+listener race opnieuw geïntroduceerd.
+FIX 1
+Onverwachte SIGNED_OUT krijgt nu 1,8 seconde grace.
 
-FIX 2 - EDITOR RELOADT NIET OP USER OBJECT REFRESH
-app/editor/page.tsx:
-- load effect hangt niet meer van heel `user` af;
-- alleen stabiele velden:
-  authLoading + user.id + role;
-- editor onthoudt welke combinatie user/role/route al geladen is;
-- dezelfde scope wordt niet nogmaals over het actieve canvas geladen.
+Komt binnen die tijd dezelfde geldige sessie terug:
+- SIGNED_OUT wordt volledig genegeerd;
+- gebruiker blijft visueel ingelogd;
+- role/plan blijven stabiel;
+- editor ziet geen tijdelijke downgrade.
 
-FIX 3 - KOUDE AUTH BOOT
-Bij een echte browser-refresh wacht een Dashboardboek eerst totdat Supabase
-INITIAL_SESSION klaar is.
+Klik je zelf expliciet op Uitloggen:
+- logout blijft direct;
+- geen grace;
+- normale beveiliging blijft intact.
 
-Daardoor wordt een Dashboardboek niet eerst één render als guest geladen.
+FIX 2
+De Editor bepaalt zijn geladen projectscope nu uitsluitend op:
 
-FIX 4 - DASHBOARD ROUTE + GEEN USER
-Als een echte login ontbreekt op `/editor?book=...`, wordt niet langer een
-guest-autosave over die Dashboardroute geladen.
+user-id + editor-route
 
-De editor wacht op login/context in plaats van de actieve projectstate te
-vervangen.
+NIET meer op:
+role / plan / compleet user-object.
 
-BEHOUDEN
-- save on visibility hidden;
-- sessionStorage editor autosave;
-- Reader Feedback V1;
-- Function/IF/variables;
-- 15-node gratis proefmodus;
-- hoofdstuk-marker start;
-- Account auteursnaam;
-- moderatie/review;
-- Dashboard-opslag;
-- Reader globale paginanummers/readback.
+Dus:
+Author -> tijdelijke Reader -> Author
+of
+Author Pro -> tijdelijke free -> Author Pro
+
+kan NOOIT meer het actieve canvas opnieuw laden.
+
+FIX 3
+De melding 'Author Pro nodig' wordt alleen nog gebruikt bij de echte eerste
+poging om een Dashboardboek zonder rechten te openen.
+
+Een reeds geladen project reageert niet op tijdelijke entitlement-refreshes.
+
+BELANGRIJK
+Save/publish beveiliging blijft bestaan.
+Als een abonnement echt is beëindigd, worden server-side/auteur-permissions
+bij opslaan/publiceren nog steeds afgedwongen.
 
 GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep `app` en `lib` over `dibooks_author_studio`.
-3. Bestanden vervangen.
-4. npm run build.
-5. Commit/push naar Vercel.
-
-TEST
-1. Open een bestaand Dashboardboek in Studio.
-2. Wijzig tekst of plaats een node.
-3. Wacht 1-2 sec zodat sessiesave geschreven is.
-4. Ga 20-60 sec naar een ander browser-tabblad.
-5. Ga terug.
-6. Canvas moet EXACT blijven staan.
-7. Herhaal een paar keer.
-8. Laat tab eventueel 5+ minuten op achtergrond staan en test opnieuw.
-9. Controleer daarna expliciet uitloggen: dat moet nog steeds echt uitloggen.
+2. `app` en `lib` vervangen.
+3. npm run build.
+4. Push/deploy.
+5. Zelfde tab-wisseltest opnieuw uitvoeren.

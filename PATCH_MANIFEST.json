@@ -1,5 +1,5 @@
 {
-  "name": "DiBooks Editor Tab Focus Stability V1",
+  "name": "DiBooks Editor Tab Focus Stability V1.1",
   "date": "2026-08-25",
   "sql_required": false,
   "files": [
@@ -8,10 +8,9 @@
     "PATCH_INFO.txt"
   ],
   "fixes": [
-    "Ignore transient null auth session during tab resume",
-    "Preserve enriched role and plan through token refresh",
-    "Prevent editor book reload on same-user object refresh",
-    "Wait for INITIAL_SESSION before dashboard editor load",
-    "Prevent dashboard route from restoring guest autosave"
+    "Grace period for unexpected SIGNED_OUT during tab resume",
+    "Immediate explicit logout retained",
+    "Editor scope no longer depends on role/plan",
+    "No Author Pro alert for transient entitlement refresh"
   ]
 }

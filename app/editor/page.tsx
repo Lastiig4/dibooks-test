@@ -2818,11 +2818,12 @@ export default function Home() {
             ? `book:${bookId}`
             : "new";
       const userScope = user?.id ?? "guest";
-      const loadScope = `${userScope}:${role}:${routeScope}`;
+      const loadScope = `${userScope}:${routeScope}`;
 
-      // Een profielrefresh/tokenrefresh maakt soms een nieuw JS user-object,
-      // maar zolang ID + rol + route hetzelfde zijn is er niets opnieuw te
-      // laden. De actieve editorstate blijft dan onaangeraakt.
+      // Een profiel-, token-, role- of plan-refresh mag nooit een bestaand
+      // canvas opnieuw laden. Voor de editor-identiteit zijn alleen account-ID
+      // + route relevant. Schrijfrechten worden bij daadwerkelijke save/publish
+      // nog steeds opnieuw via permissions/server-side checks afgedwongen.
       if (loadedEditorScopeRef.current === loadScope) {
         return;
       }
@@ -2932,6 +2933,12 @@ export default function Home() {
       }
 
       if (!permissions.canEditConceptBook) {
+        // Tijdens een auth/profile refresh kunnen entitlements heel kort nog
+        // niet verrijkt zijn. Een bestaand geladen canvas mag daar nooit op
+        // reageren. Alleen bij een echte eerste poging om dit dashboardboek
+        // te openen blokkeren we de route.
+        if (loadedEditorScopeRef.current === loadScope) return;
+
         alert(
           "Een actief Auteur-plan is nodig om Dashboardboeken of gedeelde concepten in de editor te wijzigen. De gratis Studio blijft beschikbaar voor lokale projecten tot 15 verhaalnodes.",
         );
@@ -3017,7 +3024,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, role, setEdges, setNodes, user?.id]);
+  }, [authLoading, setEdges, setNodes, user?.id]);
 
   useEffect(() => {
     if (reviewMode) return;
