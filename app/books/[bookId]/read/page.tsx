@@ -968,26 +968,22 @@ function enqueueReaderFeedbackToasts(
   actions: ReaderFunctionAction[] = [],
 ) {
   const feedbackItems = buildReaderFeedbackItems(book, actions);
+  if (feedbackItems.length === 0) return;
 
-  feedbackItems.forEach((item, index) => {
-    const id = `reader_feedback_${Date.now()}_${index}_${Math.random()
+  const now = Date.now();
+  const queuedItems = feedbackItems.map((item, index) => ({
+    ...item,
+    id: `reader_feedback_${now}_${index}_${Math.random()
       .toString(36)
-      .slice(2, 7)}`;
+      .slice(2, 7)}`,
+  }));
 
-    setFeedbacks((current) => [
-      ...current,
-      {
-        ...item,
-        id,
-      },
-    ]);
-
-    window.setTimeout(() => {
-      setFeedbacks((current) =>
-        current.filter((feedback) => feedback.id !== id),
-      );
-    }, 3600 + index * 220);
-  });
+  // Alle meldingen komen in FIFO-volgorde in één wachtrij.
+  // De bovenste melding wordt later pas na zijn eigen leestijd verwijderd.
+  setFeedbacks((current) => [
+    ...current,
+    ...queuedItems,
+  ]);
 }
 
 function evaluateReaderCondition(
@@ -2048,6 +2044,25 @@ export default function ReadBookPage() {
   const readerShellRef = useRef<HTMLElement | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const { user, loading: authLoading } = useDemoAuth();
+
+  const readerFeedbackHeadId =
+    readerFeedbacks[0]?.id ?? null;
+
+  useEffect(() => {
+    if (!readerFeedbackHeadId) return;
+
+    const timeout = window.setTimeout(() => {
+      setReaderFeedbacks((current) => {
+        if (current[0]?.id !== readerFeedbackHeadId) {
+          return current;
+        }
+
+        return current.slice(1);
+      });
+    }, 4800);
+
+    return () => window.clearTimeout(timeout);
+  }, [readerFeedbackHeadId]);
 
   useEffect(() => {
     let active = true;
@@ -3498,7 +3513,7 @@ export default function ReadBookPage() {
             return (
               <div
                 key={feedback.id}
-                className="rounded-2xl border border-blue-300/20 bg-[#0b1020]/95 p-4 text-white shadow-2xl shadow-black/55 backdrop-blur-xl"
+                className="rounded-2xl border border-blue-300/20 bg-[#0b1020]/95 p-4 text-white shadow-2xl shadow-black/55 backdrop-blur-xl transition-all duration-300"
               >
                 <div className="flex items-start gap-3">
                   <span className="text-2xl">{presentation.icon}</span>

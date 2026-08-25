@@ -1,72 +1,68 @@
-DiBooks Patch - Editor Safety + Scene Info V1
-=============================================
+DiBooks Patch - Reader Feedback Queue V1.1
+==========================================
 
-SCÈNE-INFO
-Leeg betekent nu echt leeg.
+PROBLEEM
+Bij meerdere Reader Feedback meldingen kregen alle meldingen vrijwel tegelijk
+een timer. Daardoor verdwenen melding 2, 3 en 4 te snel nadat de eerste weg was.
 
-Voor nieuwe Tekst/Speciale nodes:
-- ingevuld: toon info zolang die node actief is;
-- leeg: toon niets extra's zolang die node actief is.
+NIEUWE WERKING: FIFO WACHTRIJ
+Alle meldingen verschijnen nog steeds netjes onder elkaar.
 
-Voorbeeld:
-Node A = Cycle 64 • Day 83
-Node B = leeg
-Node C = Cycle 64 • Day 84
+Maar alleen de BOVENSTE melding heeft een actieve verdwijn-timer.
 
-Reader:
-A -> Hoofdstuk ... • Cycle 64 • Day 83
-B -> alleen Hoofdstuk ...
-C -> Hoofdstuk ... • Cycle 64 • Day 84
+Voorbeeld met 3 meldingen:
 
-Als de context verandert, ook van ingevuld naar leeg, begint de volgende
-context op een nieuwe reader-pagina.
+0 sec
+[❤️ Relatie verbeterd]
+[🎒 Item ontvangen]
+[⬆️ Reputatie verhoogd]
 
-Alleen OUDE nodes zonder sceneInfo-property gebruiken nog het oude
-Hoofdstukinfo/chapterSubtitle als backwards-compatible fallback.
+na ±4,8 sec:
+[🎒 Item ontvangen]      <- schuift naar boven
+[⬆️ Reputatie verhoogd]
 
-EDITOR LOCK
-Nieuw slotje links onderaan.
+De Item-melding krijgt NU pas zijn eigen ±4,8 sec leestijd.
 
-Vergrendeld:
-- nodes niet verslepen;
-- geen node/edge wijzigingen via ReactFlow;
-- rechter instellingenpaneel geblokkeerd;
-- nieuwe nodes toevoegen geblokkeerd;
-- variabelen openen geblokkeerd;
-- lokaal project laden geblokkeerd;
-- Reset editor geblokkeerd.
+Daarna:
+[⬆️ Reputatie verhoogd]
 
-Nog wel mogelijk:
-- selecteren/kijken;
-- pan/zoom;
-- Preview;
-- opslaan/exporteren;
-- Help/theme.
+Ook die krijgt vervolgens zijn eigen ±4,8 sec.
 
-Bovenin staat duidelijk: 🔒 Vergrendeld.
+Dus:
+- first in = first out;
+- geen meldingen die tegelijk verdwijnen;
+- iedere melding krijgt volledige leestijd zodra hij bovenaan staat.
 
-UNDO
-Nieuwe Undo-knop links.
+STUDIO PREVIEW
+Exact dezelfde wachtrijlogica.
 
-- bewaart maximaal 50 recente editorstappen;
-- verwijderde nodes + paths kunnen terug;
-- nodeverplaatsingen kunnen terug;
-- tekst/metadata/logica/variabelen kunnen terug;
-- Ctrl+Z / Cmd+Z werkt op het canvas;
-- in input/textarea blijft Ctrl+Z gewoon lokale tekst-undo.
+PUBLIEKE READER
+Exact dezelfde wachtrijlogica.
 
-Undo is uitgeschakeld zolang Editor Lock actief is.
+TERUGLEESMODUS
+Blijft ongewijzigd: Reader Feedback wordt daar niet opnieuw getriggerd.
+
+BEHOUDEN
+- Reader Feedback types;
+- custom notification text;
+- Function/choice/minigame effects;
+- Scene Info;
+- Editor Lock;
+- Undo;
+- tab-focus fix;
+- globale paginanummers;
+- terugleesmodus.
 
 GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep map app over dibooks_author_studio.
+2. Sleep map `app` over dibooks_author_studio.
 3. Bestanden vervangen.
 4. npm run build.
 5. Push/deploy.
 
 TEST
-- Scene: Day 1 -> lege node -> Day 2.
-- Lock: probeer node te slepen/verwijderen/wijzigen.
-- Undo: verwijder node, wacht ±0,3 sec, klik Undo.
+Maak een keuze met minimaal 3 zichtbare effects.
+De eerste melding moet na ±4,8 sec verdwijnen.
+De tweede schuift omhoog en blijft daarna opnieuw ±4,8 sec staan.

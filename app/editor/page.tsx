@@ -4161,26 +4161,42 @@ ${formatSaveError(error)}`);
         ): item is Omit<ReaderFeedbackToast, "id"> => !!item,
       );
 
-    feedbackItems.forEach((item, index) => {
-      const id = `preview_feedback_${Date.now()}_${index}_${Math.random()
+    if (feedbackItems.length === 0) return;
+
+    const now = Date.now();
+    const queuedItems = feedbackItems.map((item, index) => ({
+      ...item,
+      id: `preview_feedback_${now}_${index}_${Math.random()
         .toString(36)
-        .slice(2, 7)}`;
+        .slice(2, 7)}`,
+    }));
 
-      setPreviewFeedbacks((current) => [
-        ...current,
-        {
-          ...item,
-          id,
-        },
-      ]);
-
-      window.setTimeout(() => {
-        setPreviewFeedbacks((current) =>
-          current.filter((feedback) => feedback.id !== id),
-        );
-      }, 3600 + index * 220);
-    });
+    // Alleen toevoegen aan de wachtrij. Verwijderen gebeurt centraal:
+    // steeds alleen de bovenste melding krijgt zijn eigen leestijd.
+    setPreviewFeedbacks((current) => [
+      ...current,
+      ...queuedItems,
+    ]);
   }
+
+  const previewFeedbackHeadId =
+    previewFeedbacks[0]?.id ?? null;
+
+  useEffect(() => {
+    if (!previewFeedbackHeadId) return;
+
+    const timeout = window.setTimeout(() => {
+      setPreviewFeedbacks((current) => {
+        if (current[0]?.id !== previewFeedbackHeadId) {
+          return current;
+        }
+
+        return current.slice(1);
+      });
+    }, 4800);
+
+    return () => window.clearTimeout(timeout);
+  }, [previewFeedbackHeadId]);
 
   function executePreviewActions(actions: FunctionAction[] = []) {
     queuePreviewReaderFeedback(actions);
@@ -6061,7 +6077,7 @@ ${formatSaveError(error)}`);
                 return (
                   <div
                     key={feedback.id}
-                    className="rounded-2xl border border-blue-300/20 bg-[#0b1020]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl"
+                    className="rounded-2xl border border-blue-300/20 bg-[#0b1020]/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all duration-300"
                   >
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{presentation.icon}</span>

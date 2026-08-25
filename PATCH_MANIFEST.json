@@ -1,5 +1,5 @@
 {
-  "name": "DiBooks Editor Safety + Scene Info V1",
+  "name": "DiBooks Reader Feedback Queue V1.1",
   "date": "2026-08-25",
   "sql_required": false,
   "files": [
@@ -8,11 +8,10 @@
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Blank scene info clears context",
-    "Legacy chapter info fallback for old nodes",
-    "Editor lock mode",
-    "Multi-step undo up to 50 actions",
-    "Ctrl/Cmd+Z canvas undo",
-    "Undo deleted nodes and paths"
+    "FIFO Reader Feedback queue",
+    "4.8 seconds reading time per top notification",
+    "Sequential dismissal",
+    "Next notification moves upward before its timer starts",
+    "Same behavior in Studio Preview and public Reader"
   ]
 }
