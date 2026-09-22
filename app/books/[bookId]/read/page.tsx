@@ -17,6 +17,7 @@ type ReaderNodeType =
   | "special"
   | "chapter"
   | "cutscene"
+  | "image"
   | "choice"
   | "minigame"
   | "function"
@@ -102,6 +103,9 @@ type ReaderNode = {
   videoStoragePath?: string;
   videoFileName?: string;
   videoDuration?: number;
+  imageUrl?: string;
+  imageAlt?: string;
+  imageCaption?: string;
   choices: ReaderChoice[];
   miniGameType?: string;
   miniGameDuration?: number;
@@ -301,6 +305,10 @@ function normalizeNode(rawNode: any): ReaderNode {
     videoStoragePath: data.videoStoragePath ?? content.videoStoragePath ?? rawNode?.videoStoragePath ?? "",
     videoFileName: data.videoFileName ?? content.videoFileName ?? rawNode?.videoFileName ?? "",
     videoDuration: data.videoDuration ?? content.videoDuration ?? rawNode?.videoDuration ?? 0,
+    imageUrl: data.imageUrl ?? content.imageUrl ?? rawNode?.imageUrl ?? "",
+    imageAlt: data.imageAlt ?? content.imageAlt ?? rawNode?.imageAlt ?? "",
+    imageCaption:
+      data.imageCaption ?? content.imageCaption ?? rawNode?.imageCaption ?? "",
     choices: data.choices ?? content.choices ?? rawNode?.choices ?? [],
     miniGameType: data.miniGameType ?? content.miniGameType ?? rawNode?.miniGameType ?? "",
     miniGameDuration: data.miniGameDuration ?? content.miniGameDuration ?? rawNode?.miniGameDuration ?? 5,
@@ -603,7 +611,8 @@ function isReaderReplayVisibleNode(node: ReaderNode | undefined | null) {
     node.type === "special" ||
     node.type === "choice" ||
     node.type === "minigame" ||
-    node.type === "cutscene"
+    node.type === "cutscene" ||
+    node.type === "image"
   );
 }
 
@@ -3535,6 +3544,7 @@ export default function ReadBookPage() {
   const { book, node } = reader;
   const isTextNode = node.type === "text" || node.type === "special";
   const isCutsceneNode = node.type === "cutscene";
+  const isImageNode = node.type === "image";
   const isReadOnlyReplay = replayStepIndex !== null;
   const activeReplayStep =
     replayStepIndex !== null
@@ -3992,6 +4002,66 @@ export default function ReadBookPage() {
             initialSceneInfo={reader.initialSceneInfo}
             onSceneInfoChange={setActiveSceneInfo}
           />
+        )}
+
+        {isImageNode && (
+          <div className="flex h-full w-full items-center justify-center overflow-auto bg-black p-4 sm:p-6 lg:p-8">
+            <div className="flex w-full max-w-6xl flex-col items-center gap-4">
+              {node.imageUrl ? (
+                <img
+                  src={node.imageUrl}
+                  alt={node.imageAlt || node.title || "Afbeelding"}
+                  className="max-h-[calc(100vh-14rem)] max-w-full rounded-2xl object-contain shadow-2xl"
+                />
+              ) : (
+                <div className="rounded-3xl border border-red-500/25 bg-red-500/10 p-6 text-red-100">
+                  Deze afbeelding is nog niet beschikbaar.
+                </div>
+              )}
+
+              {node.imageCaption && (
+                <p className="max-w-3xl text-center text-sm font-semibold leading-6 text-neutral-300 sm:text-base">
+                  {node.imageCaption}
+                </p>
+              )}
+
+              {!isReadOnlyReplay && reader.outgoingPaths.length === 1 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    goToNode(reader.outgoingPaths[0].target, {
+                      sourceNodeId: node.id,
+                      exitKind: "path",
+                    })
+                  }
+                  className="rounded-2xl bg-sky-600 px-6 py-3 text-sm font-black text-white transition hover:bg-sky-500"
+                >
+                  Verder
+                </button>
+              )}
+
+              {!isReadOnlyReplay && reader.outgoingPaths.length > 1 && (
+                <div className="flex flex-wrap justify-center gap-3">
+                  {reader.outgoingPaths.map((edge, index) => (
+                    <button
+                      key={`${edge.id}-${index}`}
+                      type="button"
+                      onClick={() =>
+                        goToNode(edge.target, {
+                          sourceNodeId: node.id,
+                          exitKind: "path",
+                          edgeLabel: edge.label,
+                        })
+                      }
+                      className="rounded-2xl border border-sky-400/30 bg-sky-500/15 px-5 py-3 text-sm font-black text-sky-100 hover:bg-sky-500/25"
+                    >
+                      {edge.label || `Verder ${index + 1}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {node.type === "cutscene" && (

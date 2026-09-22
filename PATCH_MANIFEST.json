@@ -1,18 +1,20 @@
 {
-  "name": "DiBooks Reader Global Progress V1",
-  "date": "2026-08-25",
+  "name": "DiBooks Afbeelding Node V1",
+  "date": "2026-09-22",
   "sql_required": false,
   "files": [
+    "app/editor/page.tsx",
     "app/books/[bookId]/read/page.tsx",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Whole-run reader progress bar",
-    "No reset between nodes",
-    "Branch-aware progress",
-    "Longest remaining route estimation",
-    "Merged text-flow weighting",
-    "100 percent at actual route ending",
-    "Saved progress_percent uses same model"
+    "Afbeelding node",
+    "Local image upload up to 5 MB",
+    "Alt text",
+    "Caption",
+    "Studio Preview",
+    "Public Reader",
+    "Readback",
+    "Global progress integration"
   ]
 }

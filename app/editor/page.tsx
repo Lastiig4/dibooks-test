@@ -113,7 +113,7 @@ const FontSize = Extension.create({
   },
 });
 
-type DiNodeType = "text" | "special" | "chapter" | "cutscene" | "choice" | "minigame" | "function" | "condition" | "scratchpad";
+type DiNodeType = "text" | "special" | "chapter" | "cutscene" | "image" | "choice" | "minigame" | "function" | "condition" | "scratchpad";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 
@@ -223,6 +223,9 @@ type DiNodeData = {
   videoStoragePath?: string;
   videoFileName?: string;
   videoDuration?: number;
+  imageUrl?: string;
+  imageAlt?: string;
+  imageCaption?: string;
   choices?: {
     label: string;
     targetNodeId?: string;
@@ -303,6 +306,7 @@ const nodeColors: Record<DiNodeType, string> = {
   special: "#eab308",
   chapter: "#e11d48",
   cutscene: "#16a34a",
+  image: "#0ea5e9",
   choice: "#f97316",
   minigame: "#9333ea",
   function: "#06b6d4",
@@ -315,6 +319,7 @@ const nodeLabels: Record<DiNodeType, string> = {
   special: "Speciale pagina",
   chapter: "Hoofdstuk-marker",
   cutscene: "Cutscene",
+  image: "Afbeelding",
   choice: "Keuze",
   minigame: "Mini game",
   function: "Functie",
@@ -1194,6 +1199,10 @@ function isNodeComplete(node: Node<DiNodeData> | undefined) {
 
   if (node.data.type === "cutscene") {
     return !!node.data.videoUrl && node.data.videoUrl.trim().length > 0;
+  }
+
+  if (node.data.type === "image") {
+    return !!node.data.imageUrl && node.data.imageUrl.trim().length > 0;
   }
 
   if (node.data.type === "choice") {
@@ -4346,6 +4355,9 @@ ${formatSaveError(error)}`);
         videoStoragePath: type === "cutscene" ? "" : undefined,
         videoFileName: type === "cutscene" ? "" : undefined,
         videoDuration: type === "cutscene" ? 0 : undefined,
+        imageUrl: type === "image" ? "" : undefined,
+        imageAlt: type === "image" ? "" : undefined,
+        imageCaption: type === "image" ? "" : undefined,
         choices:
           type === "choice"
             ? [
@@ -5532,6 +5544,16 @@ ${formatSaveError(error)}`);
                 }}
               />
               <SidebarMenuItem
+                title="Afbeelding"
+                description="Toon een wereldkaart, illustratie, brief of ander beeld op een eigen scherm."
+                accentClass="bg-sky-600 text-white"
+                icon={<span className="text-xl leading-none">🖼️</span>}
+                onClick={() => {
+                  setSidebarGroupOpen(null);
+                  createNode("image");
+                }}
+              />
+              <SidebarMenuItem
                 title="Minigame"
                 description="Interactieve opdracht met succes- en failroute."
                 accentClass="bg-purple-600 text-white"
@@ -6512,6 +6534,160 @@ ${formatSaveError(error)}`);
                       opmaak aan te passen.
                     </div>
                   )}
+                </div>
+              )}
+
+              {selectedNode.data.type === "image" && (
+                <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3">
+                  <div className="mb-4">
+                    <h3 className="font-black text-sky-300">Afbeelding</h3>
+                    <p className="mt-1 text-sm text-neutral-400">
+                      Gebruik dit voor bijvoorbeeld een wereldkaart, plattegrond, brief, dossier of illustratie.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4">
+                    <div>
+                      <label className="mb-2 block text-sm font-black">
+                        Afbeelding uploaden
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        disabled={editorLocked}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file || !selectedNodeId) return;
+
+                          if (file.size > 5 * 1024 * 1024) {
+                            alert("Afbeelding is te groot. Gebruik maximaal 5 MB.");
+                            event.target.value = "";
+                            return;
+                          }
+
+                          const fileReader = new FileReader();
+                          fileReader.onload = () => {
+                            const imageUrl =
+                              typeof fileReader.result === "string"
+                                ? fileReader.result
+                                : "";
+
+                            if (!imageUrl) return;
+
+                            setNodes((currentNodes) =>
+                              currentNodes.map((node) =>
+                                node.id === selectedNodeId
+                                  ? {
+                                      ...node,
+                                      data: {
+                                        ...node.data,
+                                        imageUrl,
+                                      },
+                                    }
+                                  : node,
+                              ),
+                            );
+                          };
+                          fileReader.readAsDataURL(file);
+                          event.target.value = "";
+                        }}
+                        className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-sm text-white file:mr-3 file:rounded-lg file:border-0 file:bg-sky-600 file:px-3 file:py-2 file:font-black file:text-white hover:file:bg-sky-500 disabled:opacity-40"
+                      />
+                      <p className="mt-2 text-xs text-neutral-500">
+                        PNG, JPG, WEBP of GIF • maximaal 5 MB.
+                      </p>
+                    </div>
+
+                    {selectedNode.data.imageUrl ? (
+                      <div className="rounded-xl border border-sky-800 bg-sky-950/20 p-3">
+                        <img
+                          src={selectedNode.data.imageUrl}
+                          alt={selectedNode.data.imageAlt || "Preview afbeelding"}
+                          className="mx-auto max-h-64 max-w-full rounded-lg object-contain"
+                        />
+                        <button
+                          type="button"
+                          disabled={editorLocked}
+                          onClick={() => {
+                            if (!selectedNodeId) return;
+                            setNodes((currentNodes) =>
+                              currentNodes.map((node) =>
+                                node.id === selectedNodeId
+                                  ? {
+                                      ...node,
+                                      data: {
+                                        ...node.data,
+                                        imageUrl: "",
+                                      },
+                                    }
+                                  : node,
+                              ),
+                            );
+                          }}
+                          className="mt-3 rounded-lg bg-red-700 px-3 py-2 text-xs font-black text-white hover:bg-red-600 disabled:opacity-40"
+                        >
+                          Afbeelding verwijderen
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-neutral-700 bg-neutral-950 p-4 text-sm text-neutral-400">
+                        Nog geen afbeelding toegevoegd. Deze node is pas compleet nadat je een afbeelding uploadt.
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="mb-2 block text-sm font-black">
+                        Alt-tekst <span className="text-neutral-500">(optioneel)</span>
+                      </label>
+                      <input
+                        value={selectedNode.data.imageAlt ?? ""}
+                        disabled={editorLocked}
+                        onChange={(event) => {
+                          if (!selectedNodeId) return;
+                          const imageAlt = event.target.value;
+                          setNodes((currentNodes) =>
+                            currentNodes.map((node) =>
+                              node.id === selectedNodeId
+                                ? {
+                                    ...node,
+                                    data: { ...node.data, imageAlt },
+                                  }
+                                : node,
+                            ),
+                          );
+                        }}
+                        placeholder="Bijv. Wereldkaart van Serenthil"
+                        className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-sky-400 disabled:opacity-40"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-black">
+                        Onderschrift <span className="text-neutral-500">(optioneel)</span>
+                      </label>
+                      <input
+                        value={selectedNode.data.imageCaption ?? ""}
+                        disabled={editorLocked}
+                        onChange={(event) => {
+                          if (!selectedNodeId) return;
+                          const imageCaption = event.target.value;
+                          setNodes((currentNodes) =>
+                            currentNodes.map((node) =>
+                              node.id === selectedNodeId
+                                ? {
+                                    ...node,
+                                    data: { ...node.data, imageCaption },
+                                  }
+                                : node,
+                            ),
+                          );
+                        }}
+                        placeholder="Bijv. De zeven koninkrijken van Serenthil"
+                        maxLength={180}
+                        className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-sky-400 disabled:opacity-40"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -8321,6 +8497,55 @@ ${formatSaveError(error)}`);
                 initialSceneInfo={textChain.initialSceneInfo}
                 onSceneInfoChange={setPreviewSceneInfo}
               />
+            )}
+
+            {previewNode.data.type === "image" && (
+              <div className="flex h-full items-center justify-center overflow-auto bg-black p-4 sm:p-6">
+                <div className="flex w-full max-w-6xl flex-col items-center gap-4">
+                  {previewNode.data.imageUrl ? (
+                    <img
+                      src={previewNode.data.imageUrl}
+                      alt={previewNode.data.imageAlt || previewNode.data.label || "Afbeelding"}
+                      className="max-h-[72vh] max-w-full rounded-2xl object-contain shadow-2xl"
+                    />
+                  ) : (
+                    <div className="rounded-xl border border-red-700 bg-red-950/40 p-5 text-red-200">
+                      Deze afbeelding-node heeft nog geen afbeelding.
+                    </div>
+                  )}
+
+                  {previewNode.data.imageCaption && (
+                    <p className="max-w-3xl text-center text-sm font-semibold leading-6 text-neutral-300">
+                      {previewNode.data.imageCaption}
+                    </p>
+                  )}
+
+                  {previewPaths.length === 1 && (
+                    <button
+                      type="button"
+                      onClick={() => goToPreviewNode(previewPaths[0].target)}
+                      className="rounded-xl bg-sky-600 px-5 py-3 font-black text-white hover:bg-sky-500"
+                    >
+                      Verder
+                    </button>
+                  )}
+
+                  {previewPaths.length > 1 && (
+                    <div className="flex flex-wrap justify-center gap-3">
+                      {previewPaths.map((edge, index) => (
+                        <button
+                          key={`${edge.id}-${index}`}
+                          type="button"
+                          onClick={() => goToPreviewNode(edge.target)}
+                          className="rounded-xl border border-sky-400/30 bg-sky-500/15 px-5 py-3 font-black text-sky-100 hover:bg-sky-500/25"
+                        >
+                          {edge.label || `Verder ${index + 1}`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             {previewNode.data.type === "cutscene" && (

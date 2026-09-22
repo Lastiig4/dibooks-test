@@ -1,86 +1,60 @@
-DiBooks Patch - Reader Global Progress V1
-=========================================
-
-PROBLEEM
-De blauwe progressiebalk gebruikte de positie van de huidige node in de
-project-JSON/node-array.
-
-Daardoor kon de balk bij een volgende node of vertakking ineens teruglopen of
-opnieuw lijken te beginnen.
+DiBooks Patch - Afbeelding Node V1
+================================
 
 NIEUW
-De blauwe balk is nu BOEK-/RUN-VOORTGANG.
+Media & interactie > Afbeelding
 
-Hij gebruikt:
-1. wat de lezer in deze daadwerkelijke run al heeft afgelegd;
-2. de voortgang binnen de huidige tekstflow;
-3. de langste nog bereikbare route vanaf de huidige positie.
+Gebruik voor wereldkaarten, plattegronden, brieven, dossiers, illustraties of andere stilstaande beelden.
 
-Daardoor:
-- de balk reset niet meer bij een nieuwe node;
-- een keuze kan een korter/langer toekomstig pad kiezen;
-- de voortgang blijft gebaseerd op de daadwerkelijk gekozen route;
-- bij een echt einde komt de balk op 100%.
+EDITOR
+- Nieuwe blauwe Afbeelding-node.
+- Upload PNG/JPG/WEBP/GIF.
+- Maximaal 5 MB per afbeelding in V1.
+- Optionele alt-tekst.
+- Optioneel onderschrift.
+- Node is pas compleet als een afbeelding is toegevoegd.
+- Editor Lock en Undo werken ook met deze node.
 
-VERTAKKINGEN
-We tellen bewust NIET alle alternatieve branches bij elkaar op.
+STUDIO PREVIEW
+Afbeeldingen verschijnen op een eigen scherm, met behoud van aspect ratio.
+Bij één path verschijnt Verder; bij meerdere paths verschijnen routeknoppen.
 
-Als een boek bijvoorbeeld:
-A -> keuze -> B of C
+PUBLIEKE READER
+- Eigen afbeelding-scherm.
+- Responsive op desktop/tablet/mobiel.
+- Optioneel onderschrift.
+- Ondersteunt normale paths.
+- Ondersteunt Terugleesmodus.
+- Telt als één zichtbare verhaalstap in de globale voortgang.
 
-heeft, hoeft iemand niet zowel B als C te lezen om 100% te halen.
+OPSLAG V1
+De afbeelding wordt als data-URL in de bestaande project JSON opgeslagen.
+Daarom is geen SQL of nieuwe storage-bucket nodig.
 
-Voor toekomstige, nog niet gemaakte keuzes gebruikt DiBooks de langste nog
-bereikbare route als conservatieve schatting.
+Voor een latere V2 kunnen we grote afbeeldingen naar DiBooks Storage verplaatsen, net zoals cutscenes, zodat projecten kleiner blijven.
 
-Na een keuze wordt alleen het gekozen vervolg nog relevant.
-
-TEKSTFLOWS
-Opeenvolgende tekstnodes die automatisch als één Reader-flow worden
-samengevoegd, worden ook als één voortgangssegment behandeld.
-
-De onderliggende tekstnodes tellen wel mee in het gewicht, en de huidige
-pagina bepaalt hoe ver de lezer binnen die flow is.
-
-TECHNISCHE NODES
-Deze tellen niet als extra leesprogressie:
-- Hoofdstuk-marker
-- Function
-- IF / Condition
-
-Wel zichtbaar/interactief en dus wel onderdeel van voortgang:
-- Tekst
-- Speciale pagina
-- Keuze
-- Cutscene
-- Minigame
-- andere zichtbare story nodes
-
-LOOPS
-Er zit cycle-protection in de toekomstige-routeberekening zodat een eventuele
-loop in een verhaal geen oneindige progressieberekening veroorzaakt.
-
-READBACK
-Terugleesmodus blijft de voortgang van het echte live-leespunt tonen en
-verandert de echte voortgang niet.
-
-OPSLAG
-`reading_progress.progress_percent` gebruikt vanaf nu dezelfde globale
-route-aware berekening. Dus Library/Favorieten percentages blijven hiermee
-ook consistent.
+BEHOUDEN
+- Reader Feedback FIFO queue
+- Editor Lock + Undo
+- Scene Info
+- Global Reader Progress
+- Terugleesmodus
+- Function/IF/variables
+- Tab-focus stability
 
 GEEN SQL NODIG.
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep map `app` over dibooks_author_studio.
-3. Bestand vervangen.
+2. Sleep map app over dibooks_author_studio.
+3. Bestanden vervangen.
 4. npm run build.
 5. Push/deploy.
 
 TEST
-1. Begin vooraan in een boek.
-2. Lees door meerdere tekstflows.
-3. Passeer een keuze/minigame/hoofdstuk.
-4. Balk moet blijven oplopen en niet resetten.
-5. Voltooi een route -> balk moet op 100% eindigen.
+1. Media & interactie > Afbeelding.
+2. Upload een wereldkaart.
+3. Voeg onderschrift toe.
+4. Verbind naar volgende node.
+5. Preview.
+6. Test daarna publieke Reader en terugleesmodus.
