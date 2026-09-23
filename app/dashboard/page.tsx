@@ -63,6 +63,7 @@ type DashboardBook = DiBook & {
   accessType?: "free" | "premium";
   seriesId?: string | null;
   seriesOrder?: number | null;
+  officialTutorial?: boolean;
   moderationStatus?: "draft" | "pending" | "approved" | "rejected" | string;
   moderationFeedback?: string | null;
   moderationUpdatedAt?: string;
@@ -83,6 +84,7 @@ type NewBookForm = {
   accessType: "free" | "premium";
   seriesId: string;
   seriesOrder: string;
+  officialTutorial: boolean;
 };
 
 const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
@@ -102,7 +104,28 @@ const defaultForm: NewBookForm = {
   accessType: "free",
   seriesId: "",
   seriesOrder: "1",
+  officialTutorial: false,
 };
+
+const TUTORIAL_GENRE = "Tutorial";
+const MAX_CHOICE_OPTIONS = 99;
+
+function isTutorialGenre(value: unknown) {
+  return String(value ?? "").trim().toLowerCase() === "tutorial";
+}
+
+function getChoiceCode(index: number) {
+  let value = Math.max(0, index) + 1;
+  let code = "";
+
+  while (value > 0) {
+    value -= 1;
+    code = String.fromCharCode(65 + (value % 26)) + code;
+    value = Math.floor(value / 26);
+  }
+
+  return code;
+}
 
 const ageRatings = ["AL", "6+", "9+", "12+", "16+", "18+"];
 const suggestedGenres = [
@@ -231,6 +254,10 @@ function getNodeVideoUrl(node: any) {
   return node?.data?.videoUrl ?? node?.content?.videoUrl ?? "";
 }
 
+function getNodeImageUrl(node: any) {
+  return node?.data?.imageUrl ?? node?.content?.imageUrl ?? "";
+}
+
 function getNodeChoices(node: any) {
   const choices = node?.data?.choices ?? node?.content?.choices ?? [];
   return Array.isArray(choices) ? choices : [];
@@ -255,9 +282,13 @@ function isCompletePublishNode(node: any) {
     return getNodeVideoUrl(node).trim().length > 0;
   }
 
+  if (nodeType === "image") {
+    return getNodeImageUrl(node).trim().length > 0;
+  }
+
   if (nodeType === "choice") {
     return getNodeChoices(node)
-      .slice(0, 3)
+      .slice(0, MAX_CHOICE_OPTIONS)
       .some((choice: any) => String(choice?.label ?? "").trim().length > 0 && String(choice?.targetNodeId ?? "").trim().length > 0);
   }
 
@@ -374,15 +405,25 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
       errors.push(`Cutscene '${title}' heeft nog geen video.`);
     }
 
+    if (nodeType === "image" && !getNodeImageUrl(node).trim()) {
+      errors.push(`Afbeelding-node '${title}' heeft nog geen afbeelding.`);
+    }
+
     if (nodeType === "choice") {
-      const choices = getNodeChoices(node).slice(0, 3);
+      const choices = getNodeChoices(node).slice(0, MAX_CHOICE_OPTIONS);
       const routedChoices = choices.filter((choice: any) => String(choice?.targetNodeId ?? "").trim().length > 0);
-      const defaultChoiceLabels = new Set(["keuze a", "keuze b", "keuze c"]);
-      const customChoicesWithoutTarget = choices.filter((choice: any) => {
-        const label = String(choice?.label ?? "").trim();
-        const targetNodeId = String(choice?.targetNodeId ?? "").trim();
-        return label.length > 0 && !defaultChoiceLabels.has(label.toLowerCase()) && targetNodeId.length === 0;
-      });
+      const customChoicesWithoutTarget = choices.filter(
+        (choice: any, choiceIndex: number) => {
+          const label = String(choice?.label ?? "").trim();
+          const targetNodeId = String(choice?.targetNodeId ?? "").trim();
+          const defaultLabel = `keuze ${getChoiceCode(choiceIndex)}`;
+          return (
+            label.length > 0 &&
+            label.toLowerCase() !== defaultLabel.toLowerCase() &&
+            targetNodeId.length === 0
+          );
+        },
+      );
 
       if (routedChoices.length < 2) {
         errors.push(`Keuze-node '${title}' heeft minimaal 2 keuzes met een doel-node nodig.`);
@@ -1781,6 +1822,7 @@ function NewBookModal({
   onClose,
   onSave,
   mode = "new",
+  canMarkOfficialTutorial = false,
 }: {
   form: NewBookForm;
   setForm: React.Dispatch<React.SetStateAction<NewBookForm>>;
@@ -1789,6 +1831,7 @@ function NewBookModal({
   onClose: () => void;
   onSave: () => void;
   mode?: "new" | "edit";
+  canMarkOfficialTutorial?: boolean;
 }) {
   function updateField<K extends keyof NewBookForm>(key: K, value: NewBookForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1799,6 +1842,19 @@ function NewBookModal({
     if (!cleanGenre) return;
 
     setForm((current) => {
+      if (isTutorialGenre(cleanGenre)) {
+        return {
+          ...current,
+          genres: [TUTORIAL_GENRE],
+          primaryGenre: TUTORIAL_GENRE,
+          genreInput: "",
+        };
+      }
+
+      if (current.genres.some(isTutorialGenre)) {
+        return current;
+      }
+
       if (current.genres.includes(cleanGenre)) {
         return { ...current, genreInput: "" };
       }
@@ -1820,9 +1876,12 @@ function NewBookModal({
         ...current,
         genres: nextGenres,
         primaryGenre: current.primaryGenre === genre ? nextGenres[0] ?? "" : current.primaryGenre,
+        officialTutorial: isTutorialGenre(genre) ? false : current.officialTutorial,
       };
     });
   }
+
+  const tutorialSelected = form.genres.some(isTutorialGenre);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-6">
@@ -1940,6 +1999,7 @@ function NewBookModal({
               <div className="flex gap-2">
                 <input
                   value={form.genreInput}
+                  disabled={tutorialSelected}
                   onChange={(event) => updateField("genreInput", event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -1952,7 +2012,8 @@ function NewBookModal({
                 />
                 <button
                   onClick={() => addGenre(form.genreInput)}
-                  className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500"
+                  disabled={tutorialSelected}
+                  className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
                 >
                   Voeg toe
                 </button>
@@ -1972,22 +2033,63 @@ function NewBookModal({
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => addGenre(TUTORIAL_GENRE)}
+                  className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-widest transition ${
+                    tutorialSelected
+                      ? "border-violet-300/40 bg-violet-500/25 text-violet-100"
+                      : "border-violet-400/30 text-violet-200 hover:bg-violet-500/15"
+                  }`}
+                >
+                  {tutorialSelected ? "✓ Tutorial" : "+ Tutorial"}
+                </button>
+
                 {suggestedGenres.map((genre) => (
                   <button
                     key={genre}
                     onClick={() => addGenre(genre)}
-                    className="rounded-full border border-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-neutral-300 hover:bg-white/10"
+                    disabled={tutorialSelected}
+                    className="rounded-full border border-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-neutral-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     + {genre}
                   </button>
                 ))}
               </div>
+
+              {tutorialSelected && (
+                <div className="mt-3 rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-xs font-semibold leading-5 text-violet-100/80">
+                  Tutorial is een exclusief boektype. Andere genre-labels zijn uitgeschakeld en dit boek verschijnt alleen op de Tutorials-plank.
+                </div>
+              )}
+
+              {tutorialSelected && canMarkOfficialTutorial && (
+                <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-500/10 p-3">
+                  <input
+                    type="checkbox"
+                    checked={form.officialTutorial}
+                    onChange={(event) =>
+                      updateField("officialTutorial", event.target.checked)
+                    }
+                    className="mt-0.5 h-5 w-5 accent-cyan-400"
+                  />
+                  <span>
+                    <span className="block text-sm font-black text-cyan-100">
+                      Officiële DiBooks tutorial
+                    </span>
+                    <span className="mt-1 block text-xs font-semibold leading-5 text-cyan-100/65">
+                      Admin-only. Dit boek blijft altijd als eerste op de Tutorials-plank staan.
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-black text-neutral-300">Hoofdgenre</label>
               <select
                 value={form.primaryGenre}
+                disabled={tutorialSelected}
                 onChange={(event) => updateField("primaryGenre", event.target.value)}
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-blue-400"
               >
@@ -2307,6 +2409,8 @@ export default function DashboardPage() {
         published: false,
         featured: false,
         mostRead: false,
+        officialTutorial:
+          form.genres.some(isTutorialGenre) && form.officialTutorial,
         projectData: {
           version: 1,
           type: "dibooks-project",
@@ -2364,6 +2468,7 @@ export default function DashboardPage() {
       accessType: book.accessType ?? "free",
       seriesId: book.seriesId ?? "",
       seriesOrder: book.seriesOrder ? String(book.seriesOrder) : "1",
+      officialTutorial: !!book.officialTutorial,
     });
   }
 
@@ -2406,6 +2511,11 @@ export default function DashboardPage() {
         published: false,
         featured: detailsBook.featured ?? false,
         mostRead: detailsBook.mostRead ?? false,
+        officialTutorial:
+          detailsForm.genres.some(isTutorialGenre) &&
+          (user.role === "admin"
+            ? detailsForm.officialTutorial
+            : !!detailsBook.officialTutorial),
         projectData: detailsBook.projectData,
       });
 
@@ -2809,6 +2919,7 @@ export default function DashboardPage() {
           onClose={() => setNewBookOpen(false)}
           onSave={saveNewBook}
           mode="new"
+          canMarkOfficialTutorial={user?.role === "admin"}
         />
       )}
 
@@ -2821,6 +2932,7 @@ export default function DashboardPage() {
           onClose={() => setDetailsBook(null)}
           onSave={saveBookDetails}
           mode="edit"
+          canMarkOfficialTutorial={user?.role === "admin"}
         />
       )}
       {seriesManagerContext && user && (

@@ -29,6 +29,7 @@ type DashboardBook = DiBook & {
   readerCount?: number;
   viewCount?: number;
   favoritesCount?: number;
+  officialTutorial?: boolean;
 };
 
 type PopularityRow = {
@@ -38,7 +39,40 @@ type PopularityRow = {
   readerCount?: number | string;
 };
 
+const TUTORIAL_GENRE = "Tutorial";
 const FALLBACK_COVER_CLASS = "from-blue-950 via-slate-950 to-purple-950";
+
+function isTutorialBook(book: DashboardBook) {
+  return (
+    book.genres?.some(
+      (genre) => String(genre).trim().toLowerCase() === "tutorial",
+    ) ||
+    String(book.primaryGenre ?? "").trim().toLowerCase() ===
+      "tutorial"
+  );
+}
+
+function sortTutorialBooks(books: DashboardBook[]) {
+  return [...books].sort((left, right) => {
+    if (!!left.officialTutorial !== !!right.officialTutorial) {
+      return left.officialTutorial ? -1 : 1;
+    }
+
+    if (!!left.published !== !!right.published) {
+      return left.published ? -1 : 1;
+    }
+
+    const rightDate = Date.parse(
+      right.publishedAt || right.updatedAt || right.createdAt || "",
+    );
+    const leftDate = Date.parse(
+      left.publishedAt || left.updatedAt || left.createdAt || "",
+    );
+
+    return (Number.isFinite(rightDate) ? rightDate : 0) -
+      (Number.isFinite(leftDate) ? leftDate : 0);
+  });
+}
 const FALLBACK_ACCENT_CLASS = "border-blue-500/50";
 
 function getPopularityCount(
@@ -154,7 +188,9 @@ function BookCard({ book, large = false }: { book: DashboardBook; large?: boolea
       </div>
       <CoverArtwork book={book} large={large} />
       <div className="flex min-h-[136px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-5 backdrop-blur-[2px]">
-        <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300/80">Interactief verhaal</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300/80">
+          {isTutorialBook(book) ? "Tutorial" : "Interactief verhaal"}
+        </p>
         <h3 className="mt-2 line-clamp-2 text-3xl font-black leading-none text-white">{book.title}</h3>
         <div className="mt-5 flex items-center justify-between gap-3">
           <span className="truncate text-xs font-black uppercase tracking-widest text-neutral-500">{book.author}</span>
@@ -714,17 +750,31 @@ export default function LibraryPage() {
     };
   }, []);
 
-  const allBooks = useMemo<DashboardBook[]>(() => [...publishedBooks, ...comingSoonBooks], [publishedBooks, comingSoonBooks]);
+  const allBooks = useMemo<DashboardBook[]>(
+    () => [...publishedBooks, ...comingSoonBooks],
+    [publishedBooks, comingSoonBooks],
+  );
+  const tutorialBooks = useMemo(
+    () => sortTutorialBooks(allBooks.filter(isTutorialBook)),
+    [allBooks],
+  );
   const liveBooks = useMemo(
-    () => publishedBooks.filter((book) => book.published),
+    () =>
+      publishedBooks.filter(
+        (book) => book.published && !isTutorialBook(book),
+      ),
     [publishedBooks],
+  );
+  const regularComingSoonBooks = useMemo(
+    () => comingSoonBooks.filter((book) => !isTutorialBook(book)),
+    [comingSoonBooks],
   );
   const popularBooks = useMemo(
     () => sortBooksByPopularity(liveBooks, popularityByBookId),
     [liveBooks, popularityByBookId],
   );
   const featuredBook =
-    popularBooks[0] ?? liveBooks[0] ?? comingSoonBooks[0] ?? null;
+    popularBooks[0] ?? liveBooks[0] ?? regularComingSoonBooks[0] ?? null;
   const mostReadBooks = popularBooks.slice(0, 12);
   const genreRows = makeGenreRows(liveBooks);
 
@@ -792,7 +842,7 @@ export default function LibraryPage() {
               </div>
             </div>
           </section>
-        ) : (
+        ) : allBooks.length === 0 ? (
           <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
             <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-8 shadow-2xl sm:p-12">
               <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">DiBooks Library</p>
@@ -800,9 +850,14 @@ export default function LibraryPage() {
               <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">Zodra auteurs hun eerste DiBooks publiceren, verschijnen ze hier automatisch in de Library.</p>
             </div>
           </section>
-        )}
+        ) : null}
 
-        {comingSoonBooks.length > 0 && <BookRow title="Binnenkort" rowBooks={comingSoonBooks} />}
+        {tutorialBooks.length > 0 && (
+          <BookRow title="Tutorials" rowBooks={tutorialBooks} />
+        )}
+        {regularComingSoonBooks.length > 0 && (
+          <BookRow title="Binnenkort" rowBooks={regularComingSoonBooks} />
+        )}
         {liveBooks.length > 0 && <BookRow title="Nieuw in de Library" rowBooks={liveBooks} />}
         <BookRow title="Populair bij lezers" rowBooks={mostReadBooks} />
         {genreRows.map((row) => <BookRow key={row.genre} title={row.genre} rowBooks={row.books} />)}
@@ -846,7 +901,7 @@ export default function LibraryPage() {
       </section>
 
       <footer className="border-t border-white/5 px-5 py-8 text-sm font-bold text-neutral-500 sm:px-8 lg:px-10">
-        DiBooks Library • {allBooks.length} boeken in catalogus • {liveBooks.length} live • {comingSoonBooks.length} binnenkort
+        DiBooks Library • {allBooks.length} boeken in catalogus • {liveBooks.length} normale boeken live • {tutorialBooks.length} tutorials • {regularComingSoonBooks.length} binnenkort
       </footer>
     </main>
   );

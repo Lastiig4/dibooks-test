@@ -38,6 +38,7 @@ export type DashboardBookInput = {
   accessType?: "free" | "premium";
   seriesId?: string | null;
   seriesOrder?: number | null;
+  officialTutorial?: boolean;
   projectData?: any;
 };
 
@@ -64,15 +65,54 @@ function slugify(value: string) {
   );
 }
 
+const TUTORIAL_GENRE = "Tutorial";
+
+function isTutorialGenre(value: unknown) {
+  return String(value ?? "").trim().toLowerCase() === "tutorial";
+}
+
+function normalizeBookGenres(genres: unknown, primaryGenre?: unknown) {
+  const source = Array.isArray(genres)
+    ? genres.map((genre) => String(genre ?? "").trim()).filter(Boolean)
+    : [];
+  const tutorial =
+    source.some(isTutorialGenre) || isTutorialGenre(primaryGenre);
+
+  if (tutorial) {
+    return {
+      genres: [TUTORIAL_GENRE],
+      primaryGenre: TUTORIAL_GENRE,
+      tutorial: true,
+    };
+  }
+
+  const nextGenres = source.length > 0 ? source : ["Interactief"];
+  const requestedPrimary = String(primaryGenre ?? "").trim();
+
+  return {
+    genres: nextGenres,
+    primaryGenre:
+      requestedPrimary && nextGenres.includes(requestedPrimary)
+        ? requestedPrimary
+        : nextGenres[0] ?? "Interactief",
+    tutorial: false,
+  };
+}
+
 function mapRowToDashboardBook(row: any) {
+  const normalizedGenres = normalizeBookGenres(
+    row.genres,
+    row.primary_genre ?? row.primaryGenre,
+  );
+
   return {
     id: row.id,
     title: row.title,
     author: row.author,
     subtitle: row.subtitle,
     description: row.description,
-    genres: Array.isArray(row.genres) ? row.genres : ["Interactief"],
-    primaryGenre: row.primary_genre ?? row.primaryGenre ?? "Interactief",
+    genres: normalizedGenres.genres,
+    primaryGenre: normalizedGenres.primaryGenre,
     status: row.status ?? "Concept",
     ageRating: row.age_rating ?? "12+",
     readTime: row.read_time ?? "Concept",
@@ -96,6 +136,7 @@ function mapRowToDashboardBook(row: any) {
     removedFromLibraryAt: row.removed_from_library_at ?? undefined,
     seriesId: row.series_id ?? null,
     seriesOrder: row.series_order ?? null,
+    officialTutorial: !!row.official_tutorial,
     moderationStatus: row.moderation_status ?? "draft",
     moderationFeedback: row.moderation_feedback ?? null,
     moderationUpdatedAt: row.moderation_updated_at ?? undefined,
@@ -331,6 +372,10 @@ export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: Das
 
   const supabase = createSupabaseBrowserClient();
   const existingBookId = input.id || null;
+  const normalizedGenres = normalizeBookGenres(
+    input.genres,
+    input.primaryGenre,
+  );
   const slug = existingBookId ? undefined : await getUniqueSlug(user.id, input.title, existingBookId);
 
   if (existingBookId) {
@@ -356,11 +401,11 @@ export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: Das
   const bookPayload: Record<string, any> = {
     owner_id: user.id,
     title: input.title,
-    author: input.author || user.name || "Onbekende auteur",
+    author: input.author || user.authorName || user.name || "Onbekende auteur",
     subtitle: input.subtitle || "Nieuw interactief boek in concept.",
     description: input.description || "Nog geen beschrijving ingevuld.",
-    genres: input.genres?.length ? input.genres : ["Interactief"],
-    primary_genre: input.primaryGenre || input.genres?.[0] || "Interactief",
+    genres: normalizedGenres.genres,
+    primary_genre: normalizedGenres.primaryGenre,
     status: input.status || "Concept",
     age_rating: input.ageRating || "12+",
     read_time: input.readTime || "Concept",
@@ -377,6 +422,8 @@ export async function saveDashboardBookToSupabase(user: DemoAuthUser, input: Das
     access_type: input.accessType || "free",
     series_id: input.seriesId || null,
     series_order: input.seriesId ? Math.max(1, Number(input.seriesOrder) || 1) : null,
+    official_tutorial:
+      normalizedGenres.tutorial && !!input.officialTutorial,
   };
 
   if (slug) bookPayload.slug = slug;

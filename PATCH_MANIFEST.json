@@ -1,20 +1,26 @@
 {
-  "name": "DiBooks Afbeelding Node V1",
+  "name": "DiBooks Tutorials Shelf + Choice Menu 99 V1",
   "date": "2026-09-22",
-  "sql_required": false,
+  "sql_required": true,
+  "sql_file": "TUTORIAL_SHELF_CHOICE99_V1_SUPABASE.sql",
   "files": [
+    "app/dashboard/page.tsx",
+    "app/page.tsx",
     "app/editor/page.tsx",
     "app/books/[bookId]/read/page.tsx",
+    "lib/supabase/dashboardBooks.ts",
+    "TUTORIAL_SHELF_CHOICE99_V1_SUPABASE.sql",
     "PATCH_INFO.txt"
   ],
   "features": [
-    "Afbeelding node",
-    "Local image upload up to 5 MB",
-    "Alt text",
-    "Caption",
-    "Studio Preview",
-    "Public Reader",
-    "Readback",
-    "Global progress integration"
+    "Exclusive Tutorial book label",
+    "Tutorials-only public shelf",
+    "Single official tutorial pinned first",
+    "Choice nodes 3 default up to 99",
+    "Add/remove choice controls",
+    "A-Z/AA choice labels",
+    "Reader and Preview scroll for long choices",
+    "Dashboard validation up to 99 choices",
+    "Image node publication validation"
   ]
 }

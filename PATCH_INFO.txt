@@ -1,60 +1,68 @@
-DiBooks Patch - Afbeelding Node V1
-================================
+DiBooks Patch - Tutorials Shelf + Choice Menu 99 V1
+=================================================
 
-NIEUW
-Media & interactie > Afbeelding
+BELANGRIJK - SQL EERST
+Voer `TUTORIAL_SHELF_CHOICE99_V1_SUPABASE.sql` één keer uit in Supabase SQL Editor.
 
-Gebruik voor wereldkaarten, plattegronden, brieven, dossiers, illustraties of andere stilstaande beelden.
+TUTORIAL BOEKTYPE
+- Create Book en Studio Save krijgen een aparte `Tutorial` keuze.
+- Klik Tutorial -> alle bestaande genre-labels verdwijnen.
+- Zolang Tutorial actief is kunnen geen andere genre-labels worden toegevoegd.
+- Hoofdgenre wordt automatisch `Tutorial`.
+- Leeftijd, taal/waarschuwingen (waar aanwezig), serie, auteur, toegang en overige metadata blijven los daarvan werken.
 
-EDITOR
-- Nieuwe blauwe Afbeelding-node.
-- Upload PNG/JPG/WEBP/GIF.
-- Maximaal 5 MB per afbeelding in V1.
-- Optionele alt-tekst.
-- Optioneel onderschrift.
-- Node is pas compleet als een afbeelding is toegevoegd.
-- Editor Lock en Undo werken ook met deze node.
+TUTORIALS-PLANK
+- Alle boeken met Tutorial komen alleen op de Tutorials-plank.
+- Ze worden uitgesloten van Populair, Nieuw in de Library, Binnenkort en normale genreplanken.
+- Live en Binnenkort tutorials kunnen beide op de Tutorials-plank staan met hun gewone statusbadge.
 
-STUDIO PREVIEW
-Afbeeldingen verschijnen op een eigen scherm, met behoud van aspect ratio.
-Bij één path verschijnt Verder; bij meerdere paths verschijnen routeknoppen.
+OFFICIËLE HOOFDTUTORIAL
+- Admin ziet bij een Tutorial-boek de checkbox `Officiële DiBooks tutorial`.
+- Dat boek staat altijd als eerste op de Tutorials-plank.
+- Database staat maximaal één officiële tutorial tegelijk toe.
+- Wil je wisselen: eerst oude hoofdtutorial uitvinken, daarna de nieuwe aanvinken.
 
-PUBLIEKE READER
-- Eigen afbeelding-scherm.
-- Responsive op desktop/tablet/mobiel.
-- Optioneel onderschrift.
-- Ondersteunt normale paths.
-- Ondersteunt Terugleesmodus.
-- Telt als één zichtbare verhaalstap in de globale voortgang.
+KEUZEMENU 3 -> 99
+- Nieuwe Keuze-node start nog steeds met 3 keuzes.
+- `+ Keuze toevoegen` voegt één keuze per klik toe.
+- Maximum: 99 keuzes per node.
+- Extra keuzes kunnen individueel verwijderd worden; minimum blijft 3.
+- Labels lopen A, B, C ... Z, AA, AB ... door.
+- Paths worden automatisch opnieuw gekoppeld/geïndexeerd wanneer een keuze wordt verwijderd.
+- Studio Preview en publieke Reader ondersteunen alle 99 keuzes.
+- Reader/Preview zijn scrollbaar bij lange keuzelijsten.
+- Dashboard publicatiecontrole valideert alle 99 keuzes in plaats van alleen de eerste 3.
 
-OPSLAG V1
-De afbeelding wordt als data-URL in de bestaande project JSON opgeslagen.
-Daarom is geen SQL of nieuwe storage-bucket nodig.
-
-Voor een latere V2 kunnen we grote afbeeldingen naar DiBooks Storage verplaatsen, net zoals cutscenes, zodat projecten kleiner blijven.
+EXTRA FIX
+Dashboard-publicatiecontrole herkent nu ook de Afbeelding-node als complete content wanneer een afbeelding is geüpload.
 
 BEHOUDEN
-- Reader Feedback FIFO queue
+- Afbeelding-node
 - Editor Lock + Undo
 - Scene Info
-- Global Reader Progress
-- Terugleesmodus
-- Function/IF/variables
-- Tab-focus stability
-
-GEEN SQL NODIG.
+- Reader Feedback queue
+- Global progress
+- Readback
+- Function / IF / variables
+- Moderation
 
 INSTALLEREN
 1. ZIP uitpakken.
-2. Sleep map app over dibooks_author_studio.
-3. Bestanden vervangen.
-4. npm run build.
+2. SQL uitvoeren in Supabase SQL Editor.
+3. Mappen `app` en `lib` over `dibooks_author_studio` slepen en vervangen.
+4. `npm run build`.
 5. Push/deploy.
 
-TEST
-1. Media & interactie > Afbeelding.
-2. Upload een wereldkaart.
-3. Voeg onderschrift toe.
-4. Verbind naar volgende node.
-5. Preview.
-6. Test daarna publieke Reader en terugleesmodus.
+TEST TUTORIAL
+1. Nieuw boek -> klik Tutorial.
+2. Controleer dat andere labels verdwijnen en geblokkeerd zijn.
+3. Als Admin: vink Officiële DiBooks tutorial aan.
+4. Publiceer/test -> alleen Tutorials-plank, officiële boek vooraan.
+
+TEST KEUZES
+1. Maak Keuze-node -> 3 standaardkeuzes.
+2. Voeg 5-10 extra keuzes toe.
+3. Koppel paths.
+4. Verwijder een middelste extra keuze.
+5. Controleer dat labels/paths opnieuw netjes doorlopen.
+6. Test Preview + Reader.

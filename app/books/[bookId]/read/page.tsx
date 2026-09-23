@@ -203,6 +203,20 @@ function escapeHtml(value: string) {
 
 
 const MANUAL_PAGE_BREAK_MARKER = "[[NIEUWE_PAGINA]]";
+const MAX_CHOICE_OPTIONS = 99;
+
+function getChoiceCode(index: number) {
+  let value = Math.max(0, index) + 1;
+  let code = "";
+
+  while (value > 0) {
+    value -= 1;
+    code = String.fromCharCode(65 + (value % 26)) + code;
+    value = Math.floor(value / 26);
+  }
+
+  return code;
+}
 const SCENE_INFO_MARKER_ATTR = "data-dibooks-scene-info";
 
 function createSceneInfoMarker(value: string) {
@@ -4144,7 +4158,7 @@ export default function ReadBookPage() {
 
               <div className="mt-8 grid gap-3">
                 {node.choices
-                  .slice(0, 3)
+                  .slice(0, MAX_CHOICE_OPTIONS)
                   .filter((choice) => choice.label?.trim())
                   .map((choice, index) => {
                     const wasSelected =
@@ -4193,7 +4207,7 @@ export default function ReadBookPage() {
                         } disabled:cursor-default`}
                       >
                         <span className={`mr-3 ${wasSelected ? "text-emerald-300" : "text-orange-300"}`}>
-                          {["A", "B", "C"][index]}.
+                          {getChoiceCode(index)}.
                         </span>
                         {choice.label}
                         {wasSelected && (
@@ -4211,7 +4225,7 @@ export default function ReadBookPage() {
 
         {node.type === "minigame" && (
           isReadOnlyReplay ? (
-            <div className="mx-auto flex h-full max-w-3xl items-center justify-center p-6">
+            <div className="mx-auto flex h-full max-w-3xl items-start justify-center overflow-y-auto p-6 py-8">
               <div className="w-full rounded-[2rem] border border-purple-500/25 bg-purple-950/25 p-7 shadow-2xl sm:p-9">
                 <p className="text-xs font-black uppercase tracking-[0.28em] text-purple-300">
                   Eerdere minigame

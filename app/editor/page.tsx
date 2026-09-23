@@ -327,6 +327,37 @@ const nodeLabels: Record<DiNodeType, string> = {
   scratchpad: "Kladblok",
 };
 
+const MIN_CHOICE_OPTIONS = 3;
+const MAX_CHOICE_OPTIONS = 99;
+
+function getChoiceCode(index: number) {
+  let value = Math.max(0, index) + 1;
+  let code = "";
+
+  while (value > 0) {
+    value -= 1;
+    code = String.fromCharCode(65 + (value % 26)) + code;
+    value = Math.floor(value / 26);
+  }
+
+  return code;
+}
+
+function createChoiceOption(index: number) {
+  return {
+    label: `Keuze ${getChoiceCode(index)}`,
+    targetNodeId: "",
+  };
+}
+
+function createDefaultChoices() {
+  return Array.from(
+    { length: MIN_CHOICE_OPTIONS },
+    (_, index) => createChoiceOption(index),
+  );
+}
+
+
 function isScratchpadNode(node: Node<DiNodeData> | undefined | null) {
   return node?.data?.type === "scratchpad";
 }
@@ -2165,6 +2196,12 @@ type DashboardSaveForm = {
 const DASHBOARD_BOOKS_STORAGE_KEY = "dibooks-dashboard-books-v1";
 
 const dashboardAgeRatings = ["AL", "6+", "9+", "12+", "16+", "18+"];
+const TUTORIAL_GENRE = "Tutorial";
+
+function isTutorialGenre(value: unknown) {
+  return String(value ?? "").trim().toLowerCase() === "tutorial";
+}
+
 const dashboardSuggestedGenres = [
   "Sci-fi",
   "Fantasy",
@@ -2296,6 +2333,16 @@ function SaveToDashboardModal({
     if (!cleanGenre) return;
 
     setForm((current) => {
+      if (isTutorialGenre(cleanGenre)) {
+        return {
+          ...current,
+          genres: [TUTORIAL_GENRE],
+          primaryGenre: TUTORIAL_GENRE,
+          genreInput: "",
+        };
+      }
+
+      if (current.genres.some(isTutorialGenre)) return current;
       if (current.genres.includes(cleanGenre)) return { ...current, genreInput: "" };
       const nextGenres = [...current.genres, cleanGenre];
       return {
@@ -2317,6 +2364,8 @@ function SaveToDashboardModal({
       };
     });
   }
+
+  const tutorialSelected = form.genres.some(isTutorialGenre);
 
   if (!canUseAuthorTools) {
     return (
@@ -2564,6 +2613,7 @@ function SaveToDashboardModal({
               <div className="flex gap-2">
                 <input
                   value={form.genreInput}
+                  disabled={tutorialSelected}
                   onChange={(event) => updateField("genreInput", event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -2576,7 +2626,8 @@ function SaveToDashboardModal({
                 />
                 <button
                   onClick={() => addGenre(form.genreInput)}
-                  className="rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-black text-white hover:bg-cyan-500"
+                  disabled={tutorialSelected}
+                  className="rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-black text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
                 >
                   Voeg toe
                 </button>
@@ -2596,22 +2647,42 @@ function SaveToDashboardModal({
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => addGenre(TUTORIAL_GENRE)}
+                  className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-widest transition ${
+                    tutorialSelected
+                      ? "border-violet-300/40 bg-violet-500/25 text-violet-100"
+                      : "border-violet-400/30 text-violet-200 hover:bg-violet-500/15"
+                  }`}
+                >
+                  {tutorialSelected ? "✓ Tutorial" : "+ Tutorial"}
+                </button>
+
                 {dashboardSuggestedGenres.map((genre) => (
                   <button
                     key={genre}
                     onClick={() => addGenre(genre)}
-                    className="rounded-full border border-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-neutral-300 hover:bg-white/10"
+                    disabled={tutorialSelected}
+                    className="rounded-full border border-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-neutral-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     + {genre}
                   </button>
                 ))}
               </div>
+
+              {tutorialSelected && (
+                <p className="mt-3 rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-xs font-semibold leading-5 text-violet-100/75">
+                  Tutorial is exclusief: andere genre-labels vervallen en het boek komt alleen op de Tutorials-plank.
+                </p>
+              )}
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-black text-neutral-300">Hoofdgenre</label>
               <select
                 value={form.primaryGenre}
+                disabled={tutorialSelected}
                 onChange={(event) => updateField("primaryGenre", event.target.value)}
                 className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-bold text-white outline-none focus:border-cyan-400"
               >
@@ -4359,13 +4430,7 @@ ${formatSaveError(error)}`);
         imageAlt: type === "image" ? "" : undefined,
         imageCaption: type === "image" ? "" : undefined,
         choices:
-          type === "choice"
-            ? [
-                { label: "Keuze A", targetNodeId: "" },
-                { label: "Keuze B", targetNodeId: "" },
-                { label: "Keuze C", targetNodeId: "" },
-              ]
-            : undefined,
+          type === "choice" ? createDefaultChoices() : undefined,
         miniGameType: type === "minigame" ? "stabilize_line" : undefined,
         miniGameDuration: type === "minigame" ? 5 : undefined,
         miniGameDifficulty: type === "minigame" ? "normal" : undefined,
@@ -4775,11 +4840,7 @@ ${formatSaveError(error)}`);
         if (node.id !== selectedNodeId) return node;
 
         const nextChoices = [
-          ...(node.data.choices ?? [
-            { label: "Keuze A", targetNodeId: "" },
-            { label: "Keuze B", targetNodeId: "" },
-            { label: "Keuze C", targetNodeId: "" },
-          ]),
+          ...(node.data.choices ?? createDefaultChoices()),
         ];
 
         nextChoices[choiceIndex] = {
@@ -4791,7 +4852,7 @@ ${formatSaveError(error)}`);
           ...node,
           data: {
             ...node.data,
-            choices: nextChoices.slice(0, 3),
+            choices: nextChoices.slice(0, MAX_CHOICE_OPTIONS),
           },
         };
       }),
@@ -4812,15 +4873,13 @@ ${formatSaveError(error)}`);
 
         if (!updates.targetNodeId) return filteredEdges;
 
-        const choiceLetters = ["A", "B", "C"];
-
         const nextEdge: Edge = {
           id: `${edgePrefix}${updates.targetNodeId}_${Date.now()}`,
           source: selectedNodeId,
           target: updates.targetNodeId,
           sourceHandle: "out",
           targetHandle: "in",
-          label: choiceLetters[choiceIndex] ?? `Keuze ${choiceIndex + 1}`,
+          label: `Keuze ${getChoiceCode(choiceIndex)}`,
           data: { choiceIndex },
           animated: false,
           style: {
@@ -4832,6 +4891,106 @@ ${formatSaveError(error)}`);
         return [...filteredEdges, nextEdge];
       });
     }
+  }
+
+
+  function addSelectedChoice() {
+    if (!selectedNodeId || !selectedNode || selectedNode.data.type !== "choice") {
+      return;
+    }
+
+    const currentChoices =
+      selectedNode.data.choices?.length
+        ? selectedNode.data.choices
+        : createDefaultChoices();
+
+    if (currentChoices.length >= MAX_CHOICE_OPTIONS) return;
+
+    const nextChoice = createChoiceOption(currentChoices.length);
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedNodeId
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                choices: [...currentChoices, nextChoice],
+              },
+            }
+          : node,
+      ),
+    );
+  }
+
+  function removeSelectedChoice(choiceIndex: number) {
+    if (!selectedNodeId || !selectedNode || selectedNode.data.type !== "choice") {
+      return;
+    }
+
+    const currentChoices =
+      selectedNode.data.choices?.length
+        ? selectedNode.data.choices
+        : createDefaultChoices();
+
+    if (currentChoices.length <= MIN_CHOICE_OPTIONS) return;
+
+    const nextChoices = currentChoices.filter(
+      (_, index) => index !== choiceIndex,
+    );
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedNodeId
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                choices: nextChoices,
+              },
+            }
+          : node,
+      ),
+    );
+
+    setEdges((currentEdges) => {
+      const withoutChoiceEdges = currentEdges.filter((edge) => {
+        const edgeChoiceIndex = (
+          edge.data as { choiceIndex?: number } | undefined
+        )?.choiceIndex;
+
+        return !(
+          edge.source === selectedNodeId &&
+          (edgeChoiceIndex !== undefined ||
+            edge.id.startsWith(`choice_${selectedNodeId}_`))
+        );
+      });
+
+      const rebuiltEdges = nextChoices.flatMap(
+        (choice, nextIndex): Edge[] => {
+          if (!choice.targetNodeId) return [];
+
+          return [
+            {
+              id: `choice_${selectedNodeId}_${nextIndex}_${choice.targetNodeId}_${Date.now()}`,
+              source: selectedNodeId,
+              target: choice.targetNodeId,
+              sourceHandle: "out",
+              targetHandle: "in",
+              label: `Keuze ${getChoiceCode(nextIndex)}`,
+              data: { choiceIndex: nextIndex },
+              animated: false,
+              style: {
+                stroke: "#dc2626",
+                strokeWidth: 5,
+              },
+            },
+          ];
+        },
+      );
+
+      return [...withoutChoiceEdges, ...rebuiltEdges];
+    });
   }
 
 
@@ -6802,85 +6961,115 @@ ${formatSaveError(error)}`);
                   <div className="mb-4">
                     <h3 className="font-black">Keuze menu</h3>
                     <p className="mt-1 text-sm text-neutral-400">
-                      Maximaal 3 keuzes. Elke keuze maakt automatisch een path/lijn naar de gekozen node.
+                      Start met 3 keuzes en voeg zelf extra keuzes toe tot maximaal 99. Elke keuze maakt automatisch een path/lijn naar de gekozen node.
                     </p>
                   </div>
 
                   <div className="grid gap-4">
-                    {(selectedNode.data.choices ?? [
-                      { label: "Keuze A", targetNodeId: "" },
-                      { label: "Keuze B", targetNodeId: "" },
-                      { label: "Keuze C", targetNodeId: "" },
-                    ]).slice(0, 3).map((choice, choiceIndex) => {
-                      const choiceLetter = ["A", "B", "C"][choiceIndex];
+                    {(selectedNode.data.choices ?? createDefaultChoices())
+                      .slice(0, MAX_CHOICE_OPTIONS)
+                      .map((choice, choiceIndex) => {
+                        const choiceLetter = getChoiceCode(choiceIndex);
 
-                      return (
-                        <div
-                          key={choiceIndex}
-                          className="rounded-xl border border-neutral-700 bg-neutral-950 p-3"
-                        >
-                          <label className="mb-2 block text-sm font-black text-orange-300">
-                            Keuze {choiceLetter}
-                          </label>
-
-                          <input
-                            value={choice.label}
-                            onChange={(event) =>
-                              updateSelectedChoice(choiceIndex, {
-                                label: event.target.value,
-                              })
-                            }
-                            placeholder={`Tekst voor keuze ${choiceLetter}...`}
-                            className="mb-3 w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-orange-400"
-                          />
-
-                          <label className="mb-2 block text-sm font-bold">
-                            Gaat naar node
-                          </label>
-
-                          <select
-                            value={choice.targetNodeId ?? ""}
-                            onChange={(event) =>
-                              updateSelectedChoice(choiceIndex, {
-                                targetNodeId: event.target.value,
-                              })
-                            }
-                            className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-orange-400"
+                        return (
+                          <div
+                            key={choiceIndex}
+                            className="rounded-xl border border-neutral-700 bg-neutral-950 p-3"
                           >
-                            <option value="">Nog geen doel gekozen...</option>
-                            {availableTargetNodes.map((node) => (
-                              <option key={node.id} value={node.id}>
-                                {node.data.label} — {nodeLabels[node.data.type]}
-                              </option>
-                            ))}
-                          </select>
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <label className="block text-sm font-black text-orange-300">
+                                Keuze {choiceLetter}
+                              </label>
+                              {(selectedNode.data.choices ?? createDefaultChoices()).length > MIN_CHOICE_OPTIONS && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeSelectedChoice(choiceIndex)}
+                                  className="rounded-lg border border-red-500/25 bg-red-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-red-200 hover:bg-red-500/20"
+                                >
+                                  Verwijder
+                                </button>
+                              )}
+                            </div>
 
-                          {choice.targetNodeId && (
-                            <button
-                              onClick={() =>
+                            <input
+                              value={choice.label}
+                              onChange={(event) =>
                                 updateSelectedChoice(choiceIndex, {
-                                  targetNodeId: "",
+                                  label: event.target.value,
                                 })
                               }
-                              className="mt-3 rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white hover:bg-red-500"
-                            >
-                              Verwijder keuze-path
-                            </button>
-                          )}
-
-                          <div className="mt-3">
-                            <VariableEffectsEditor
-                              title="Effect van deze keuze"
-                              description="Wordt direct uitgevoerd voordat de gekozen route opent."
-                              actions={choice.effects ?? []}
-                              variables={storyVariables}
-                              onChange={(effects) => updateSelectedChoice(choiceIndex, { effects })}
-                              accent="orange"
+                              placeholder={`Tekst voor keuze ${choiceLetter}...`}
+                              className="mb-3 w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-orange-400"
                             />
+
+                            <label className="mb-2 block text-sm font-bold">
+                              Gaat naar node
+                            </label>
+
+                            <select
+                              value={choice.targetNodeId ?? ""}
+                              onChange={(event) =>
+                                updateSelectedChoice(choiceIndex, {
+                                  targetNodeId: event.target.value,
+                                })
+                              }
+                              className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-orange-400"
+                            >
+                              <option value="">Nog geen doel gekozen...</option>
+                              {availableTargetNodes.map((node) => (
+                                <option key={node.id} value={node.id}>
+                                  {node.data.label} — {nodeLabels[node.data.type]}
+                                </option>
+                              ))}
+                            </select>
+
+                            {choice.targetNodeId && (
+                              <button
+                                onClick={() =>
+                                  updateSelectedChoice(choiceIndex, {
+                                    targetNodeId: "",
+                                  })
+                                }
+                                className="mt-3 rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white hover:bg-red-500"
+                              >
+                                Verwijder keuze-path
+                              </button>
+                            )}
+
+                            <div className="mt-3">
+                              <VariableEffectsEditor
+                                title="Effect van deze keuze"
+                                description="Wordt direct uitgevoerd voordat de gekozen route opent."
+                                actions={choice.effects ?? []}
+                                variables={storyVariables}
+                                onChange={(effects) =>
+                                  updateSelectedChoice(choiceIndex, { effects })
+                                }
+                                accent="orange"
+                              />
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-400/20 bg-orange-500/10 p-3">
+                      <div>
+                        <p className="text-sm font-black text-orange-100">
+                          {(selectedNode.data.choices ?? createDefaultChoices()).length}/{MAX_CHOICE_OPTIONS} keuzes
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-orange-100/60">
+                          De eerste 3 staan standaard klaar. Extra keuzes kun je weer verwijderen.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addSelectedChoice}
+                        disabled={(selectedNode.data.choices ?? createDefaultChoices()).length >= MAX_CHOICE_OPTIONS}
+                        className="rounded-xl bg-orange-600 px-4 py-3 text-sm font-black text-white hover:bg-orange-500 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                      >
+                        + Keuze toevoegen
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -8586,7 +8775,7 @@ ${formatSaveError(error)}`);
             )}
 
             {previewNode.data.type === "choice" && (
-              <div className="mx-auto flex h-full max-w-3xl flex-col justify-center gap-4 p-6">
+              <div className="mx-auto flex h-full max-w-3xl flex-col justify-start gap-4 overflow-y-auto p-6 py-8">
                 <div className="rounded-2xl bg-neutral-900 p-8">
                   <p className="text-sm font-bold uppercase tracking-widest text-orange-400">
                     Keuze moment
@@ -8596,7 +8785,7 @@ ${formatSaveError(error)}`);
                   </h1>
                   <div className="mt-6 grid gap-3">
                     {(previewNode.data.choices ?? [])
-                      .slice(0, 3)
+                      .slice(0, MAX_CHOICE_OPTIONS)
                       .filter((choice) => choice.label.trim().length > 0)
                       .map((choice, choiceIndex) => {
                         const targetNode = nodes.find(
@@ -8615,7 +8804,7 @@ ${formatSaveError(error)}`);
                             className="rounded-xl border border-orange-700 bg-orange-600 px-5 py-4 text-left text-lg font-black text-white hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <span className="mr-3 text-orange-200">
-                              {["A", "B", "C"][choiceIndex]}.
+                              {getChoiceCode(choiceIndex)}.
                             </span>
                             {choice.label}
                             {targetNode && (
