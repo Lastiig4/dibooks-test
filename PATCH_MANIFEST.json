@@ -1,26 +1,14 @@
 {
-  "name": "DiBooks Tutorials Shelf + Choice Menu 99 V1",
-  "date": "2026-09-22",
-  "sql_required": true,
-  "sql_file": "TUTORIAL_SHELF_CHOICE99_V1_SUPABASE.sql",
+  "name": "DiBooks Choice99 TS Fix V1.1",
+  "date": "2026-09-23",
+  "sql_required": false,
   "files": [
-    "app/dashboard/page.tsx",
-    "app/page.tsx",
     "app/editor/page.tsx",
-    "app/books/[bookId]/read/page.tsx",
-    "lib/supabase/dashboardBooks.ts",
-    "TUTORIAL_SHELF_CHOICE99_V1_SUPABASE.sql",
     "PATCH_INFO.txt"
   ],
-  "features": [
-    "Exclusive Tutorial book label",
-    "Tutorials-only public shelf",
-    "Single official tutorial pinned first",
-    "Choice nodes 3 default up to 99",
-    "Add/remove choice controls",
-    "A-Z/AA choice labels",
-    "Reader and Preview scroll for long choices",
-    "Dashboard validation up to 99 choices",
-    "Image node publication validation"
+  "fixes": [
+    "ChoiceOption explicit shared type",
+    "Default choices now include effects array",
+    "Removes TypeScript union error on choice.effects"
   ]
 }

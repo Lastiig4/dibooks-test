@@ -208,6 +208,12 @@ function normalizeStoryVariableName(value: string) {
   return normalized || "variabele";
 }
 
+type ChoiceOption = {
+  label: string;
+  targetNodeId?: string;
+  effects?: FunctionAction[];
+};
+
 type DiNodeData = {
   label: string;
   type: DiNodeType;
@@ -226,11 +232,7 @@ type DiNodeData = {
   imageUrl?: string;
   imageAlt?: string;
   imageCaption?: string;
-  choices?: {
-    label: string;
-    targetNodeId?: string;
-    effects?: FunctionAction[];
-  }[];
+  choices?: ChoiceOption[];
   miniGameType?: string;
   miniGameDuration?: number;
   miniGameDifficulty?: MiniGameDifficulty;
@@ -343,14 +345,15 @@ function getChoiceCode(index: number) {
   return code;
 }
 
-function createChoiceOption(index: number) {
+function createChoiceOption(index: number): ChoiceOption {
   return {
     label: `Keuze ${getChoiceCode(index)}`,
     targetNodeId: "",
+    effects: [],
   };
 }
 
-function createDefaultChoices() {
+function createDefaultChoices(): ChoiceOption[] {
   return Array.from(
     { length: MIN_CHOICE_OPTIONS },
     (_, index) => createChoiceOption(index),
@@ -4843,8 +4846,14 @@ ${formatSaveError(error)}`);
           ...(node.data.choices ?? createDefaultChoices()),
         ];
 
+        const fallbackChoice: ChoiceOption = {
+          label: `Keuze ${getChoiceCode(choiceIndex)}`,
+          targetNodeId: "",
+          effects: [],
+        };
+
         nextChoices[choiceIndex] = {
-          ...(nextChoices[choiceIndex] ?? { label: `Keuze ${choiceIndex + 1}` }),
+          ...(nextChoices[choiceIndex] ?? fallbackChoice),
           ...updates,
         };
 
