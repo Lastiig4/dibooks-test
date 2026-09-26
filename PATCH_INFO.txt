@@ -1,63 +1,72 @@
-DiBooks Patch - Choice99 TS Fix V1.1
-====================================
+DiBooks Auteur Studio - Node Settings Modal V1
+Datum: 26 september 2026
 
-VERCEL ERROR
-app/editor/page.tsx:7043
+BASIS
+Repository: https://github.com/Lastiig4/dibooks-test
+Commit: 59d66e7539babc88def620c11c7ebb61029ad7db
+Deze patch bevat volledige bestanden op basis van deze versie.
 
-Property 'effects' does not exist on type:
-{ label: string; targetNodeId?: string; effects?: FunctionAction[] }
-|
-{ label: string; targetNodeId: string }
+INSTALLATIE
+1. Maak een backup of Git-commit van je huidige project.
+2. Pak de ZIP uit in de projectroot (de map met package.json).
+3. Vervang app/editor/page.tsx en voeg components/NodeSettingsModal.tsx toe.
+4. Controleer met npx tsc --noEmit en npm run build, en deploy zoals gebruikelijk.
+Bij wijzigingen na bovenstaande commit: vergelijk/merge eerst het editorbestand,
+zodat je latere eigen wijzigingen niet overschrijft.
 
-OORZAAK
-De nieuwe 3 standaardkeuzes van Choice99 werden door TypeScript automatisch
-geïnferreerd als een simpeler objecttype zonder `effects`.
+INHOUD
+app/editor/page.tsx
+components/NodeSettingsModal.tsx
+PATCH_INFO.txt
 
-Wanneer de editor vervolgens deed:
-
-choice.effects ?? []
-
-zag TypeScript een union waarvan één variant geen `effects` had.
-
-FIX
-Er is nu één expliciet type:
-
-ChoiceOption
-
-met:
-- label
-- targetNodeId
-- effects
-
-Alle plekken gebruiken nu exact hetzelfde type:
-- opgeslagen keuzes
-- de 3 standaardkeuzes
-- nieuwe keuze toevoegen
-- fallback bij updateSelectedChoice
-
-De standaardkeuzes starten ook expliciet met:
-effects: []
+GEWIJZIGD
+- De permanente rechterkolom met auteursinstellingen is verwijderd.
+- Klikken op een geplaatste node opent de grote instellingenmodal, ook als
+  dezelfde node nog geselecteerd is. Een nieuwe node opent direct zijn instellingen.
+- Sluiten of Escape sluit alleen het venster en behoudt de selectie.
+- Stijl sluit aan op Flags & variabelen: donkere achtergrond, indigo-accenten,
+  afgeronde panelen en een duidelijke Sluiten-knop.
+- Responsive breedte tot 1024px, hoogte op basis van de dynamische viewport,
+  een vaste kop en een afzonderlijk scrollbaar instellingenformulier.
+- Alle bestaande instellingen zijn hergebruikt voor text, special, chapter,
+  function, condition, choice, minigame, cutscene, image en scratchpad.
+- Afbeelding- en videovelden krijgen de beschikbare breedte; gevarenzone staat onderaan.
+- Focus blijft binnen de modal; de editor erachter is niet bedienbaar.
+- Editor Lock blokkeert de formuliervelden ook voor toetsenbordbediening.
+- De bestaande grote teksteditor opent boven de modal. Het instellingenformulier
+  blijft gemount en de focusafhandeling pauzeert zolang die teksteditor open is.
+- De modalcomponent is buiten de editor gedefinieerd; invoer rendert het formulier
+  opnieuw zonder het te remounten of bij iedere aanslag de focus te verplaatsen.
+- Review inspectie blijft zijn bestaande zijbalk en centrale inspectie gebruiken.
 
 BEHOUDEN
-- minimaal 3 keuzes
-- maximaal 99 keuzes
-- + Keuze toevoegen
-- keuzes verwijderen vanaf keuze 4
-- A/B/C ... Z/AA/AB labels
-- Variable Effects
-- Reader Feedback
-- Tutorials-systeem
-- Afbeelding-node
-- Editor Lock / Undo
-- Scene Info
+De bestaande opslag-, upload-, Undo-, start-node-, badge- en path-handlers zijn
+behouden. Ook Scene Info, Reader Feedback, Choice99, Image Node en Tutorial-logica
+blijven aanwezig. De reader, dashboard, databank en afhankelijkheden zijn niet gewijzigd.
+Geen SQL of nieuwe packages nodig.
 
-GEEN SQL NODIG VOOR DEZE FIX.
-Als je de SQL uit de vorige Tutorials + Choice99 patch nog niet had uitgevoerd,
-moet die natuurlijk nog wel eenmalig uitgevoerd worden.
+UITGEVOERDE CONTROLES
+- npx tsc --noEmit: geslaagd.
+- npm run build: geslaagd, inclusief Next.js TypeScriptcontrole en paginageneratie.
+- npx eslint components/NodeSettingsModal.tsx: geslaagd.
+- git diff --check: geslaagd.
+- Browser: geplaatste hoofdstuknode openen en opnieuw openen; sluiten met Escape;
+  selectie behouden; titel wijzigen; Tab naar het volgende veld; Undo van titel;
+  vergrendelde velden en bereikbare Sluiten-knop.
+- Browser: afbeelding- en cutsceneformulier op 390 x 844 pixels, scrollbare inhoud,
+  zichtbare uploadknoppen, vaste kop en Sluiten-knop.
+- Browser: tekstnode met Scene Info; grote teksteditor openen/sluiten; terugkeer
+  naar instellingen met focus op Sluiten.
+- Browser: path toevoegen en start-node wijzigen; path-teller en startbadge bijgewerkt.
+- Browser: keuzemenu start met 3 opties; extra keuze D toevoegen geeft 4/99.
+- Codevergelijking: bestaande nodeformulieren en callbacks behouden; alleen
+  presentatie, modalstatus en de positie van de gevarenzone aangepast.
 
-INSTALLEREN
-1. ZIP uitpakken.
-2. Sleep map `app` over dibooks_author_studio.
-3. `app/editor/page.tsx` vervangen.
-4. Commit/push.
-5. Vercel opnieuw laten builden.
+TESTBEPERKINGEN
+De lokale kopie bevat geen Supabase-projectconfiguratie of aangemeld auteursaccount.
+Echte afbeelding/video-opslag in Supabase, online opslaan en publiceren zijn daarom
+niet end-to-end uitgevoerd. De bestaande uploadvalidatie en opslagcode zijn behouden.
+Niet elke reader-, review- en tutorialroute is afzonderlijk doorgeklikt.
+De build meldt de bestaande Next.js-waarschuwing over middleware versus proxy;
+dit is geen buildfout. De eerste sandbox-build kon Google Fonts niet bereiken;
+de normale build met netwerktoegang is volledig geslaagd.

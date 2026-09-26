@@ -1,5 +1,6 @@
 "use client";
 
+import NodeSettingsModal from "@/components/NodeSettingsModal";
 import { AppNavActions } from "@/components/AppNav";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -2829,6 +2830,7 @@ export default function Home() {
   const [nodes, setNodes, onNodesChange] =
     useNodesState<Node<DiNodeData>>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [nodeSettingsOpen, setNodeSettingsOpen] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpView, setHelpView] = useState<"overview" | "tutorial">("overview");
@@ -4457,6 +4459,7 @@ ${formatSaveError(error)}`);
 
     setNodes((currentNodes) => [...currentNodes, newNode]);
     setSelectedNodeId(id);
+    setNodeSettingsOpen(true);
   }
 
   function updateSelectedNodeLabel(label: string) {
@@ -4820,6 +4823,7 @@ ${formatSaveError(error)}`);
 
     setStartNodeId(nextStartNodeId);
     setSelectedNodeId(null);
+    setNodeSettingsOpen(false);
 
     if (editingTextNodeId === deletedNodeId) {
       setEditingTextNodeId(null);
@@ -5610,7 +5614,7 @@ ${formatSaveError(error)}`);
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-neutral-950 text-white">
-      <div className="flex h-full">
+      <div className="flex h-full" inert={!reviewMode && nodeSettingsOpen && !!selectedNode}>
         <aside className="relative flex w-24 flex-col items-center border-r-4 border-black bg-neutral-950 p-3">
           {reviewMode && (
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-neutral-950/70 backdrop-blur-[1px]" title="Reviewmodus is alleen-lezen">
@@ -6299,6 +6303,7 @@ ${formatSaveError(error)}`);
             onNodeClick={(_, node) => {
               setSelectedNodeId(node.id);
               if (reviewMode) setReviewInspectorOpen(true);
+              else setNodeSettingsOpen(true);
             }}
             onInit={(instance) => {
               reviewFlowInstanceRef.current = instance;
@@ -6327,26 +6332,9 @@ ${formatSaveError(error)}`);
           </div>
         </section>
 
-        <aside
-          ref={reviewInspectionAsideRef}
-          className="relative w-80 overflow-y-auto border-l-4 border-black bg-neutral-950 p-4"
-        >
-          {editorLocked && !reviewMode && (
-            <div className="absolute inset-0 z-[80] flex items-start justify-center bg-neutral-950/55 p-4 pt-16 backdrop-blur-[1px]">
-              <div className="rounded-2xl border border-amber-300/25 bg-amber-500/15 px-4 py-3 text-center shadow-2xl">
-                <p className="text-sm font-black text-amber-100">
-                  🔒 Editor vergrendeld
-                </p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-amber-100/65">
-                  Ontgrendel via het slotje links om instellingen te wijzigen.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <h2 className="mb-4 text-xl font-black">{reviewMode ? "Review inspectie" : "Node instellingen"}</h2>
-
-          {reviewMode ? (
+        {reviewMode && (
+        <aside ref={reviewInspectionAsideRef} className="relative w-80 overflow-y-auto border-l-4 border-black bg-neutral-950 p-4">
+          <h2 className="mb-4 text-xl font-black">Review inspectie</h2>
             <div className="grid gap-4">
               {!selectedNode ? (
                 <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-sm font-semibold leading-6 text-neutral-400">
@@ -6396,16 +6384,21 @@ ${formatSaveError(error)}`);
                 </>
               )}
             </div>
-          ) : (
-            <>
-          {!selectedNode && (
-            <p className="text-neutral-400">
-              Klik op een node om deze te bewerken.
-            </p>
-          )}
+        </aside>
+        )}
+      </div>
 
+      {!reviewMode && nodeSettingsOpen && selectedNode && (
+        <NodeSettingsModal
+          title={selectedNode.data.label}
+          nodeType={nodeLabels[selectedNode.data.type]}
+          locked={editorLocked}
+          suspended={!!editingTextNode || variablesOpen}
+          onClose={() => setNodeSettingsOpen(false)}
+        >
           {selectedNode && (
-            <div className="grid gap-4">
+            <div className="grid gap-5 [&>div]:rounded-2xl [&>div]:border [&>div]:border-white/10 [&>div]:bg-white/[0.025] [&>div]:p-4 sm:[&>div]:p-5">
+              <h3 className="text-sm font-black uppercase tracking-widest text-indigo-300">Algemeen & verhaalroutes</h3>
               <div>
                 <label className="mb-2 block text-sm font-bold">Titel</label>
                 <input
@@ -6543,21 +6536,7 @@ ${formatSaveError(error)}`);
                 </button>
               )}
 
-              <div className="rounded-xl border border-red-900/70 bg-red-950/30 p-3">
-                <div className="mb-2 text-sm font-black text-red-200">
-                  Gevarenzone
-                </div>
-                <button
-                  onClick={deleteSelectedNode}
-                  disabled={nodes.length <= 1}
-                  className="w-full rounded-xl bg-red-700 px-4 py-3 font-black text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
-                >
-                  Delete node
-                </button>
-                <p className="mt-2 text-xs text-red-200/70">
-                  Verwijdert deze node plus alle paths van en naar deze node.
-                </p>
-              </div>
+
 
               {selectedNode.data.type !== "choice" &&
                 selectedNode.data.type !== "minigame" &&
@@ -7494,12 +7473,25 @@ ${formatSaveError(error)}`);
                   </div>
                 </div>
               )}
+              <div className="rounded-xl border border-red-900/70 bg-red-950/30 p-3">
+                <div className="mb-2 text-sm font-black text-red-200">
+                  Gevarenzone
+                </div>
+                <button
+                  onClick={deleteSelectedNode}
+                  disabled={nodes.length <= 1}
+                  className="w-full rounded-xl bg-red-700 px-4 py-3 font-black text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+                >
+                  Delete node
+                </button>
+                <p className="mt-2 text-xs text-red-200/70">
+                  Verwijdert deze node plus alle paths van en naar deze node.
+                </p>
+              </div>
             </div>
           )}
-            </>
-          )}
-        </aside>
-      </div>
+        </NodeSettingsModal>
+      )}
 
       {helpOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 p-4 sm:p-8">
