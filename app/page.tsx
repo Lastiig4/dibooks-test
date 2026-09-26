@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import AppNav from "@/components/AppNav";
+import LibraryHighlights, { LibraryBackdrop, LibraryBookCard } from "@/components/LibraryHighlights";
+import { selectLibraryHighlights } from "@/lib/librarySelection";
 import { useEffect, useMemo, useState } from "react";
 import type { DiBook } from "@/lib/books";
 import {
@@ -73,7 +75,7 @@ function sortTutorialBooks(books: DashboardBook[]) {
       (Number.isFinite(leftDate) ? leftDate : 0);
   });
 }
-const FALLBACK_ACCENT_CLASS = "border-blue-500/50";
+
 
 function getPopularityCount(
   book: DashboardBook,
@@ -153,54 +155,6 @@ function BookBadge({ children, light = false }: { children: React.ReactNode; lig
   );
 }
 
-function CoverArtwork({ book, large = false }: { book: DashboardBook; large?: boolean }) {
-  const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
-  const hasCustomCover = !!book.coverImage;
-  return (
-    <div className={`relative isolate ${large ? "h-80" : "h-64"} overflow-hidden bg-gradient-to-br ${coverClass}`}>
-      {hasCustomCover && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={book.coverImage} alt={`Cover van ${book.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover" />
-      )}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.16),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.20))]" />
-      {!hasCustomCover && (
-        <>
-          <div className="absolute -right-16 top-7 -z-10 h-44 w-44 rounded-full border border-white/10" />
-          <div className="absolute -right-8 top-20 -z-10 h-64 w-64 rounded-full border border-white/10" />
-          <div className="absolute left-5 top-5 text-[10px] font-black uppercase tracking-[0.35em] text-white/30">DiBooks</div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function BookCard({ book, large = false }: { book: DashboardBook; large?: boolean }) {
-  const href = `/books/${book.id}`;
-  const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
-  return (
-    <Link href={href} className={`group relative shrink-0 overflow-hidden rounded-2xl border ${accentClass} bg-neutral-950 shadow-2xl transition hover:-translate-y-1 hover:scale-[1.01] hover:border-white/60 ${large ? "w-[330px] sm:w-[400px]" : "w-[250px] sm:w-[290px]"}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-4 py-3">
-        <BookBadge>{book.primaryGenre}</BookBadge>
-        <div className="flex items-center gap-2">
-          <AccessBadge book={book} />
-          <BookBadge light>{getBookStatusLabel(book)}</BookBadge>
-        </div>
-      </div>
-      <CoverArtwork book={book} large={large} />
-      <div className="flex min-h-[136px] flex-col border-t border-white/10 bg-gradient-to-t from-black/70 via-black/32 to-transparent p-5 backdrop-blur-[2px]">
-        <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300/80">
-          {isTutorialBook(book) ? "Tutorial" : "Interactief verhaal"}
-        </p>
-        <h3 className="mt-2 line-clamp-2 text-3xl font-black leading-none text-white">{book.title}</h3>
-        <div className="mt-5 flex items-center justify-between gap-3">
-          <span className="truncate text-xs font-black uppercase tracking-widest text-neutral-500">{book.author}</span>
-          <span className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white group-hover:bg-blue-500">Bekijk</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 function GuestPopularCover({
   book,
   rank,
@@ -263,40 +217,6 @@ function GuestPopularCover({
         <p className="mt-2 truncate text-xs font-bold text-neutral-500">
           {book.author}
         </p>
-      </div>
-    </Link>
-  );
-}
-
-function FeaturedPanel({ book }: { book: DashboardBook }) {
-  const accentClass = book.accentClass || FALLBACK_ACCENT_CLASS;
-  const coverClass = book.coverClass || FALLBACK_COVER_CLASS;
-  const hasCustomCover = !!book.coverImage;
-  return (
-    <Link href={`/books/${book.id}`} className="hidden w-[190px] justify-self-end xl:block">
-      <div className={`overflow-hidden rounded-[1.25rem] border ${accentClass} bg-neutral-950/80 shadow-xl backdrop-blur-md transition hover:-translate-y-1`}>
-        <div className={`relative h-56 overflow-hidden bg-gradient-to-br ${coverClass}`}>
-          {hasCustomCover && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={book.coverImage} alt={`Cover van ${book.title}`} className="absolute inset-0 h-full w-full object-cover opacity-90" />
-          )}
-          {!hasCustomCover && (
-            <>
-              <div className="absolute left-4 top-4 text-[9px] font-black uppercase tracking-[0.34em] text-white/28">DiBooks</div>
-              <div className="absolute -right-12 top-10 h-36 w-36 rounded-full border border-white/10" />
-              <div className="absolute -right-5 top-24 h-48 w-48 rounded-full border border-white/8" />
-            </>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-          <div className="absolute left-3 right-3 top-3 flex flex-wrap gap-1.5">
-            <BookBadge>{book.primaryGenre}</BookBadge>
-            <AccessBadge book={book} />
-          </div>
-          <div className="absolute bottom-3 left-3 right-3">
-            <p className="text-[8px] font-black uppercase tracking-[0.30em] text-blue-300/80">Uitgelicht</p>
-            <h3 className="mt-1 line-clamp-2 text-xl font-black leading-none text-white">{book.title}</h3>
-          </div>
-        </div>
       </div>
     </Link>
   );
@@ -663,8 +583,8 @@ function BookRow({ title, rowBooks }: { title: string; rowBooks: DashboardBook[]
         <h2 className="text-xl font-black text-white sm:text-2xl">{title}</h2>
         <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-neutral-500">{rowBooks.length} boeken</span>
       </div>
-      <div className="flex gap-5 overflow-x-auto px-5 pb-3 sm:px-8 lg:px-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {rowBooks.map((book) => <BookCard key={`${title}-${book.source ?? "library"}-${book.id}`} book={book} />)}
+      <div className="flex snap-x snap-proximity gap-5 overflow-x-auto px-5 pb-4 pt-1 sm:px-8 lg:px-10 [scrollbar-width:thin]">
+        {rowBooks.map((book) => <LibraryBookCard key={`${title}-${book.source ?? "library"}-${book.id}`} book={book} />)}
       </div>
     </section>
   );
@@ -773,14 +693,13 @@ export default function LibraryPage() {
     () => sortBooksByPopularity(liveBooks, popularityByBookId),
     [liveBooks, popularityByBookId],
   );
-  const featuredBook =
-    popularBooks[0] ?? liveBooks[0] ?? regularComingSoonBooks[0] ?? null;
-  const mostReadBooks = popularBooks.slice(0, 12);
+  const librarySelection = selectLibraryHighlights(allBooks, popularityByBookId);
+  const mostReadBooks = librarySelection.popular.slice(0, 12);
   const genreRows = makeGenreRows(liveBooks);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#05070d] text-white">
-      <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_36%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.12),transparent_35%),linear-gradient(180deg,#05070d_0%,#05070d_45%,#020308_100%)]" />
+    <main className="relative isolate min-h-screen overflow-hidden bg-[#070a11] text-white">
+      <LibraryBackdrop />
       <AppNav title={isLoggedIn ? "Library" : "DiBooks"} subtitle={isLoggedIn ? "Ontdek interactieve boeken" : "Lees, kies en bouw interactieve verhalen"} />
 
       {!isLoggedIn && (
@@ -799,7 +718,7 @@ export default function LibraryPage() {
         </>
       )}
 
-      <div id="library" className="scroll-mt-28">
+      <div id="library" className="mx-auto max-w-[1600px] scroll-mt-28">
         {!isLoggedIn && (
           <div className="mx-auto max-w-7xl px-5 pt-2 sm:px-8 lg:px-10">
             <p className="text-xs font-black uppercase tracking-[0.32em] text-blue-300">DiBooks Library</p>
@@ -807,42 +726,8 @@ export default function LibraryPage() {
           </div>
         )}
 
-        {featuredBook ? (
-          <section className="px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-            <div className={`relative isolate overflow-hidden rounded-[1.5rem] border border-white/10 bg-gradient-to-br ${featuredBook.coverClass || FALLBACK_COVER_CLASS} shadow-2xl`}>
-              {featuredBook.bannerImage && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={featuredBook.bannerImage} alt={`Banner van ${featuredBook.title}`} className="absolute inset-0 -z-10 h-full w-full object-cover opacity-85" />
-              )}
-              <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.08),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(37,99,235,0.10),transparent_34%),linear-gradient(90deg,rgba(0,0,0,0.88),rgba(0,0,0,0.72),rgba(0,0,0,0.50))]" />
-              <div className="absolute -right-20 top-8 -z-10 h-[280px] w-[280px] rounded-full border border-white/8" />
-              <div className="absolute -right-4 top-20 -z-10 h-[380px] w-[380px] rounded-full border border-white/5" />
-              <div className="relative grid min-h-[285px] items-center gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_210px] lg:p-9">
-                <div className="max-w-3xl">
-                  {featuredBook.source === "dashboard" && (
-                    <div className="mb-4 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-emerald-200">Nieuw gepubliceerd vanuit Dashboard</div>
-                  )}
-                  <div className="mb-5 flex flex-wrap gap-2">
-                    {featuredBook.genres.map((genre) => <BookBadge key={genre}>{genre}</BookBadge>)}
-                    <AccessBadge book={featuredBook} />
-                    <BookBadge light>{getBookStatusLabel(featuredBook)}</BookBadge>
-                  </div>
-                  <h1 className="max-w-4xl text-4xl font-black leading-none sm:text-5xl lg:text-6xl">{featuredBook.title}</h1>
-                  <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">{featuredBook.subtitle}</p>
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    {featuredBook.published ? (
-                      <Link href={`/books/${featuredBook.id}/read`} className="rounded-2xl bg-white px-7 py-4 text-lg font-black text-black hover:bg-neutral-200">Lees nu</Link>
-                    ) : (
-                      <span className="rounded-2xl bg-neutral-700 px-7 py-4 text-lg font-black text-neutral-300">Binnenkort</span>
-                    )}
-                    <Link href={`/books/${featuredBook.id}`} className="rounded-2xl border border-white/15 bg-black/30 px-7 py-4 text-lg font-black text-white hover:bg-white/10">Meer informatie</Link>
-                  </div>
-                </div>
-                <FeaturedPanel book={featuredBook} />
-              </div>
-            </div>
-          </section>
-        ) : allBooks.length === 0 ? (
+        <LibraryHighlights books={allBooks} counts={popularityByBookId} />
+        {allBooks.length === 0 && (
           <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
             <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-8 shadow-2xl sm:p-12">
               <p className="text-sm font-black uppercase tracking-[0.32em] text-blue-300">DiBooks Library</p>
@@ -850,7 +735,7 @@ export default function LibraryPage() {
               <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-neutral-300 sm:text-lg">Zodra auteurs hun eerste DiBooks publiceren, verschijnen ze hier automatisch in de Library.</p>
             </div>
           </section>
-        ) : null}
+        )}
 
         {tutorialBooks.length > 0 && (
           <BookRow title="Tutorials" rowBooks={tutorialBooks} />
@@ -858,7 +743,7 @@ export default function LibraryPage() {
         {regularComingSoonBooks.length > 0 && (
           <BookRow title="Binnenkort" rowBooks={regularComingSoonBooks} />
         )}
-        {liveBooks.length > 0 && <BookRow title="Nieuw in de Library" rowBooks={liveBooks} />}
+        {liveBooks.length > 0 && <BookRow title="Nieuw in de Library" rowBooks={librarySelection.latest} />}
         <BookRow title="Populair bij lezers" rowBooks={mostReadBooks} />
         {genreRows.map((row) => <BookRow key={row.genre} title={row.genre} rowBooks={row.books} />)}
       </div>
