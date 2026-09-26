@@ -1,59 +1,62 @@
-DiBooks Library - Compacte highlights & grotere covers V1
+DiBooks Auteur Studio - Compacte node-instellingen & direct kladblok V2
 26 september 2026
 
 INSTALLATIE
-Pak de ZIP uit in de projectroot (bij package.json).
-Vervang app/page.tsx en voeg de twee nieuwe bestanden toe:
-components/LibraryHighlights.tsx
-lib/librarySelection.ts
-Maak eerst een backup/commit. Controleer daarna npm run build.
-Geen SQL, migraties of nieuwe packages nodig.
+Maak een backup/commit en pak deze ZIP uit in je projectroot bij package.json.
+Vervang:
+  app/editor/page.tsx
+  components/NodeSettingsModal.tsx
+Voeg toe:
+  components/ScratchpadEditor.tsx
+Controleer daarna npm run build en deploy zoals gebruikelijk.
+Geen SQL of nieuwe dependencies nodig; gebruikt de bestaande Tiptap-packages.
 
 BASIS
-Lastiig4/dibooks-test, commit 59d66e7539babc88def620c11c7ebb61029ad7db.
-Het complete app/page.tsx is meegeleverd; merge eerst als je dat bestand
-sinds deze versie zelf hebt veranderd.
-De eerdere node-modalpatch kan onafhankelijk hiervan blijven staan.
-Deze ZIP bevat uitsluitend de Library-wijzigingen.
+Repository Lastiig4/dibooks-test, commit 59d66e7539babc88def620c11c7ebb61029ad7db,
+met de eerder geleverde Node Settings Modal V1 als uitgangspunt.
+V2 bevat de volledige editorbestanden en vervangt de V1-modalpatch.
+Latere eigen wijzigingen in deze bestanden eerst vergelijken/mergen.
+De Library-patch wordt niet meegeleverd of gewijzigd.
 
-ONTWERP
-- Grote uitgelichte-boekbanner vervangen door maximaal drie compacte kaarten.
-- Schakel tussen Meest gelezen en Nieuwe uitgaven.
-- Mobiel: horizontaal schuivende highlights; desktop: drie kolommen.
-- Grotere boekcovers in de planken, met volledige 2:3-ruimte en object-contain.
-  De afbeelding wordt niet bijgesneden. Titels en badges staan onder de cover.
-- Compactere tekst, auteursnaam en Bekijk-link.
-- Library-inhoud gecentreerd met een maximum van 1600px.
-- Zeer subtiele, vervaagde nodeverbindingen aan de randen van de achtergrond.
-  Geen labels, druk raster, bewegende achtergrond of extra afbeeldingsdownload.
-- Toetsenbordbediening, focusindicatie en selectie via aria-pressed.
+KLADBLOK
+- Klikken of toevoegen opent direct het kladblok: titel en bewerkbare tekst.
+- Geen tussenliggende node-instellingen of tweede teksteditor nodig.
+- Cursor staat direct in de notities; wijzigingen gaan direct naar projectstate.
+- Verwijderen en Sluiten staan steeds bereikbaar in de kop.
+- De bestaande verwijderbevestiging en laatste-nodebeveiliging blijven gelden.
+- Bestaande rich text wordt geladen; tekst, koppen, lijsten, nadruk, kleur,
+  lettertype en lettergrootte worden ondersteund door de editor.
+- Alleen openen of wisselen naar leesmodus schrijft de tekst niet opnieuw weg.
+- Editor Lock maakt de notities alleen-lezen en blokkeert titel en verwijderen.
+- Kladblokken blijven privé en buiten start-node-, path- en Reader-logica.
 
-SELECTIE
-- Meest gelezen gebruikt de bestaande get_public_book_popularity RPC of
-  expliciete readerCount/readCount-waarden; geen views/favorieten als lezers.
-- Alleen gepubliceerde boeken met positieve leescijfers worden gerangschikt.
-- Zonder leescijfers wordt Nieuwe uitgaven getoond; de rankingknop is disabled.
-- Nieuwe uitgaven sorteert op publicatiedatum, met aanmaakdatum als fallback.
-  Een recente bewerking maakt een oud boek niet automatisch nieuw.
-- Zijn er nog geen gepubliceerde reguliere boeken, dan verschijnen maximaal
-  drie Binnenkort-boeken met alleen links naar hun informatiepagina.
-- Tutorials blijven apart en komen niet in deze highlightselectie terecht.
-- Minder dan drie beschikbare boeken geeft minder kaarten, geen nepvulling.
-- De bestaande gastenintro, accountlogica, boekdetails, Reader, Tutorial-plank
-  en genreplanken blijven behouden.
+OVERIGE NODES
+- Compacte vaste kop met klein type-label rechtsboven.
+- Groot Type-blok en dubbele titelweergave verwijderd.
+- Basisvelden in één kolom onder Gegevens: titel, subtype/hoofdstukvelden
+  waar van toepassing, en Scène-info bij tekst/special.
+- Daaronder de bestaande inhoud en nodespecifieke instellingen.
+- Algemene paths en de start-nodeknop staan daarna onder Verhaalroutes.
+- Specifieke keuze-, minigame- en IF-routes blijven bij hun eigen instellingen.
+- Minigamevelden Duur en Moeilijkheid staan nu ook onder elkaar.
+- Minder losse kaders en padding; scrollbaar en bruikbaar op mobiel.
+- Verwijderen van gewone nodes blijft onderaan.
+
+BEHOUDEN
+Undo, selectie, Editor Lock, start-node/badge, Scene Info, bestaande teksteditor,
+Choice99, Reader Feedback, Image Node, uploads, tutorials en reviewlogica.
+Geen wijziging aan het formaat van opgeslagen projecten.
 
 CONTROLES
-- TypeScript en definitieve Next.js-productiebuild geslaagd.
-- ESLint op de twee nieuwe bestanden geslaagd; git diff --check geslaagd.
-- Gerichte selectietests: ranking, datums, tutorials, drafts, Binnenkort,
-  nul/ontbrekende/ongeldige tellingen, dubbele IDs en lege catalogus.
-- Browsercontrole van de componenten op desktop en 390 x 844 mobiel:
-  selectie wisselt correct, volledige covers en geen pagina-overflow.
-- Preview getest met lokale voorbeeldboeken en fictieve leescijfers.
-  De tijdelijke previewroute is verwijderd en zit niet in de patch.
-- Geen live Supabase-accountdata gebruikt; controleer na plaatsen ook de
-  ingelogde Library met je eigen boeken. Niet gepubliceerd of gedeployed.
-- Bestaande Next.js-melding over middleware/proxy blijft een waarschuwing.
-
-De losse screenshots naast de ZIP zijn ontwerpvoorbeelden; hun covers en
-leescijfers zijn testmateriaal. Je eigen covers worden automatisch gebruikt.
+- Next.js-productiebuild inclusief TypeScript geslaagd.
+- ESLint op de aangepaste modal en nieuwe kladblokcomponent geslaagd.
+- Browser: direct openen, automatisch focus op notities, typen zonder
+  focusverlies, titel aanpassen, sluiten en opnieuw openen met bewaarde tekst.
+- Browser: Editor Lock blokkeert titel/verwijderen; notities hebben
+  contenteditable=false. Verwijderknop activeert bestaande bevestiging.
+- Browser: compacte tekstnodevolgorde en mobiel op 390 x 844 gecontroleerd;
+  geen horizontale pagina-overflow.
+- Online Supabase-opslag en echte media-uploads niet getest: configuratie
+  ontbreekt lokaal. Niet elke overige nodevariant is opnieuw doorgeklikt;
+  hun bestaande callbacks en velden zijn behouden.
+- Bestaande Next.js middleware/proxy-waarschuwing is geen buildfout.

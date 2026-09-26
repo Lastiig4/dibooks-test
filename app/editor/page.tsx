@@ -1,5 +1,6 @@
 "use client";
 
+import ScratchpadEditor from "@/components/ScratchpadEditor";
 import NodeSettingsModal from "@/components/NodeSettingsModal";
 import { AppNavActions } from "@/components/AppNav";
 import type React from "react";
@@ -4747,7 +4748,7 @@ ${formatSaveError(error)}`);
   }
 
   function deleteSelectedNode() {
-    if (!selectedNode) return;
+    if (!selectedNode || editorLocked || reviewMode) return;
 
     if (nodes.length <= 1) {
       alert("Je kunt de laatste node niet verwijderen.");
@@ -6392,13 +6393,19 @@ ${formatSaveError(error)}`);
         <NodeSettingsModal
           title={selectedNode.data.label}
           nodeType={nodeLabels[selectedNode.data.type]}
+          quickNote={selectedNode.data.type === "scratchpad"}
+          onDelete={selectedNode.data.type === "scratchpad" ? deleteSelectedNode : undefined}
+          canDelete={nodes.length > 1}
           locked={editorLocked}
           suspended={!!editingTextNode || variablesOpen}
           onClose={() => setNodeSettingsOpen(false)}
         >
-          {selectedNode && (
-            <div className="grid gap-5 [&>div]:rounded-2xl [&>div]:border [&>div]:border-white/10 [&>div]:bg-white/[0.025] [&>div]:p-4 sm:[&>div]:p-5">
-              <h3 className="text-sm font-black uppercase tracking-widest text-indigo-300">Algemeen & verhaalroutes</h3>
+          {selectedNode.data.type === "scratchpad" ? (
+<ScratchpadEditor key={selectedNode.id} title={selectedNode.data.label} html={selectedNode.data.textHtml ?? ""} text={selectedNode.data.text ?? ""} locked={editorLocked} onTitleChange={updateSelectedNodeLabel} onChange={(html, text) => { if (!editorLocked) updateNodeRichText(selectedNode.id, html, text); }} />
+) : (
+<div className="grid gap-5">
+<section className="grid gap-4 border-b border-white/10 pb-5">
+<h3 className="text-xs font-bold uppercase tracking-widest text-indigo-200">Gegevens</h3>
               <div>
                 <label className="mb-2 block text-sm font-bold">Titel</label>
                 <input
@@ -6408,19 +6415,6 @@ ${formatSaveError(error)}`);
                   }
                   className="w-full rounded-lg border-2 border-neutral-700 bg-neutral-900 p-3 text-white outline-none focus:border-white"
                 />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold">Type</label>
-                <div
-                  className="rounded-lg border-2 border-black p-3 font-black"
-                  style={{
-                    background: nodeColors[selectedNode.data.type],
-                    color: selectedNode.data.type === "scratchpad" ? "#0f172a" : undefined,
-                  }}
-                >
-                  {nodeLabels[selectedNode.data.type]}
-                </div>
               </div>
 
               {selectedNode.data.type === "special" && (
@@ -6514,123 +6508,9 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
-              {selectedNode.data.type === "scratchpad" ? (
-                <div className="rounded-xl border border-white/15 bg-white/10 p-3 text-sm text-neutral-300">
-                  <div className="font-black text-white">Kladblok-node</div>
-                  <p className="mt-1 text-neutral-400">
-                    Deze node is alleen voor notities/lore. Hij kan geen start-node zijn en krijgt geen paths.
-                  </p>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setStartNodeId(selectedNode.id)}
-                  className={`rounded-xl px-4 py-3 font-black ${
-                    selectedNode.id === startNodeId
-                      ? "bg-yellow-500 text-black"
-                      : "bg-neutral-800 text-white hover:bg-neutral-700"
-                  }`}
-                >
-                  {selectedNode.id === startNodeId
-                    ? "Dit is de start-node ★"
-                    : "Maak start-node"}
-                </button>
-              )}
-
-
-
-              {selectedNode.data.type !== "choice" &&
-                selectedNode.data.type !== "minigame" &&
-                selectedNode.data.type !== "condition" &&
-                selectedNode.data.type !== "scratchpad" && (
-              <div className="rounded-xl bg-neutral-900 p-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-black">Paths</h3>
-                  <span className="text-sm text-neutral-400">
-                    {selectedNodePaths.length}/{
-                      selectedNode.data.type === "function" ||
-                      selectedNode.data.type === "chapter"
-                        ? 1
-                        : 10
-                    }
-                  </span>
-                </div>
-
-                <label className="mb-2 block text-sm font-bold">
-                  Add path naar node
-                </label>
-
-                {selectedNode.data.type === "function" && (
-                  <p className="mb-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs font-bold leading-5 text-cyan-100/80">
-                    Functie-nodes zijn onzichtbaar voor lezers. Zodra de reader deze node bereikt, worden de acties uitgevoerd en gaat het verhaal automatisch door via de eerste path.
-                  </p>
-                )}
-
-                {selectedNode.data.type === "chapter" && (
-                  <p className="mb-3 rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-xs font-bold leading-5 text-rose-100/80">
-                    Hoofdstuk-markers zijn onzichtbaar voor lezers en gebruiken precies één vervolgpath. Plaats hem vóór de eerste node van het hoofdstuk.
-                  </p>
-                )}
-
-                <select
-                  defaultValue=""
-                  onChange={(event) => {
-                    addPathFromSelectedNode(event.target.value);
-                    event.target.value = "";
-                  }}
-                  className="mb-4 w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-white"
-                >
-                  <option value="" disabled>
-                    Kies een node...
-                  </option>
-
-                  {availableTargetNodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {node.data.label} — {node.data.type}
-                    </option>
-                  ))}
-                </select>
-
-                {selectedNodePaths.length === 0 && (
-                  <p className="text-sm text-neutral-500">
-                    Deze node heeft nog geen paths.
-                  </p>
-                )}
-
-                <div className="grid gap-2">
-                  {selectedNodePaths.map((edge) => {
-                    const targetNode = nodes.find(
-                      (node) => node.id === edge.target,
-                    );
-
-                    return (
-                      <div
-                        key={edge.id}
-                        className="rounded-lg border border-neutral-700 bg-neutral-950 p-3"
-                      >
-                        <div className="mb-2 text-sm">
-                          Naar:{" "}
-                          <span className="font-bold text-white">
-                            {targetNode?.data.label ?? "Onbekende node"}
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() => deletePath(edge.id)}
-                          className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white hover:bg-red-500"
-                        >
-                          Verwijder path
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              )}
-
               {(selectedNode.data.type === "text" ||
                 selectedNode.data.type === "special") && (
-                <div className="rounded-xl border border-blue-400/20 bg-blue-500/[0.07] p-4">
+                <div className="grid gap-1">
                   <label className="mb-2 block text-sm font-black text-blue-100">
                     Scène-info <span className="text-neutral-500">(optioneel)</span>
                   </label>
@@ -6651,12 +6531,12 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
+</section>
               {(selectedNode.data.type === "text" ||
-                selectedNode.data.type === "special" ||
-                selectedNode.data.type === "scratchpad") && (
+                selectedNode.data.type === "special") && (
                 <div>
                   <label className="mb-2 block text-sm font-bold">
-                    {selectedNode.data.type === "scratchpad" ? "Notities / lore" : "Tekst / inhoud"}
+                    Tekst / inhoud
                   </label>
 
                   <button
@@ -6931,16 +6811,6 @@ ${formatSaveError(error)}`);
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-
-              {selectedNode.data.type === "scratchpad" && (
-                <div className="rounded-xl border border-white/15 bg-white/10 p-3 text-sm text-neutral-300">
-                  <div className="font-black text-white">Niet zichtbaar voor lezers</div>
-                  <p className="mt-1 text-neutral-400">
-                    Kladblok-nodes worden opgeslagen in je project, maar niet meegenomen in de reader-export,
-                    publicatie-eisen, paden, voortgang of node-limiet.
-                  </p>
                 </div>
               )}
 
@@ -7341,7 +7211,7 @@ ${formatSaveError(error)}`);
                       </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3">
                       <div>
                         <label className="mb-2 block text-sm font-black">
                           Duur
@@ -7473,6 +7343,109 @@ ${formatSaveError(error)}`);
                   </div>
                 </div>
               )}
+<section className="grid gap-3 border-t border-white/10 pt-5">
+<h3 className="text-xs font-bold uppercase tracking-widest text-indigo-200">Verhaalroutes</h3>
+                <button
+                  onClick={() => setStartNodeId(selectedNode.id)}
+                  className={`w-fit rounded-lg px-3 py-2 text-sm font-bold ${
+                    selectedNode.id === startNodeId
+                      ? "bg-yellow-500 text-black"
+                      : "bg-neutral-800 text-white hover:bg-neutral-700"
+                  }`}
+                >
+                  {selectedNode.id === startNodeId
+                    ? "Dit is de start-node ★"
+                    : "Maak start-node"}
+                </button>              {selectedNode.data.type !== "choice" &&
+                selectedNode.data.type !== "minigame" &&
+                selectedNode.data.type !== "condition" && (
+              <div className="rounded-xl bg-neutral-900 p-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="font-black">Paths</h3>
+                  <span className="text-sm text-neutral-400">
+                    {selectedNodePaths.length}/{
+                      selectedNode.data.type === "function" ||
+                      selectedNode.data.type === "chapter"
+                        ? 1
+                        : 10
+                    }
+                  </span>
+                </div>
+
+                <label className="mb-2 block text-sm font-bold">
+                  Add path naar node
+                </label>
+
+                {selectedNode.data.type === "function" && (
+                  <p className="mb-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs font-bold leading-5 text-cyan-100/80">
+                    Functie-nodes zijn onzichtbaar voor lezers. Zodra de reader deze node bereikt, worden de acties uitgevoerd en gaat het verhaal automatisch door via de eerste path.
+                  </p>
+                )}
+
+                {selectedNode.data.type === "chapter" && (
+                  <p className="mb-3 rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-xs font-bold leading-5 text-rose-100/80">
+                    Hoofdstuk-markers zijn onzichtbaar voor lezers en gebruiken precies één vervolgpath. Plaats hem vóór de eerste node van het hoofdstuk.
+                  </p>
+                )}
+
+                <select
+                  defaultValue=""
+                  onChange={(event) => {
+                    addPathFromSelectedNode(event.target.value);
+                    event.target.value = "";
+                  }}
+                  className="mb-4 w-full rounded-lg border-2 border-neutral-700 bg-neutral-950 p-3 text-white outline-none focus:border-white"
+                >
+                  <option value="" disabled>
+                    Kies een node...
+                  </option>
+
+                  {availableTargetNodes.map((node) => (
+                    <option key={node.id} value={node.id}>
+                      {node.data.label} — {node.data.type}
+                    </option>
+                  ))}
+                </select>
+
+                {selectedNodePaths.length === 0 && (
+                  <p className="text-sm text-neutral-500">
+                    Deze node heeft nog geen paths.
+                  </p>
+                )}
+
+                <div className="grid gap-2">
+                  {selectedNodePaths.map((edge) => {
+                    const targetNode = nodes.find(
+                      (node) => node.id === edge.target,
+                    );
+
+                    return (
+                      <div
+                        key={edge.id}
+                        className="rounded-lg border border-neutral-700 bg-neutral-950 p-3"
+                      >
+                        <div className="mb-2 text-sm">
+                          Naar:{" "}
+                          <span className="font-bold text-white">
+                            {targetNode?.data.label ?? "Onbekende node"}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => deletePath(edge.id)}
+                          className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white hover:bg-red-500"
+                        >
+                          Verwijder path
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              )}
+
+</section>
               <div className="rounded-xl border border-red-900/70 bg-red-950/30 p-3">
                 <div className="mb-2 text-sm font-black text-red-200">
                   Gevarenzone
@@ -7488,8 +7461,8 @@ ${formatSaveError(error)}`);
                   Verwijdert deze node plus alle paths van en naar deze node.
                 </p>
               </div>
-            </div>
-          )}
+</div>
+)}
         </NodeSettingsModal>
       )}
 
