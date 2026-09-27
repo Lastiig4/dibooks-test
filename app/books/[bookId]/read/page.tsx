@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import { bookmarkKey, parseBookmarks, bookmarkAvailable, type ReaderBookmark } from "@/lib/readerBookmarks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AppNavActions } from "@/components/AppNav";
@@ -1779,6 +1780,9 @@ function paginateTextHtmlMeasured(
 
 
 function BookPageReader({
+  onAnchorConsumed,
+  onTextOffset,
+  requestedAnchor,
   pageWidthMode,
   html,
   pageIndex,
@@ -1795,6 +1799,9 @@ function BookPageReader({
   initialSceneInfo = "",
   onSceneInfoChange,
 }: {
+  onAnchorConsumed: (value: undefined) => void;
+  onTextOffset: (offset: number) => void;
+  requestedAnchor?: { offset: number; token: string };
   pageWidthMode: "compact" | "wide" | "full";
   html: string;
   pageIndex: number;
@@ -1812,6 +1819,7 @@ function BookPageReader({
   onSceneInfoChange?: (sceneInfo: string) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const appliedAnchor = useRef<string | null>(null);
   const [pages, setPages] = useState<string[]>([]);
   const [visiblePageCount, setVisiblePageCount] = useState(1);
   const [pageSceneInfos, setPageSceneInfos] = useState<string[]>([]);
@@ -1885,6 +1893,17 @@ function BookPageReader({
       }
       nextIndex = Math.min(nextIndex, Math.max(0, nextPages.length - 1));
       if (previous?.html !== html) anchorOffset = nextPages.slice(0, nextIndex).reduce((sum, page) => sum + textLength(page), 0);
+      if (requestedAnchor && appliedAnchor.current !== requestedAnchor.token) {
+        anchorOffset = requestedAnchor.offset;
+        let length = 0;
+        nextIndex = Math.max(0, nextPages.length - 1);
+        for (let i = 0; i < nextPages.length; i++) {
+          length += textLength(nextPages[i]);
+          if (length > anchorOffset) { nextIndex = i; break; }
+        }
+        appliedAnchor.current = requestedAnchor.token;
+        onAnchorConsumed(undefined);
+      }
       if (nextVisiblePageCount === 2) nextIndex -= nextIndex % 2;
       currentIndexRef.current = nextIndex;
       layoutRef.current = { html, pages: nextPages, index: nextIndex, offset: anchorOffset };
@@ -1912,7 +1931,13 @@ function BookPageReader({
     initialSceneInfo,
     maxSpreadWidth,
     maxSingleWidth,
+    requestedAnchor,
+    onAnchorConsumed,
   ]);
+
+  useEffect(() => {
+    onTextOffset(pages.slice(0, pageIndex).reduce((sum, page) => sum + stripHtml(page).replace(/\s/g, "").length, 0));
+  }, [pages, pageIndex, onTextOffset]);
 
   useEffect(() => {
     onSceneInfoChange?.(
@@ -2330,6 +2355,29 @@ export default function ReadBookPage() {
   const readerShellRef = useRef<HTMLElement | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const { user, loading: authLoading } = useDemoAuth();
+  const [contentsTab, setContentsTab] = useState<"chapters" | "bookmarks">("chapters");
+  const [bookmarkStore, setBookmarkStore] = useState<{ key: string; items: ReaderBookmark[] }>({ key: "", items: [] });
+  const [bookmarkMessage, setBookmarkMessage] = useState("");
+  const [readerTextOffset, setReaderTextOffset] = useState(0);
+  const [requestedBookmarkAnchor, setRequestedBookmarkAnchor] = useState<{ nodeId: string; offset: number; token: string }>();
+  const bookmarksKey = user ? bookmarkKey(user.id, bookId) : "";
+  const savedBookmarks = bookmarkStore.key === bookmarksKey ? bookmarkStore.items : [];
+  useEffect(() => {
+    if (!bookmarksKey) return;
+    const read = () => {
+      try { setBookmarkStore({ key: bookmarksKey, items: parseBookmarks(localStorage.getItem(bookmarksKey)) }); }
+      catch { setBookmarkMessage("Bladwijzers kunnen in deze browser niet worden geladen."); }
+    };
+    read();
+    const sync = (event: StorageEvent) => { if (event.key === bookmarksKey) read(); };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, [bookmarksKey]);
+  function saveBookmarks(items: ReaderBookmark[]) {
+    if (!bookmarksKey) return;
+    try { localStorage.setItem(bookmarksKey, JSON.stringify(items)); setBookmarkStore({ key: bookmarksKey, items }); setBookmarkMessage("Bladwijzers bijgewerkt."); }
+    catch { setBookmarkMessage("Opslaan mislukt: browseropslag is niet beschikbaar of vol."); }
+  }
 
   const readerFeedbackHeadId =
     readerFeedbacks[0]?.id ?? null;
@@ -3687,6 +3735,13 @@ export default function ReadBookPage() {
     (isCutsceneNode && !isReadOnlyReplay) || (quietReading && isTextNode && !settingsOpen && !contentsOpen);
 
   const currentHistoryIndex = getCurrentHistoryStepIndex();
+  const bookmarkStep = runHistory[currentHistoryIndex];
+  const currentBookmark = savedBookmarks.find(b => b.stepIndex === currentHistoryIndex && b.enteredAt === bookmarkStep?.enteredAt && b.nodeId === currentNodeId && b.offset === readerTextOffset);
+  function toggleCurrentBookmark() {
+    if (!isTextNode || !bookmarkStep?.enteredAt || !bookmarksKey) return;
+    if (currentBookmark) { saveBookmarks(savedBookmarks.filter(b => b.id !== currentBookmark.id)); return; }
+    saveBookmarks([{ id: crypto.randomUUID(), nodeId: currentNodeId, stepIndex: currentHistoryIndex, enteredAt: bookmarkStep.enteredAt, offset: readerTextOffset, pageIndex, label: displayedChapter ? formatReaderChapterLabel(displayedChapter) : node.title || "Leesplek", createdAt: new Date().toISOString() }, ...savedBookmarks]);
+  }
   const globalPageOffset = getReaderGlobalPageOffset(
     runHistory,
     book,
@@ -3735,6 +3790,7 @@ export default function ReadBookPage() {
       className={`relative flex h-dvh flex-col overflow-hidden ${readerShellClass}`}
     >
       {quietReading && isTextNode && <button type="button" onClick={() => setQuietReading(false)} aria-label="Leesbediening tonen" className="absolute right-2 top-2 z-40 rounded-full border border-current/20 bg-neutral-900/80 px-3 py-2 text-xs text-white opacity-60 hover:opacity-100 focus:opacity-100">☰ Bediening</button>}
+      {bookmarkMessage && <div role="status" className="absolute bottom-20 right-4 z-50 flex max-w-xs items-center gap-3 rounded-xl border border-amber-300/30 bg-neutral-950 p-3 text-sm text-amber-100">{bookmarkMessage}<button type="button" aria-label="Melding sluiten" onClick={() => setBookmarkMessage("")}>✕</button></div>}
       {!hideReaderChromeForCutscene && (
       <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
@@ -3775,6 +3831,9 @@ export default function ReadBookPage() {
               title="Bereikte hoofdstukken"
             >
               Inhoud
+            </button>
+            <button type="button" disabled={!isTextNode || !bookmarkStep?.enteredAt || bookmarkStore.key !== bookmarksKey} onClick={toggleCurrentBookmark} aria-pressed={!!currentBookmark} title={currentBookmark ? "Bladwijzer verwijderen" : "Huidige bladzijde bewaren"} className={`rounded-full border px-3 py-2 text-xs font-black disabled:opacity-40 ${currentBookmark ? "border-amber-300/50 bg-amber-400/15 text-amber-200" : "border-white/10 hover:bg-white/10"}`}>
+              {currentBookmark ? "🔖 Bewaard" : "🔖 Bladwijzer"}
             </button>
             <button
               onClick={() => void toggleReaderFullscreen()}
@@ -3956,7 +4015,7 @@ export default function ReadBookPage() {
                 Inhoud
               </p>
               <h2 className="mt-1 text-xl font-black">
-                Bereikte hoofdstukken
+                {contentsTab === "chapters" ? "Bereikte hoofdstukken" : "Mijn bladwijzers"}
               </h2>
               <p className="mt-1 text-xs font-semibold leading-5 text-neutral-500">
                 Alleen hoofdstukken uit jouw huidige verhaalpad worden getoond.
@@ -3972,13 +4031,28 @@ export default function ReadBookPage() {
           </div>
 
           <div className="mt-4 grid max-h-[55vh] gap-2 overflow-y-auto pr-1">
-            {reachedChapters.length === 0 && (
+            <div className="flex gap-2" role="group" aria-label="Inhoud selecteren">
+              <button type="button" aria-pressed={contentsTab === "chapters"} onClick={() => setContentsTab("chapters")} className={`rounded-xl px-3 py-2 text-sm ${contentsTab === "chapters" ? "bg-blue-500/25" : "bg-white/5"}`}>Hoofdstukken</button>
+              <button type="button" aria-pressed={contentsTab === "bookmarks"} onClick={() => setContentsTab("bookmarks")} className={`rounded-xl px-3 py-2 text-sm ${contentsTab === "bookmarks" ? "bg-amber-500/25" : "bg-white/5"}`}>Bladwijzers ({savedBookmarks.length})</button>
+            </div>
+            {contentsTab === "bookmarks" && <>
+              <p className="text-xs text-neutral-400">Bewaard in deze browser, per account. Teruglezen verandert je voortgang en keuzes niet.</p>
+              {!savedBookmarks.length && <p className="p-3 text-sm text-neutral-300">Nog geen bladwijzers. Gebruik de knop naast Inhoud om een leesplek te bewaren.</p>}
+              {savedBookmarks.map(b => {
+                const available = bookmarkAvailable(b, runHistory) && book.nodes.some(n => n.id === b.nodeId);
+                return <div key={b.id} className="rounded-xl border border-white/10 p-3">
+                  <p className="text-sm font-bold">{b.label}</p><p className="mt-1 text-xs text-neutral-400">{available ? "Bewaarde leesplek" : "Niet beschikbaar in je huidige leesronde"}</p>
+                  <div className="mt-2 flex gap-3"><button type="button" disabled={!available} onClick={() => { setRequestedBookmarkAnchor({ nodeId: b.nodeId, offset: b.offset, token: crypto.randomUUID() }); openReplayAtStep(b.stepIndex, b.pageIndex); }} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-200 disabled:opacity-40">Teruglezen</button><button type="button" onClick={() => saveBookmarks(savedBookmarks.filter(item => item.id !== b.id))} className="rounded-lg px-3 py-2 text-xs text-red-200">Verwijderen</button></div>
+                </div>;
+              })}
+            </>}
+            {contentsTab === "chapters" && reachedChapters.length === 0 && (
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm font-semibold text-neutral-400">
                 Er is in deze leesrun nog geen hoofdstuk-marker opgeslagen.
               </div>
             )}
 
-            {reachedChapters.map(({ stepIndex, node: chapterNode }) => {
+            {contentsTab === "chapters" && reachedChapters.map(({ stepIndex, node: chapterNode }) => {
               const targetIndex = findReplayVisibleStepIndex(
                 runHistory,
                 book,
@@ -4060,6 +4134,9 @@ export default function ReadBookPage() {
       >
         {isTextNode && (
           <BookPageReader
+            onAnchorConsumed={setRequestedBookmarkAnchor}
+            onTextOffset={setReaderTextOffset}
+            requestedAnchor={requestedBookmarkAnchor?.nodeId === currentNodeId ? requestedBookmarkAnchor : undefined}
             pageWidthMode={pageWidthMode}
             html={reader.textHtml}
             pageIndex={pageIndex}

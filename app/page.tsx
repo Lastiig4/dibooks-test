@@ -3,6 +3,7 @@
 import Link from "next/link";
 import AppNav from "@/components/AppNav";
 import LibraryHighlights, { LibraryBackdrop, LibraryBookCard } from "@/components/LibraryHighlights";
+import ContinueReading from "@/components/ContinueReading";
 import { selectLibraryHighlights } from "@/lib/librarySelection";
 import { useEffect, useMemo, useState } from "react";
 import type { DiBook } from "@/lib/books";
@@ -726,6 +727,7 @@ export default function LibraryPage() {
           </div>
         )}
 
+        {isLoggedIn && <ContinueReading books={allBooks} />}
         <LibraryHighlights books={allBooks} counts={popularityByBookId} />
         {allBooks.length === 0 && (
           <section className="px-5 pt-10 sm:px-8 sm:pt-14 lg:px-10">
