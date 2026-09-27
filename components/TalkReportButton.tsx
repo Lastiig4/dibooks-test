@@ -1,0 +1,9 @@
+"use client";
+import { useRef, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { openDiBooksAuth } from "@/lib/plans";
+export default function TalkReportButton({topicId,replyId,loggedIn}:{topicId:string;replyId?:string;loggedIn:boolean}) {
+ const [open,setOpen]=useState(false);const [reason,setReason]=useState("");const [busy,setBusy]=useState(false);const [message,setMessage]=useState("");const guard=useRef(false);
+ async function submit(event:React.FormEvent){event.preventDefault();if(guard.current)return;guard.current=true;setBusy(true);setMessage("");try{const {error}=await createSupabaseBrowserClient().rpc("talk_report",{input_topic:topicId,input_reply:replyId??null,input_reason:reason.trim()});if(error)throw error;setOpen(false);setMessage("Bedankt. Je rapportage is ontvangen door de admins.");}catch{setMessage("Rapporteren is niet gelukt. Probeer het opnieuw.");}finally{guard.current=false;setBusy(false);}}
+ return <div className="mt-3"><button className="text-xs text-neutral-400 hover:text-amber-200" onClick={()=>loggedIn?setOpen(v=>!v):openDiBooksAuth("login")}>Rapporteren</button>{open&&<form onSubmit={submit} className="mt-3 space-y-3 rounded-xl border border-amber-300/20 p-3"><label className="block text-sm">Waarom rapporteer je dit bericht?<textarea autoFocus required minLength={3} maxLength={1000} value={reason} onChange={e=>setReason(e.target.value)} className="mt-2 block w-full rounded-lg bg-neutral-900 p-3" placeholder="Bijvoorbeeld spam, ongepast gedrag of een ongemarkeerde spoiler"/></label><div className="flex gap-4 text-sm"><button disabled={busy} className="text-amber-200">{busy?"Versturen…":"Rapportage versturen"}</button><button disabled={busy} type="button" onClick={()=>setOpen(false)}>Annuleren</button></div></form>}{message&&<p role="status" className="mt-2 text-sm text-amber-100">{message}</p>}</div>;
+}

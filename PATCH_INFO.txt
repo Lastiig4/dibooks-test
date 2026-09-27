@@ -1,39 +1,50 @@
-DIBOOKS TALK ABOUT V2 — ONDERWERPEN, TOPICS EN EXCLUSIVE
+DIBOOKS TALK ABOUT V3 - REACTIES, RAPPORTAGES EN FORUMBEHEER
 
-Dit is een aanvullende patch op de reeds geinstalleerde Talk about V1.
+Aanvullende patch op de reeds werkende Talk about V2.
+Vereist ook het bestaande meldingssysteem (user_notifications / schema-v8-notifications).
 
-INSTALLATIE
-1. Maak een databaseback-up via je gebruikelijke Supabase-backupprocedure.
-2. Voer TALK_ABOUT_HIERARCHY_V2_SUPABASE.sql uit in de Supabase SQL Editor.
-   Vereist de bestaande Talk about V1-tabellen en functies.
-   Voer oude V1-scripts daarna NIET opnieuw uit: die herstellen de oude rechten.
-3. Kopieer app/ en components/ naar de projectroot, met behoud van de mappenstructuur.
-4. Bouw en publiceer je project zoals gebruikelijk.
+INSTALLEREN
+1. Voer TALK_ABOUT_COMMUNITY_V3_SUPABASE.sql uit in de Supabase SQL Editor.
+2. Kopieer app/ en components/ naar de projectroot en vervang de betrokken bestanden.
+3. Bouw en publiceer de app zoals gebruikelijk.
+De SQL is transactioneel en opnieuw uitvoerbaar. Voer oudere foruminstallaties daarna niet opnieuw uit.
+Bestaande onderwerpen, topics, reacties, recensies, boektags en Exclusive-statussen blijven behouden.
 
-GEBRUIK
-- Iedereen kan onderwerpen, topics en berichten lezen.
-- Alleen admins en Exclusive-accounts kunnen onderwerpen maken.
-- Geregistreerde accounts maken topics binnen een onderwerp en berichten binnen topics.
-- Admins: open Talk about > Exclusive beheren, zoek op naam of e-mail en ken de status toe of trek die in.
-- Exclusive staat los van abonnement en accountrol. Het geeft geen adminrechten.
-- Na toekenning kan de ontvanger de pagina vernieuwen om de nieuwe knop te zien.
-- Boektags, recensies en de bestaande spoilerknoppen blijven beschikbaar.
+REAGEREN
+- Elk bericht heeft een knop Reageren. Het formulier vermeldt op wie je reageert.
+- Reacties blijven chronologisch leesbaar met een inspringing en link naar het oorspronkelijke bericht.
+- Reageren op reacties is ook mogelijk; de weergave gebruikt een beperkte inspringing voor kleine schermen.
+- De auteur van het oorspronkelijke bericht krijgt een melding. Bij een algemene topicreactie krijgt de topicstarter deze.
+- Geen melding bij reageren op jezelf. Geen berichttekst/spoilers in de melding.
+- Meldingen openen de juiste pagina en markeren de reactie. Links blijven werken als paginanummers verschuiven.
+- Het bestaande belletje en meldingenoverzicht halen nieuwe meldingen elke circa 8 seconden op.
+- Dit zijn meldingen in DiBooks, geen e-mail- of browserpushmeldingen.
 
-BESTAANDE DATA
-Bestaande subforums worden onderwerpen. Losse topics worden onder Bestaande gesprekken geplaatst.
-Topics vereisen voortaan een onderwerp. Een onderwerp met topics kan niet worden verwijderd.
-Intrekken van Exclusive verwijdert geen onderwerpen, topics of berichten.
-De migratie is transactioneel en kan opnieuw worden uitgevoerd.
+RAPPORTEREN EN BEHEREN
+- Ingelogde gebruikers kunnen een topicbericht of reactie rapporteren, met reden.
+- Maximaal een rapportage per account per bericht. Herhaald klikken veroorzaakt geen dubbele adminmelding.
+- Alle huidige admins ontvangen een melding in hun bestaande meldingenoverzicht.
+- Via Talk about > Forumbeheer kunnen admins de oudste 100 open rapportages bekijken.
+- Admins kunnen rapportages afwijzen of inhoud verbergen. Het verbergen vereist een extra bevestiging.
+- Een verborgen topic verbergt ook zijn reacties. Een verborgen reactie laat andere reacties bestaan.
+- Verborgen inhoud is ook via de gewone databaseleesrechten afgeschermd, niet alleen in de interface.
+- Rapportages van hetzelfde bericht worden samen afgehandeld.
+- Verborgen inhoud blijft bewaard in de database; deze versie heeft geen aparte herstelknop.
+- Admins kunnen vanuit een topic dit sluiten/heropenen en vastzetten/losmaken.
+- Een gesloten topic blijft leesbaar. Ook een al geopend formulier kan er geen reactie meer plaatsen.
+- Exclusive-gebruikers krijgen hiermee geen moderatierechten.
 
 CONTROLES
-TypeScript (npx tsc --noEmit): geslaagd.
-Productiebuild (npm run build): geslaagd.
-Bestaande Next.js-waarschuwing over middleware/proxy blijft aanwezig.
-De SQL is inhoudelijk gecontroleerd, maar niet op een aangesloten Supabase-database uitgevoerd.
-Controleer na installatie met gast, normaal account, Exclusive en admin:
-- Gast kan lezen, maar niet plaatsen.
-- Normaal account kan alleen topics binnen onderwerpen en berichten plaatsen.
-- Exclusive kan onderwerpen maken, maar geen statussen beheren.
-- Admin kan Exclusive toekennen/intrekken.
-- Na intrekken weigert de database ook een nog geopend formulier voor een nieuw onderwerp.
-- Bestaande gesprekken, boektags en spoilerknoppen werken nog.
+- npx tsc --noEmit: geslaagd.
+- npm run build: geslaagd.
+- Tijdelijke lokale PostgreSQL-testdatabase (PGlite): migratie tweemaal uitgevoerd; 19 controles geslaagd.
+  Getest: gastrechten, adminrechten, cross-topic reacties, zelfmeldingen, reactielinks,
+  spoilerarme meldingen, dubbele rapportages, verborgen inhoud, sluiten/heropenen,
+  vastzetten en paginering van reacties.
+- De bestaande Next.js-waarschuwing over middleware/proxy blijft staan.
+- Jouw live Supabase-database is niet gewijzigd en de koppeling met echte accounts is nog niet live getest.
+
+NA INSTALLATIE
+Test met twee accounts: A plaatst een bericht, B reageert via Reageren, A opent de melding.
+Rapporteer daarna het bericht en controleer bij een admin het belletje en Forumbeheer.
+Sluit het topic als admin: een gewone gebruiker mag geen nieuwe reactie meer plaatsen.

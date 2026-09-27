@@ -12,6 +12,8 @@ import {
 } from "@/lib/supabase/socialFeatures";
 
 function eventLabel(type: string) {
+  if (type === "talk_reply") return "Forumreactie";
+  if (type === "talk_report") return "Forumrapportage";
   if (type === "connection_request") return "Contactverzoek";
   if (type === "connection_accepted" || type === "connection_declined") return "Contact";
   if (type === "book_shared") return "Gedeeld boek";
@@ -24,6 +26,8 @@ function eventLabel(type: string) {
 }
 
 function eventIcon(type: string) {
+  if (type === "talk_reply") return "💬";
+  if (type === "talk_report") return "🛡️";
   if (type === "connection_request" || type === "connection_accepted") return "👥";
   if (type === "book_shared") return "📚";
   if (type === "book_feedback") return "💬";
@@ -119,7 +123,7 @@ export default function NotificationsPage() {
           <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
             <div>
               <h1 className="text-5xl font-black leading-none md:text-7xl">Wat is nieuw?</h1>
-              <p className="mt-5 max-w-3xl text-base font-semibold leading-8 text-neutral-300">Contactverzoeken, gedeelde boeken, feedback, bewerkingsvoorstellen, chatberichten en publicatiebeoordelingen komen hier samen.</p>
+              <p className="mt-5 max-w-3xl text-base font-semibold leading-8 text-neutral-300">Contactverzoeken, gedeelde boeken, feedback, bewerkingsvoorstellen, chatberichten, forumreacties, forumrapportages en publicatiebeoordelingen komen hier samen.</p>
             </div>
             {isLoggedIn && unreadCount > 0 && <button type="button" onClick={handleMarkAllRead} className="rounded-full bg-yellow-300 px-5 py-3 text-sm font-black uppercase tracking-widest text-black hover:bg-yellow-200">Alles gelezen</button>}
           </div>
@@ -139,7 +143,7 @@ export default function NotificationsPage() {
           <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-center shadow-2xl">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white/10 text-3xl">🔔</div>
             <h2 className="mt-5 text-3xl font-black">Nog geen meldingen</h2>
-            <p className="mt-3 text-sm font-semibold text-neutral-400">Zodra iemand je toevoegt, een boek deelt, feedback geeft, chat of een publicatiebeoordeling nodig is, zie je het hier.</p>
+            <p className="mt-3 text-sm font-semibold text-neutral-400">Zodra iemand je toevoegt, een boek deelt, feedback geeft, chat, op je forumbericht reageert of een beoordeling nodig is, zie je het hier.</p>
           </div>
         ) : (
           <div className="mt-8 grid gap-4">{items.map((item) => <NotificationCard key={item.notificationId} item={item} onOpen={handleOpen} />)}</div>
