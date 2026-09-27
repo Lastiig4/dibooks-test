@@ -1,21 +1,39 @@
-DIBOOKS TALK ABOUT V1
+DIBOOKS TALK ABOUT V2 — ONDERWERPEN, TOPICS EN EXCLUSIVE
+
+Dit is een aanvullende patch op de reeds geinstalleerde Talk about V1.
 
 INSTALLATIE
-1. Maak een backup. Voer BOOK_REVIEWS_V1_SUPABASE.sql uit als de eindmeldingmigratie nog niet is toegepast.
-2. Voer daarna TALK_ABOUT_V1_SUPABASE.sql uit in Supabase SQL editor.
-3. Kopieer app/ en components/ op dezelfde paden in je project. Volledige bestanden: vergelijk eigen latere aanpassingen voordat je overschrijft.
-4. Build en deploy zoals gebruikelijk. Open /talk-about. De bestaande onderhoudsmodus blijft van toepassing; de publieke site moet online staan.
+1. Maak een databaseback-up via je gebruikelijke Supabase-backupprocedure.
+2. Voer TALK_ABOUT_HIERARCHY_V2_SUPABASE.sql uit in de Supabase SQL Editor.
+   Vereist de bestaande Talk about V1-tabellen en functies.
+   Voer oude V1-scripts daarna NIET opnieuw uit: die herstellen de oude rechten.
+3. Kopieer app/ en components/ naar de projectroot, met behoud van de mappenstructuur.
+4. Bouw en publiceer je project zoals gebruikelijk.
 
-FUNCTIES
-Iedereen kan Talk about lezen zonder account. Registreren/inloggen via de bestaande auth-flow. Alleen authenticated accounts kunnen subforums, onderwerpen en reacties plaatsen, ook afgedwongen met database grants en RLS.
-Alle gepubliceerde boeken uit dezelfde catalogus als de Library worden aanklikbaar getoond, met zoekveld. Onderwerpen kunnen maximaal vijf boeken taggen. Boeken hebben gefilterde onderwerpen en recensies. Subforums hebben eigen onderwerpen. Directe links via ?book=, ?space= en ?topic=.
-Eigen onderwerpen/reacties kunnen worden verwijderd met bevestiging; admins kunnen deze ook verwijderen. Een onderwerp verwijderen verwijdert de reacties. Subforumverwijdering is in database beperkt tot eigenaar/admin, nog geen UI daarvoor.
-Onderwerpen/reacties met spoilers zijn ingeklapt totdat Bekijken wordt aangeklikt. Houd spoilers uit titels; titels zijn openbaar zichtbaar. Recensies tonen naam en sterren, maar spoilertekst wordt pas na Bekijken opgehaald via een beperkte publieke RPC. Weer verbergen beschikbaar. Geen emailadressen in de publieke recensiefeed.
-Dezelfde recensies staan nu ook op de boekpagina. Geen duplicatie van beoordelingen; bestaande unieke sleutel per account/boek behouden.
-30 onderwerpen/reacties/recensies per pagina; vorige/volgende. Lege lijsten en netwerkfouten hebben meldingen. Invoer als gewone tekst, geen HTML-uitvoering.
-Publieke forumteksten zijn voor iedereen toegankelijk; spoilermarkeringen zijn leescomfort, geen geheime toegangsbeveiliging. Geen notificaties of automatische moderatie toegevoegd.
+GEBRUIK
+- Iedereen kan onderwerpen, topics en berichten lezen.
+- Alleen admins en Exclusive-accounts kunnen onderwerpen maken.
+- Geregistreerde accounts maken topics binnen een onderwerp en berichten binnen topics.
+- Admins: open Talk about > Exclusive beheren, zoek op naam of e-mail en ken de status toe of trek die in.
+- Exclusive staat los van abonnement en accountrol. Het geeft geen adminrechten.
+- Na toekenning kan de ontvanger de pagina vernieuwen om de nieuwe knop te zien.
+- Boektags, recensies en de bestaande spoilerknoppen blijven beschikbaar.
 
-VALIDATIE
-TypeScript --noEmit en productiebuild geslaagd. Lokale browser: gastpagina opent en +Subforum vraagt om login. Databaseconfiguratie ontbreekt lokaal; geen echte berichten geplaatst, SQL/RLS en spoiler-RPC niet uitgevoerd tegen live Supabase. Bestaande middleware-deprecatiewaarschuwing.
-Aanbevolen acceptatie na migratie: gast kan lezen/niet posten; account kan plaatsen; ander account kan niet verwijderen; admin kan verwijderen; tutorialboek toont geen beoordelingsvraag; spoilerrecensie pas zichtbaar na Bekijken.
-Geen live database of website gewijzigd.
+BESTAANDE DATA
+Bestaande subforums worden onderwerpen. Losse topics worden onder Bestaande gesprekken geplaatst.
+Topics vereisen voortaan een onderwerp. Een onderwerp met topics kan niet worden verwijderd.
+Intrekken van Exclusive verwijdert geen onderwerpen, topics of berichten.
+De migratie is transactioneel en kan opnieuw worden uitgevoerd.
+
+CONTROLES
+TypeScript (npx tsc --noEmit): geslaagd.
+Productiebuild (npm run build): geslaagd.
+Bestaande Next.js-waarschuwing over middleware/proxy blijft aanwezig.
+De SQL is inhoudelijk gecontroleerd, maar niet op een aangesloten Supabase-database uitgevoerd.
+Controleer na installatie met gast, normaal account, Exclusive en admin:
+- Gast kan lezen, maar niet plaatsen.
+- Normaal account kan alleen topics binnen onderwerpen en berichten plaatsen.
+- Exclusive kan onderwerpen maken, maar geen statussen beheren.
+- Admin kan Exclusive toekennen/intrekken.
+- Na intrekken weigert de database ook een nog geopend formulier voor een nieuw onderwerp.
+- Bestaande gesprekken, boektags en spoilerknoppen werken nog.
