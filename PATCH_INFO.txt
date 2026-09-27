@@ -1,19 +1,15 @@
-DIBOOKS VERHAALCONTROLE V1
+DIBOOKS READER RUIM V1
 
-Knop: Structuur > Controleer mijn verhaal, onder Flags & variabelen.
-Geel/oranje knop; native responsive dialoog met focusbegrenzing, Escape en Sluiten.
-Na de eerste controle toont Structuur het actuele aantal meldingen of een vinkje.
-Resultaten werken direct bij na veranderingen; geen verouderde uitslag.
+Installeer app/books/[bookId]/read/page.tsx op hetzelfde pad in je project. Maak een backup en vergelijk eventuele eigen latere wijzigingen voor overschrijven.
+Deze patch bevat alleen de gepubliceerde Reader; eerdere editor/library-patches blijven apart geinstalleerd. Editor-preview is niet gewijzigd.
 
-Controleert: geldige start; bereikbaarheid vanaf start; ontbrekende path-bestemmingen; keuzes inclusief Choice99; beide condition- en minigameroutes; ontbrekende afbeeldingen/video's; mogelijke onbedoelde eindes.
-Kladblokken tellen niet mee. Lussen zijn toegestaan.
-Ga naar node centreert het canvas en opent de node-instellingen.
-Bewust einde wordt als node.data.intentionalEnd in projectdata opgeslagen, inclusief bestaande autosave/export/Undo. Deze markering verandert de Reader niet. Opheffen kan in het controlevenster. Editor Lock voorkomt wijzigingen.
+Aa > Paginabreedte: Compact / Ruim (standaard) / Schermvullend. Voorkeur lokaal opgeslagen.
+Ruim: spread tot 2200px versus voorheen 1500px; kleinere paginamarges. Schermvullend: volledige spreadbreedte. Een enkele pagina blijft begrensd op 1400px om extreem lange regels te vermijden.
+Onder 900px beschikbare breedte altijd een enkele pagina. Automatisch dubbel vanaf 1120px.
+Rustige leesmodus via Aa: header/footer verborgen tijdens tekst. Klik/tik op tekst, Escape of Bediening toont de balken weer. Interactieve scenes houden hun bestaande bediening.
+Bij herindeling binnen dezelfde tekst blijft het tekstanker in de zichtbare pagina/spread. Paginanummers kunnen veranderen. Bestaand opgeslagen voortgangsformaat blijft ongewijzigd.
+Minder paginaversiering; kleinere marges; instellingenvenster scrollbaar op kleine schermen.
 
-Beperkingen: geen online mediabereikbaarheidscontrole, geen controle van alle inhoud of variabelewaarden, voorwaarden worden niet gesimuleerd. Bereikbaar betekent dat een structurele route bestaat. Dit is geen publicatieblokkade en geen garantie dat elk speelscenario werkt.
-
-Installatie: backup maken, daarna bestanden uit deze ZIP op dezelfde relatieve paden in de projectroot kopieren. Bevat volledige bestanden en is cumulatief met Library/Editor V3 en Node Settings V2. Vergelijk eventuele eigen latere wijzigingen voor overschrijven.
-Geen SQL of nieuwe dependencies.
-
-Validatie: npx tsc --noEmit geslaagd; node --test lib/storyCheck.test.mjs: 6 tests geslaagd; npm run build geslaagd. Bestaande middleware-deprecatiewaarschuwing. Geen interactieve browsertest uitgevoerd.
-Tests vereisen Node met TypeScript type stripping (getest op Node 24).
+Geen SQL of nieuwe packages.
+Validatie: TypeScript --noEmit en productiebuild geslaagd. Geen interactieve browsertest uitgevoerd; controleer voor publicatie lange alineas, wisselen van schermbreedte, herstel van opgeslagen voortgang en interactieve overgangen met je eigen boeken.
+Bestaande middleware-deprecatiewaarschuwing blijft staan.

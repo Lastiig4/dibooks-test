@@ -1779,6 +1779,7 @@ function paginateTextHtmlMeasured(
 
 
 function BookPageReader({
+  pageWidthMode,
   html,
   pageIndex,
   setPageIndex,
@@ -1794,6 +1795,7 @@ function BookPageReader({
   initialSceneInfo = "",
   onSceneInfoChange,
 }: {
+  pageWidthMode: "compact" | "wide" | "full";
   html: string;
   pageIndex: number;
   setPageIndex: React.Dispatch<React.SetStateAction<number>>;
@@ -1813,6 +1815,11 @@ function BookPageReader({
   const [pages, setPages] = useState<string[]>([]);
   const [visiblePageCount, setVisiblePageCount] = useState(1);
   const [pageSceneInfos, setPageSceneInfos] = useState<string[]>([]);
+  const layoutRef = useRef<{ html: string; pages: string[]; index: number; offset: number } | null>(null);
+  const currentIndexRef = useRef(pageIndex);
+  currentIndexRef.current = pageIndex;
+  const maxSpreadWidth = pageWidthMode === "compact" ? 1500 : pageWidthMode === "wide" ? 2200 : undefined;
+  const maxSingleWidth = pageWidthMode === "compact" ? 860 : pageWidthMode === "wide" ? 1100 : 1400;
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -1824,15 +1831,12 @@ function BookPageReader({
       if (width <= 0 || height <= 0) return;
 
       const shouldDouble =
-        pageMode === "double" || (pageMode === "auto" && width >= 1120);
+        width >= 900 && (pageMode === "double" || (pageMode === "auto" && width >= 1120));
       const nextVisiblePageCount = shouldDouble ? 2 : 1;
 
       setVisiblePageCount(nextVisiblePageCount);
       onVisiblePageCountChange(nextVisiblePageCount);
 
-      if (nextVisiblePageCount === 2) {
-        setPageIndex((current) => current - (current % 2));
-      }
 
       const fontMultiplier = textSize === "small" ? 1.12 : textSize === "large" ? 0.78 : 0.95;
       // Speciale pagina's moeten altijd hun eigen reader-pagina's behouden.
@@ -1847,12 +1851,12 @@ function BookPageReader({
           ? 1180
           : 1450;
       const heightMultiplier = Math.max(0.65, Math.min(1.3, height / 760));
-      const pageHorizontalPadding = window.innerWidth >= 768 ? 128 : window.innerWidth >= 640 ? 96 : 64;
-      const pageVerticalPadding = window.innerWidth >= 640 ? 136 : 112;
-      const gridWidth = nextVisiblePageCount === 2 ? Math.min(width, 1500) : Math.min(width, 860);
-      const pageOuterWidth = nextVisiblePageCount === 2 ? (gridWidth - 28) / 2 : gridWidth;
-      const pageContentWidth = Math.max(260, pageOuterWidth - pageHorizontalPadding);
-      const pageContentHeight = Math.max(260, height - pageVerticalPadding);
+      const pageHorizontalPadding = window.innerWidth >= 640 ? 64 : 32;
+      const pageVerticalPadding = 76;
+      const gridWidth = Math.min(width, nextVisiblePageCount === 2 ? (maxSpreadWidth ?? width) : maxSingleWidth);
+      const pageOuterWidth = nextVisiblePageCount === 2 ? (gridWidth - 24) / 2 : gridWidth;
+      const pageContentWidth = Math.max(1, pageOuterWidth - pageHorizontalPadding);
+      const pageContentHeight = Math.max(1, height - pageVerticalPadding);
       const maxCharacters = Math.floor(baseMaxCharacters * fontMultiplier * heightMultiplier);
       const nextPages = paginateTextHtmlMeasured(html, {
         maxCharacters,
@@ -1864,6 +1868,27 @@ function BookPageReader({
         fontFamily,
       });
 
+      const previous = layoutRef.current;
+      let nextIndex = currentIndexRef.current;
+      const textLength = (value: string) => stripHtml(value).replace(/\s/g, "").length;
+      let anchorOffset = 0;
+      if (previous?.html === html && previous.pages.length) {
+        // Follow the text at the start of the current page rather than its old number.
+        const offset = nextIndex === previous.index ? previous.offset : previous.pages.slice(0, nextIndex).reduce((sum, page) => sum + textLength(page), 0);
+        anchorOffset = offset;
+        let consumed = 0;
+        nextIndex = Math.max(0, nextPages.length - 1);
+        for (let i = 0; i < nextPages.length; i++) {
+          consumed += textLength(nextPages[i]);
+          if (consumed > offset) { nextIndex = i; break; }
+        }
+      }
+      nextIndex = Math.min(nextIndex, Math.max(0, nextPages.length - 1));
+      if (previous?.html !== html) anchorOffset = nextPages.slice(0, nextIndex).reduce((sum, page) => sum + textLength(page), 0);
+      if (nextVisiblePageCount === 2) nextIndex -= nextIndex % 2;
+      currentIndexRef.current = nextIndex;
+      layoutRef.current = { html, pages: nextPages, index: nextIndex, offset: anchorOffset };
+      setPageIndex(nextIndex);
       setPages(nextPages);
       setPageSceneInfos(buildPageSceneInfos(nextPages, initialSceneInfo));
       onPageCountChange(nextPages.length);
@@ -1885,6 +1910,8 @@ function BookPageReader({
     textSize,
     theme,
     initialSceneInfo,
+    maxSpreadWidth,
+    maxSingleWidth,
   ]);
 
   useEffect(() => {
@@ -1915,10 +1942,10 @@ function BookPageReader({
 
   const pageClass =
     theme === "light"
-      ? "border-neutral-300 bg-[#fffaf0] text-neutral-950 shadow-xl"
+      ? "bg-[#fffaf0] text-neutral-950"
       : theme === "sepia"
-        ? "border-[#8f6b38]/35 bg-[#3a2a19] text-[#f3e4c9] shadow-2xl"
-        : "border-white/10 bg-neutral-950/95 text-white shadow-2xl";
+        ? "bg-[#3a2a19] text-[#f3e4c9]"
+        : "bg-neutral-950/95 text-white";
 
   const typography = getReaderTypography(
     textSize,
@@ -1941,19 +1968,20 @@ function BookPageReader({
         : "text-neutral-500";
 
   return (
-    <div className="mx-auto flex h-full w-full flex-col px-3 py-3 sm:px-6">
+    <div className="mx-auto flex h-full w-full flex-col px-2 py-1 sm:px-5">
       <div ref={viewportRef} className="min-h-0 flex-1 overflow-hidden">
         <div
           className={
             visiblePageCount === 2
-              ? "mx-auto grid h-full max-w-[1500px] grid-cols-2 gap-7"
-              : "mx-auto grid h-full max-w-[860px] grid-cols-1"
+              ? "mx-auto grid h-full grid-cols-2 gap-6"
+              : "mx-auto grid h-full grid-cols-1"
           }
+          style={{ maxWidth: visiblePageCount === 2 ? maxSpreadWidth : maxSingleWidth }}
         >
           {visiblePages.map((pageHtml, index) => (
             <article
               key={`${pageIndex}-${index}`}
-              className={`relative h-full overflow-hidden rounded-2xl border px-8 pb-20 pt-8 sm:px-12 sm:pb-24 sm:pt-10 md:px-16 ${pageClass}`}
+              className={`relative h-full overflow-hidden rounded-sm px-4 pb-[52px] pt-6 shadow-none sm:px-8 ${pageClass}`}
             >
               <div
                 className={`dibooks-reader-content prose max-w-none ${theme === "light" ? "prose-neutral" : "prose-invert"} ${paragraphSpacingClass} [&_p]:mt-0 [&_h1]:mb-4 [&_h1]:mt-0 [&_h2]:mb-4 [&_h2]:mt-0 [&_h3]:mb-4 [&_h3]:mt-0`}
@@ -1974,7 +2002,7 @@ function BookPageReader({
           ))}
 
           {visiblePageCount === 2 && visiblePages.length === 1 && (
-            <article className="h-full rounded-2xl border border-white/5 bg-black/10" />
+            <article className={`h-full rounded-sm ${pageClass}`} />
           )}
         </div>
       </div>
@@ -2260,6 +2288,26 @@ export default function ReadBookPage() {
   const [lineSpacing, setLineSpacing] = useState<ReaderLineSpacing>("normal");
   const [fontFamily, setFontFamily] = useState<ReaderFontFamily>("sans");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pageWidthMode, setPageWidthMode] = useState<"compact" | "wide" | "full">("wide");
+  const [widthReady, setWidthReady] = useState(false);
+  const [quietReading, setQuietReading] = useState(false);
+  useEffect(() => {
+    try {
+      const value = localStorage.getItem("dibooks-reader-page-width");
+      if (value === "compact" || value === "wide" || value === "full") setPageWidthMode(value);
+    } catch { /* Reading remains available if storage is blocked. */ }
+    setWidthReady(true);
+  }, []);
+  useEffect(() => {
+    if (!widthReady) return;
+    try { localStorage.setItem("dibooks-reader-page-width", pageWidthMode); } catch { /* Optional preference. */ }
+  }, [pageWidthMode, widthReady]);
+  useEffect(() => {
+    if (!quietReading) return;
+    const restore = (event: KeyboardEvent) => { if (event.key === "Escape") setQuietReading(false); };
+    window.addEventListener("keydown", restore);
+    return () => window.removeEventListener("keydown", restore);
+  }, [quietReading]);
   const [contentsOpen, setContentsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cutsceneFading, setCutsceneFading] = useState(false);
@@ -3636,7 +3684,7 @@ export default function ReadBookPage() {
         );
 
   const hideReaderChromeForCutscene =
-    isCutsceneNode && !isReadOnlyReplay;
+    (isCutsceneNode && !isReadOnlyReplay) || (quietReading && isTextNode && !settingsOpen && !contentsOpen);
 
   const currentHistoryIndex = getCurrentHistoryStepIndex();
   const globalPageOffset = getReaderGlobalPageOffset(
@@ -3684,8 +3732,9 @@ export default function ReadBookPage() {
   return (
     <main
       ref={readerShellRef}
-      className={`relative flex h-screen flex-col overflow-hidden ${readerShellClass}`}
+      className={`relative flex h-dvh flex-col overflow-hidden ${readerShellClass}`}
     >
+      {quietReading && isTextNode && <button type="button" onClick={() => setQuietReading(false)} aria-label="Leesbediening tonen" className="absolute right-2 top-2 z-40 rounded-full border border-current/20 bg-neutral-900/80 px-3 py-2 text-xs text-white opacity-60 hover:opacity-100 focus:opacity-100">☰ Bediening</button>}
       {!hideReaderChromeForCutscene && (
       <header className={`shrink-0 border-b px-4 py-3 backdrop-blur-xl sm:px-6 ${readerChromeClass}`}>
         <div className="flex items-center justify-between gap-4">
@@ -3782,7 +3831,7 @@ export default function ReadBookPage() {
 
       {settingsOpen && !hideReaderChromeForCutscene && (
         <div
-          className={`absolute right-4 top-[5.25rem] z-50 w-[min(24rem,calc(100vw-2rem))] rounded-3xl border p-4 shadow-2xl backdrop-blur-xl sm:right-6 ${readerSettingsPanelClass}`}
+          className={`absolute right-4 top-[5.25rem] z-50 max-h-[calc(100dvh-6rem)] overflow-y-auto w-[min(24rem,calc(100vw-2rem))] rounded-3xl border p-4 shadow-2xl backdrop-blur-xl sm:right-6 ${readerSettingsPanelClass}`}
         >
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -3806,6 +3855,13 @@ export default function ReadBookPage() {
           </div>
 
           <div className="mt-5 grid gap-3">
+            <label className="grid grid-cols-[1fr_9.5rem] items-center gap-3">
+              <span className="text-sm font-black">Paginabreedte</span>
+              <select value={pageWidthMode} onChange={event => setPageWidthMode(event.target.value as typeof pageWidthMode)} className={`rounded-xl border px-3 py-2.5 text-sm font-black ${readerSettingsFieldClass}`}>
+                <option value="compact">Compact</option><option value="wide">Ruim</option><option value="full">Schermvullend</option>
+              </select>
+            </label>
+            <button type="button" onClick={() => { setQuietReading(true); setSettingsOpen(false); setContentsOpen(false); }} className="rounded-xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-bold">Rustige leesmodus starten</button>
             <label className="grid grid-cols-[1fr_9.5rem] items-center gap-3">
               <span className="text-sm font-black">Tekstgrootte</span>
               <select
@@ -3893,7 +3949,7 @@ export default function ReadBookPage() {
       )}
 
       {contentsOpen && !hideReaderChromeForCutscene && (
-        <div className="absolute right-4 top-[5.25rem] z-50 w-[min(24rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-[#090c13]/98 p-4 text-white shadow-2xl backdrop-blur-xl sm:right-6">
+        <div className="absolute right-4 top-[5.25rem] z-50 max-h-[calc(100dvh-6rem)] overflow-y-auto w-[min(24rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-[#090c13]/98 p-4 text-white shadow-2xl backdrop-blur-xl sm:right-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">
@@ -3996,11 +4052,15 @@ export default function ReadBookPage() {
 
       <section
         className={`min-h-0 flex-1 overflow-hidden ${isTextNode ? "touch-pan-y" : ""}`}
+        onClick={event => {
+          if (quietReading && isTextNode && !(event.target as HTMLElement).closest("button,a,input,select,video") && !window.getSelection()?.toString()) setQuietReading(false);
+        }}
         onTouchStart={isTextNode ? handleReaderTouchStart : undefined}
         onTouchEnd={isTextNode ? handleReaderTouchEnd : undefined}
       >
         {isTextNode && (
           <BookPageReader
+            pageWidthMode={pageWidthMode}
             html={reader.textHtml}
             pageIndex={pageIndex}
             setPageIndex={setPageIndex}
@@ -4571,3 +4631,4 @@ export default function ReadBookPage() {
     </main>
   );
 }
+
