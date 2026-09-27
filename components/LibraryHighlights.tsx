@@ -80,20 +80,22 @@ export default function LibraryHighlights({ books, counts }: { books: LibraryBoo
           </div>
         )}
       </div>
-      <div key={mode} className="grid auto-cols-[min(86vw,360px)] grid-flow-col snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:auto-cols-auto lg:grid-flow-row lg:grid-cols-3">
-        {selected.map((book, index) => (
-          <article key={book.id} className="flex min-w-0 snap-start gap-4 rounded-2xl border border-white/10 bg-[#0c1019]/95 p-4 sm:gap-5">
-            <Link href={`/books/${book.id}`} aria-label={`Bekijk ${book.title}`} className="w-[104px] shrink-0 self-start rounded-lg shadow-xl shadow-black/30 transition hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-cyan-300 sm:w-[128px] motion-reduce:transform-none"><BookCover book={book} /></Link>
-            <div className="flex min-w-0 flex-1 flex-col items-start py-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200/70">{mode === "popular" ? `#${index + 1} · ${libraryReaderCount(book, counts).toLocaleString("nl-NL")} lezers` : mode === "latest" ? "Nieuw verschenen" : "Binnenkort"}</p>
-              <h2 className="mt-2 line-clamp-2 break-words text-lg font-bold leading-tight sm:text-xl"><Link href={`/books/${book.id}`} className="hover:text-blue-200">{book.title}</Link></h2>
-              <p className="mt-2 max-w-full truncate text-xs text-neutral-400">{book.author}</p>
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-400">{book.subtitle}</p>
-              <Link href={`/books/${book.id}`} className="mt-auto pt-4 text-xs font-bold text-blue-200 hover:text-white">{book.published ? "Ontdek dit boek" : "Meer informatie"} <span aria-hidden="true">↗</span></Link>
-            </div>
-          </article>
-        ))}
+      <div key={mode} className="relative isolate overflow-hidden rounded-3xl border border-blue-300/15 bg-[radial-gradient(ellipse_at_top_left,#172d60,transparent_55%),radial-gradient(ellipse_at_top_right,#302044,transparent_55%)] bg-[#080c18] px-5 py-8 sm:px-10 sm:py-12">
+        <div className="flex snap-x snap-mandatory items-center justify-start gap-6 overflow-x-auto px-3 py-8 sm:justify-center sm:gap-10">
+          {selected.map((book, index) => (
+            <Link key={book.id} href={`/books/${book.id}`} aria-label={`Bekijk ${book.title}`} className={`group relative w-[210px] shrink-0 snap-center overflow-hidden rounded-2xl border border-white/20 bg-neutral-950 shadow-2xl transition duration-300 hover:z-20 hover:-translate-y-2 focus-visible:outline-2 focus-visible:outline-cyan-300 sm:w-[240px] lg:w-[280px] motion-reduce:transform-none ${index === 0 ? "sm:-rotate-6" : index === 2 ? "sm:rotate-6" : "sm:z-10 sm:scale-105"}`}>
+              <BookCover book={book} />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+              <span className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/70 text-xs font-black text-white">#{index + 1}</span>
+              <div className="absolute inset-x-0 bottom-0 p-4">
+                <h2 className="line-clamp-2 text-lg font-black leading-tight text-white">{book.title}</h2>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-blue-200">{mode === "popular" ? `${libraryReaderCount(book, counts).toLocaleString("nl-NL")} lezers` : mode === "latest" ? "Nieuw verschenen" : "Binnenkort"}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
+

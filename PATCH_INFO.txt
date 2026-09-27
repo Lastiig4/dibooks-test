@@ -1,62 +1,11 @@
-DiBooks Auteur Studio - Compacte node-instellingen & direct kladblok V2
-26 september 2026
+DiBooks Library + Editor V3
 
-INSTALLATIE
-Maak een backup/commit en pak deze ZIP uit in je projectroot bij package.json.
-Vervang:
-  app/editor/page.tsx
-  components/NodeSettingsModal.tsx
-Voeg toe:
-  components/ScratchpadEditor.tsx
-Controleer daarna npm run build en deploy zoals gebruikelijk.
-Geen SQL of nieuwe dependencies nodig; gebruikt de bestaande Tiptap-packages.
+Grote coverpresentatie met maximaal 3 boeken, rangnummer en bestaande echte leescijfers. De wissel naar nieuwe uitgaven blijft beschikbaar. Minder dan 3 geschikte boeken: geen fictieve opvulling.
+Minimap met kruisjes in bestaande nodekleuren, donkere achtergrond, zichtbaar viewportkader, slepen en zoomen.
+Canvasbediening: grotere knoppen, contrastrijke iconen, Nederlandse tooltips. Vierde knop gebruikt dezelfde Editor Lock als de zijbalk; review-modus blijft vergrendeld.
 
-BASIS
-Repository Lastiig4/dibooks-test, commit 59d66e7539babc88def620c11c7ebb61029ad7db,
-met de eerder geleverde Node Settings Modal V1 als uitgangspunt.
-V2 bevat de volledige editorbestanden en vervangt de V1-modalpatch.
-Latere eigen wijzigingen in deze bestanden eerst vergelijken/mergen.
-De Library-patch wordt niet meegeleverd of gewijzigd.
+Cumulatieve patch inclusief eerdere Library V1 en Node Settings V2 wijzigingen. Bevat volledige bestanden met echte projectstructuur. Kopieer inhoud over overeenkomstige bestanden in de projectroot. Maak vooraf een backup; vergelijk eigen latere wijzigingen voordat je volledige bestanden vervangt.
+Geen SQL, migraties of nieuwe packages.
 
-KLADBLOK
-- Klikken of toevoegen opent direct het kladblok: titel en bewerkbare tekst.
-- Geen tussenliggende node-instellingen of tweede teksteditor nodig.
-- Cursor staat direct in de notities; wijzigingen gaan direct naar projectstate.
-- Verwijderen en Sluiten staan steeds bereikbaar in de kop.
-- De bestaande verwijderbevestiging en laatste-nodebeveiliging blijven gelden.
-- Bestaande rich text wordt geladen; tekst, koppen, lijsten, nadruk, kleur,
-  lettertype en lettergrootte worden ondersteund door de editor.
-- Alleen openen of wisselen naar leesmodus schrijft de tekst niet opnieuw weg.
-- Editor Lock maakt de notities alleen-lezen en blokkeert titel en verwijderen.
-- Kladblokken blijven privé en buiten start-node-, path- en Reader-logica.
-
-OVERIGE NODES
-- Compacte vaste kop met klein type-label rechtsboven.
-- Groot Type-blok en dubbele titelweergave verwijderd.
-- Basisvelden in één kolom onder Gegevens: titel, subtype/hoofdstukvelden
-  waar van toepassing, en Scène-info bij tekst/special.
-- Daaronder de bestaande inhoud en nodespecifieke instellingen.
-- Algemene paths en de start-nodeknop staan daarna onder Verhaalroutes.
-- Specifieke keuze-, minigame- en IF-routes blijven bij hun eigen instellingen.
-- Minigamevelden Duur en Moeilijkheid staan nu ook onder elkaar.
-- Minder losse kaders en padding; scrollbaar en bruikbaar op mobiel.
-- Verwijderen van gewone nodes blijft onderaan.
-
-BEHOUDEN
-Undo, selectie, Editor Lock, start-node/badge, Scene Info, bestaande teksteditor,
-Choice99, Reader Feedback, Image Node, uploads, tutorials en reviewlogica.
-Geen wijziging aan het formaat van opgeslagen projecten.
-
-CONTROLES
-- Next.js-productiebuild inclusief TypeScript geslaagd.
-- ESLint op de aangepaste modal en nieuwe kladblokcomponent geslaagd.
-- Browser: direct openen, automatisch focus op notities, typen zonder
-  focusverlies, titel aanpassen, sluiten en opnieuw openen met bewaarde tekst.
-- Browser: Editor Lock blokkeert titel/verwijderen; notities hebben
-  contenteditable=false. Verwijderknop activeert bestaande bevestiging.
-- Browser: compacte tekstnodevolgorde en mobiel op 390 x 844 gecontroleerd;
-  geen horizontale pagina-overflow.
-- Online Supabase-opslag en echte media-uploads niet getest: configuratie
-  ontbreekt lokaal. Niet elke overige nodevariant is opnieuw doorgeklikt;
-  hun bestaande callbacks en velden zijn behouden.
-- Bestaande Next.js middleware/proxy-waarschuwing is geen buildfout.
+Validatie: TypeScript --noEmit geslaagd; productiebuild geslaagd na toestaan van de bestaande Google Fonts-download. Bestaande middleware-deprecatiewaarschuwing blijft staan. Geen interactieve browsertest uitgevoerd.
+Basis: lokale dibooks-node-modal checkout met eerdere patches, niet opnieuw gesynchroniseerd met eventuele nieuwere remote wijzigingen.

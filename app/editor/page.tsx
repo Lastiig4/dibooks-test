@@ -1,6 +1,7 @@
 "use client";
 
 import ScratchpadEditor from "@/components/ScratchpadEditor";
+import EditorMiniMapNode from "@/components/EditorMiniMapNode";
 import NodeSettingsModal from "@/components/NodeSettingsModal";
 import { AppNavActions } from "@/components/AppNav";
 import type React from "react";
@@ -10,6 +11,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  ControlButton,
   MiniMap,
   Handle,
   Position,
@@ -6293,6 +6295,7 @@ ${formatSaveError(error)}`);
 
           <div className="min-h-0 flex-1">
           <ReactFlow
+            ariaLabelConfig={{ "controls.zoomIn.ariaLabel": "Inzoomen", "controls.zoomOut.ariaLabel": "Uitzoomen", "controls.fitView.ariaLabel": "Alle nodes in beeld" }}
             nodes={flowNodes}
             edges={getValidatedEdges(edges, nodes)}
             onNodesChange={
@@ -6327,8 +6330,12 @@ ${formatSaveError(error)}`);
               lineWidth={2}
               color={editorDarkMode ? "#334155" : "#350a0a"}
             />
-            <Controls />
-            <MiniMap />
+            <Controls className="dibooks-grid-controls" showInteractive={false} aria-label="Navigatie van het canvas">
+              <ControlButton onClick={toggleEditorLock} disabled={reviewMode} title={editorLocked ? "Editor ontgrendelen" : "Editor vergrendelen"} aria-label={editorLocked ? "Editor ontgrendelen" : "Editor vergrendelen"} aria-pressed={editorLocked || reviewMode}>
+                <LockEditorIcon locked={editorLocked || reviewMode} />
+              </ControlButton>
+            </Controls>
+            <MiniMap className="dibooks-minimap" nodeComponent={EditorMiniMapNode} nodeColor={(node) => nodeColors[node.data.type as DiNodeType] || "#94a3b8"} bgColor="#101521" maskColor="rgba(2,6,23,0.45)" maskStrokeColor="#7dd3fc" maskStrokeWidth={2} pannable zoomable ariaLabel="Overzicht van je verhaal — sleep om te navigeren" />
           </ReactFlow>
           </div>
         </section>

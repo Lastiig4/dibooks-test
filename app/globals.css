@@ -1,6 +1,29 @@
 @import '@xyflow/react/dist/style.css';
 @import "tailwindcss";
 
+/* Explicit colors override inherited page text and React Flow's white defaults. */
+.react-flow__controls.dibooks-grid-controls {
+  overflow: hidden;
+  border: 1px solid #64748b;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px #0006;
+}
+.dibooks-grid-controls .react-flow__controls-button {
+  width: 44px;
+  height: 44px;
+  background: #172033;
+  color: #f8fafc;
+  fill: currentColor;
+  border-bottom: 1px solid #475569;
+}
+.dibooks-grid-controls .react-flow__controls-button:hover { background: #334155; }
+.dibooks-grid-controls .react-flow__controls-button:focus-visible { outline: 3px solid #38bdf8; outline-offset: -3px; }
+.dibooks-grid-controls .react-flow__controls-button[aria-pressed="true"] { background: #373078; }
+.dibooks-grid-controls .react-flow__controls-button svg { width: 20px; height: 20px; max-width: 20px; max-height: 20px; }
+.react-flow__minimap.dibooks-minimap { border: 1px solid #64748b; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px #0006; }
+.dibooks-minimap svg { width: 240px; height: 160px; }
+@media (max-width: 640px) { .dibooks-minimap svg { width: 150px; height: 100px; } }
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
