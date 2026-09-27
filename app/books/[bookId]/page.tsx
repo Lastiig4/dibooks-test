@@ -1,4 +1,5 @@
 "use client";
+import TalkBookReviews from "@/components/TalkBookReviews";
 
 import Link from "next/link";
 import AppNav from "@/components/AppNav";
@@ -635,6 +636,8 @@ export default function BookDetailPage() {
           </div>
         </aside>
       </section>
+
+      {book.published && <section className="mx-auto max-w-7xl space-y-5 px-5 pb-10 sm:px-8"><Link href={`/talk-about?book=${book.id}`} className="inline-block rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-100">💬 Praat over dit boek in Talk about →</Link><TalkBookReviews key={book.id} bookId={book.id}/></section>}
 
       {authModalMode && (
         <AuthModal

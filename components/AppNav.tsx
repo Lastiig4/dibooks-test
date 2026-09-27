@@ -205,6 +205,10 @@ export default function AppNav({ title, subtitle, compact = false }: { title?: s
         </div>
         <AppNavActions compact={compact} />
       </div>
+      <nav aria-label="Ontdekken" className="mt-2 flex gap-4 text-xs font-bold text-neutral-300">
+        <Link href="/" className="hover:text-white">Library</Link>
+        <Link href="/talk-about" className="text-cyan-200 hover:text-white">💬 Talk about</Link>
+      </nav>
     </header>
   );
 }
