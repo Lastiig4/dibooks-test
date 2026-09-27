@@ -1,6 +1,8 @@
 "use client";
 
 import type React from "react";
+import BookCompletion from "@/components/BookCompletion";
+import { isTutorialMetadata, canOfferBookReview } from "@/lib/bookCompletion";
 import { bookmarkKey, parseBookmarks, bookmarkAvailable, type ReaderBookmark } from "@/lib/readerBookmarks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -90,6 +92,7 @@ type ConditionOperator =
   | "contains";
 
 type ReaderNode = {
+  intentionalEnd?: boolean;
   id: string;
   type: ReaderNodeType;
   title: string;
@@ -134,6 +137,8 @@ type ReaderEdge = {
 };
 
 type ReaderBook = {
+  coverImage?: string;
+  reviewEligible?: boolean;
   id: string;
   title: string;
   author: string;
@@ -299,6 +304,7 @@ function normalizeNode(rawNode: any): ReaderNode {
 
   return {
     id: rawNode.id,
+    intentionalEnd: (data.intentionalEnd ?? content.intentionalEnd ?? rawNode.intentionalEnd) === true,
     type,
     title,
     text,
@@ -398,6 +404,8 @@ function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBo
 
   return {
     id: fallback.id ?? rawProject?.bookId ?? "unknown-book",
+    coverImage: fallback.coverImage,
+    reviewEligible: fallback.reviewEligible === true,
     title: fallback.title ?? rawProject?.bookTitle ?? rawProject?.title ?? "DiBooks verhaal",
     author: fallback.author ?? rawProject?.author ?? "Auteur",
     subtitle: fallback.subtitle ?? rawProject?.subtitle ?? "",
@@ -460,12 +468,16 @@ async function loadSupabaseBook(bookId: string) {
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) return null;
 
+  const { data: metadata } = await supabase.from("books").select("*").eq("id", bookId).maybeSingle();
+
   if (!row.project_data) {
     throw new Error("Dit boek is gepubliceerd, maar er is nog geen reader/project-data opgeslagen.");
   }
 
   return resolveReaderBookMedia(normalizeBook(row.project_data, {
     id: row.id,
+    coverImage: metadata?.cover_image ?? row.cover_image ?? "",
+    reviewEligible: !!metadata?.published && !isTutorialMetadata(metadata),
     title: row.title,
     author: row.author,
     subtitle: row.subtitle,
@@ -4655,7 +4667,7 @@ export default function ReadBookPage() {
               !reader.nextNodeAfterChain &&
               reader.branchPaths.length === 0 && (
                 <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">
-                  Einde bereikt
+                  {user && canOfferBookReview({ eligible: book.reviewEligible === true, intentionalEnd: reader.textNodes[reader.textNodes.length - 1]?.intentionalEnd === true, replay: isReadOnlyReplay, hasNextPage: canGoNextPage, hasNextRoute: !!reader.nextNodeAfterChain || reader.branchPaths.length > 0 }) ? <BookCompletion key={`${user.id}:${book.id}:${runHistory[0]?.enteredAt}`} bookId={book.id} userId={user.id} title={book.title} author={book.author} cover={book.coverImage} runId={runHistory[0]?.enteredAt ?? "current"} /> : "Einde bereikt"}
                 </div>
               )}
           </div>
@@ -4667,7 +4679,7 @@ export default function ReadBookPage() {
           <div className="flex flex-wrap justify-end gap-3">
             {reader.outgoingPaths.length === 0 && (
               <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-black text-neutral-300">
-                Einde bereikt
+                {user && node.type === "image" && canOfferBookReview({ eligible: book.reviewEligible === true, intentionalEnd: node.intentionalEnd === true, replay: isReadOnlyReplay, hasNextPage: false, hasNextRoute: reader.outgoingPaths.length > 0 }) ? <BookCompletion key={`${user.id}:${book.id}:${runHistory[0]?.enteredAt}`} bookId={book.id} userId={user.id} title={book.title} author={book.author} cover={book.coverImage} runId={runHistory[0]?.enteredAt ?? "current"} /> : "Einde bereikt"}
               </div>
             )}
 

@@ -5392,6 +5392,7 @@ ${formatSaveError(error)}`);
         title: node.data.label,
         position: node.position,
         content: {
+          intentionalEnd: node.data.intentionalEnd === true,
           text: node.data.text ?? "",
           textHtml: node.data.textHtml ?? node.data.text ?? "",
           videoUrl: node.data.videoUrl ?? "",

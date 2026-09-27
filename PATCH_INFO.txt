@@ -1,12 +1,21 @@
-DIBOOKS VERDER LEZEN EN BLADWIJZERS V1
+DIBOOKS EINDMELDING V1
 
-Verder lezen: maximaal drie gepubliceerde boeken uit de catalogus, gesorteerd op de bestaande reading_progress.updated_at. Link opent de bestaande Reader met bestaande toegangscontrole en opgeslagen voortgang. Percentage uit bestaande database. Hoofdstuklabel indien hoofdstukinformatie beschikbaar is, anders laatst bewaarde leesplek. Geen nieuwe databasekolommen nodig.
+INSTALLATIE
+1. Maak een backup. Voer BOOK_REVIEWS_V1_SUPABASE.sql eenmalig uit in de Supabase SQL editor.
+2. Kopieer de app/components/lib bestanden naar dezelfde projectpaden. Dit zijn volledige bestanden; vergelijk eigen nieuwere wijzigingen voor overschrijven.
+3. Markeer de laatste tekst- of afbeeldingsnode als bewust einde via Structuur > Controleer mijn verhaal > Dit is bewust een einde. Sla het boek op en publiceer die projectdata opnieuw via de bestaande publicatiewerkwijze.
 
-Bladwijzerknop naast Inhoud. Inhoud bevat Hoofdstukken en Bladwijzers. Huidige tekstpagina bewaren/verwijderen; bij een spread wordt het begin van de linkerpagina bewaard. Positie is een tekstoffset binnen de huidige tekstscene, zodat andere paginabreedte of lettergrootte opnieuw wordt ingedeeld. Boekinhoud die achteraf gewijzigd wordt kan de positie verschuiven.
-Openen gebruikt bestaande terugleesmodus en bewaart het terugkeerpunt. Voortgang en keuzes worden tijdens teruglezen niet opgeslagen/gewijzigd. Oude leesrondes worden herkend aan node, history-index en enteredAt; zulke bladwijzers blijven zichtbaar maar kunnen niet worden geopend. Verwijderen blijft mogelijk.
-Bladwijzers worden LOKAAL in deze browser opgeslagen, gescheiden per account en boek. Geen synchronisatie naar andere apparaten. Bij wissen van browsergegevens verdwijnen ze. Opslagfouten worden zichtbaar gemeld.
+GEDRAG
+Op de laatste tekstpagina of terminale afbeelding verschijnt Boek afronden, alleen voor bewust gemarkeerde eindes zonder vervolgroutes. Klik opent de optionele melding met cover, titel en auteur. Geen automatische onderbreking tijdens de laatste bladzijde. Terugleesmodus vraagt niet om een beoordeling.
+Tutorials uitgesloten via genre, primair genre en official_tutorial; zowel Reader als insert-policy controleren dit. Statische demo-boeken en ontbrekende catalogusmetadata krijgen geen melding.
+Sterren 1-5 en/of recensie (maximaal 4000 tekens), spoilervlag optioneel. Niet nu sluit de melding; die leesronde wordt lokaal onthouden. Na een succesvolle beoordeling wordt de vraag permanent onderdrukt op basis van het account en boek, ook op andere apparaten. Database-primary-key (book_id,user_id) verhindert dubbele inzendingen, ook bij meerdere tabs. Een bestaande beoordeling wordt niet overschreven.
 
-Installatie: backup, daarna bestanden op dezelfde relatieve paden in de projectroot plaatsen. Bevat volledige bestanden; vergelijk eigen latere wijzigingen voor overschrijven. Library-presentatie en Reader Ruim V1 zijn in deze bestanden behouden. Editor- en verhaalcontrolebestanden worden niet vervangen.
-Geen SQL, migraties of nieuwe packages.
+OPSLAG EN SCOPE
+Nieuwe tabel public.book_reviews met RLS. Alleen eigen beoordelingen lezen en invoegen. Sterren/grenzen/nonlege invoer gecontroleerd door database. Insert vereist bestaande leesvoortgang en gepubliceerd niet-tutorialboek. Dit is geen serverbewijs van volledig uitlezen: de Reader bepaalt het eindmoment.
+Recensies zijn in deze eerste patch nog niet openbaar zichtbaar. Openbare boekpagina, auteurmeldingen en Talk about zijn vervolgstappen. Spoilervlag wordt opgeslagen; geen publieke tekstfeed toegevoegd.
+Eindes na video/keuze/minigame moeten voor deze versie naar een afsluitende tekst- of afbeeldingsnode wijzen.
+Bestaande Reader Ruim, bladwijzers en editorwijzigingen in de meegestuurde bestanden behouden. Librarybestanden worden niet vervangen. Geen nieuwe packages.
 
-Validatie: TypeScript --noEmit en productiebuild geslaagd; 5 gerichte bladwijzertests geslaagd op Node 24. Bestaande middleware-deprecatiewaarschuwing. Geen interactieve browsertest of live accounttest uitgevoerd.
+VALIDATIE
+TypeScript --noEmit geslaagd. Twee gerichte tests: tutorialherkenning en eindvoorwaarden geslaagd. Productiebuild geslaagd, bestaande middleware-waarschuwing.
+SQL niet op de live database uitgevoerd of getest. Geen interactieve browsertest/live accounttest uitgevoerd.
