@@ -1,11 +1,19 @@
-DiBooks Library + Editor V3
+DIBOOKS VERHAALCONTROLE V1
 
-Grote coverpresentatie met maximaal 3 boeken, rangnummer en bestaande echte leescijfers. De wissel naar nieuwe uitgaven blijft beschikbaar. Minder dan 3 geschikte boeken: geen fictieve opvulling.
-Minimap met kruisjes in bestaande nodekleuren, donkere achtergrond, zichtbaar viewportkader, slepen en zoomen.
-Canvasbediening: grotere knoppen, contrastrijke iconen, Nederlandse tooltips. Vierde knop gebruikt dezelfde Editor Lock als de zijbalk; review-modus blijft vergrendeld.
+Knop: Structuur > Controleer mijn verhaal, onder Flags & variabelen.
+Geel/oranje knop; native responsive dialoog met focusbegrenzing, Escape en Sluiten.
+Na de eerste controle toont Structuur het actuele aantal meldingen of een vinkje.
+Resultaten werken direct bij na veranderingen; geen verouderde uitslag.
 
-Cumulatieve patch inclusief eerdere Library V1 en Node Settings V2 wijzigingen. Bevat volledige bestanden met echte projectstructuur. Kopieer inhoud over overeenkomstige bestanden in de projectroot. Maak vooraf een backup; vergelijk eigen latere wijzigingen voordat je volledige bestanden vervangt.
-Geen SQL, migraties of nieuwe packages.
+Controleert: geldige start; bereikbaarheid vanaf start; ontbrekende path-bestemmingen; keuzes inclusief Choice99; beide condition- en minigameroutes; ontbrekende afbeeldingen/video's; mogelijke onbedoelde eindes.
+Kladblokken tellen niet mee. Lussen zijn toegestaan.
+Ga naar node centreert het canvas en opent de node-instellingen.
+Bewust einde wordt als node.data.intentionalEnd in projectdata opgeslagen, inclusief bestaande autosave/export/Undo. Deze markering verandert de Reader niet. Opheffen kan in het controlevenster. Editor Lock voorkomt wijzigingen.
 
-Validatie: TypeScript --noEmit geslaagd; productiebuild geslaagd na toestaan van de bestaande Google Fonts-download. Bestaande middleware-deprecatiewaarschuwing blijft staan. Geen interactieve browsertest uitgevoerd.
-Basis: lokale dibooks-node-modal checkout met eerdere patches, niet opnieuw gesynchroniseerd met eventuele nieuwere remote wijzigingen.
+Beperkingen: geen online mediabereikbaarheidscontrole, geen controle van alle inhoud of variabelewaarden, voorwaarden worden niet gesimuleerd. Bereikbaar betekent dat een structurele route bestaat. Dit is geen publicatieblokkade en geen garantie dat elk speelscenario werkt.
+
+Installatie: backup maken, daarna bestanden uit deze ZIP op dezelfde relatieve paden in de projectroot kopieren. Bevat volledige bestanden en is cumulatief met Library/Editor V3 en Node Settings V2. Vergelijk eventuele eigen latere wijzigingen voor overschrijven.
+Geen SQL of nieuwe dependencies.
+
+Validatie: npx tsc --noEmit geslaagd; node --test lib/storyCheck.test.mjs: 6 tests geslaagd; npm run build geslaagd. Bestaande middleware-deprecatiewaarschuwing. Geen interactieve browsertest uitgevoerd.
+Tests vereisen Node met TypeScript type stripping (getest op Node 24).

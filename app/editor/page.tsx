@@ -1,6 +1,8 @@
 "use client";
 
 import ScratchpadEditor from "@/components/ScratchpadEditor";
+import StoryCheckModal from "@/components/StoryCheckModal";
+import { checkStory } from "@/lib/storyCheck";
 import EditorMiniMapNode from "@/components/EditorMiniMapNode";
 import NodeSettingsModal from "@/components/NodeSettingsModal";
 import { AppNavActions } from "@/components/AppNav";
@@ -219,6 +221,7 @@ type ChoiceOption = {
 };
 
 type DiNodeData = {
+  intentionalEnd?: boolean;
   label: string;
   type: DiNodeType;
   isStart?: boolean;
@@ -2840,6 +2843,8 @@ export default function Home() {
   const [helpAutoShowDisabled, setHelpAutoShowDisabled] = useState(false);
   const [editorDarkMode, setEditorDarkMode] = useState(false);
   const [editorLocked, setEditorLocked] = useState(false);
+  const [storyCheckOpen, setStoryCheckOpen] = useState(false);
+  const [storyCheckRan, setStoryCheckRan] = useState(false);
   const [undoDepth, setUndoDepth] = useState(0);
   const {
     isLoggedIn,
@@ -3452,6 +3457,8 @@ export default function Home() {
   );
   const unresolvedReviewFlagCount = unresolvedReviewFlags.length;
   const clearedReviewFlagCount = activeReviewFlags.length - unresolvedReviewFlagCount;
+
+  const storyIssues = useMemo(() => storyCheckRan ? checkStory(nodes, edges, startNodeId) : [], [storyCheckRan, nodes, edges, startNodeId]);
 
   const flowNodes = nodes.map((node) => {
     const nodeFlags = activeReviewFlags.filter((flag) => flag.nodeId === node.id);
@@ -6022,7 +6029,7 @@ ${formatSaveError(error)}`);
                 </div>
               </EditorTopMenu>
 
-              <EditorTopMenu label="Structuur" icon="◫">
+              <EditorTopMenu label={storyCheckRan ? `Structuur ${storyIssues.length ? `· ${storyIssues.length}` : "✓"}` : "Structuur"} icon="◫">
                 <div className="grid gap-1">
                   <TopMenuRow
                     label="Verhaalnodes"
@@ -6051,6 +6058,14 @@ ${formatSaveError(error)}`);
                         className="w-full rounded-xl border border-indigo-400/20 bg-indigo-500/10 px-3 py-2.5 text-xs font-black text-indigo-100 hover:bg-indigo-500/20"
                       >
                         ⚑ Flags & variabelen openen
+                      </button>
+                      <button type="button" onClick={(event) => {
+                        const menu = event.currentTarget.closest("details");
+                        if (menu) { menu.open = false; menu.querySelector("summary")?.focus(); }
+                        setStoryCheckRan(true);
+                        setStoryCheckOpen(true);
+                      }} className="mt-2 w-full rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2.5 text-xs font-black text-amber-200 hover:bg-amber-500/20 focus-visible:outline-2 focus-visible:outline-amber-300">
+                        ✓ Controleer mijn verhaal
                       </button>
                     </div>
                   )}
@@ -6294,6 +6309,16 @@ ${formatSaveError(error)}`);
           )}
 
           <div className="min-h-0 flex-1">
+          {storyCheckOpen && <StoryCheckModal issues={storyIssues} nodes={nodes} locked={editorLocked || reviewMode} onClose={() => setStoryCheckOpen(false)} onEnd={(id, value) => {
+            if (editorLocked || reviewMode) return;
+            setNodes(current => current.map(node => node.id === id ? { ...node, data: { ...node.data, intentionalEnd: value } } : node));
+          }} onJump={(id) => {
+            setStoryCheckOpen(false);
+            setSelectedNodeId(id);
+            void reviewFlowInstanceRef.current?.fitView({ nodes: [{ id }], duration: 350, maxZoom: 1 });
+            if (reviewMode) setReviewInspectorOpen(true);
+            else setNodeSettingsOpen(true);
+          }} />}
           <ReactFlow
             ariaLabelConfig={{ "controls.zoomIn.ariaLabel": "Inzoomen", "controls.zoomOut.ariaLabel": "Uitzoomen", "controls.fitView.ariaLabel": "Alle nodes in beeld" }}
             nodes={flowNodes}
