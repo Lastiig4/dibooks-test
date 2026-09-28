@@ -1,50 +1,35 @@
-DIBOOKS TALK ABOUT V3 - REACTIES, RAPPORTAGES EN FORUMBEHEER
+DIBOOKS TALK ABOUT V4 - BEWERKEN EN DUBBELE TEKST
 
-Aanvullende patch op de reeds werkende Talk about V2.
-Vereist ook het bestaande meldingssysteem (user_notifications / schema-v8-notifications).
+Aanvullende patch op Talk about V3.
 
-INSTALLEREN
-1. Voer TALK_ABOUT_COMMUNITY_V3_SUPABASE.sql uit in de Supabase SQL Editor.
-2. Kopieer app/ en components/ naar de projectroot en vervang de betrokken bestanden.
-3. Bouw en publiceer de app zoals gebruikelijk.
-De SQL is transactioneel en opnieuw uitvoerbaar. Voer oudere foruminstallaties daarna niet opnieuw uit.
-Bestaande onderwerpen, topics, reacties, recensies, boektags en Exclusive-statussen blijven behouden.
+INSTALLATIE
+1. Voer TALK_ABOUT_EDIT_V4_SUPABASE.sql uit in Supabase SQL Editor.
+2. Kopieer app/ en components/ naar de projectroot en vervang de bestanden.
+3. Bouw en publiceer de app. Vernieuw daarna de browserpagina volledig (Ctrl+F5).
+Geen bestaande berichten worden verwijderd of automatisch herschreven.
 
-REAGEREN
-- Elk bericht heeft een knop Reageren. Het formulier vermeldt op wie je reageert.
-- Reacties blijven chronologisch leesbaar met een inspringing en link naar het oorspronkelijke bericht.
-- Reageren op reacties is ook mogelijk; de weergave gebruikt een beperkte inspringing voor kleine schermen.
-- De auteur van het oorspronkelijke bericht krijgt een melding. Bij een algemene topicreactie krijgt de topicstarter deze.
-- Geen melding bij reageren op jezelf. Geen berichttekst/spoilers in de melding.
-- Meldingen openen de juiste pagina en markeren de reactie. Links blijven werken als paginanummers verschuiven.
-- Het bestaande belletje en meldingenoverzicht halen nieuwe meldingen elke circa 8 seconden op.
-- Dit zijn meldingen in DiBooks, geen e-mail- of browserpushmeldingen.
+DUBBELE TEKST
+Het topictekstblok en de rapporteerknop hadden dezelfde React-key. Bij opnieuw renderen
+kon React daardoor extra tekstblokken achterlaten. Beide hebben nu unieke sleutels.
+Gereproduceerd met de oude JSX: 40 updates leverden 40 tekstblokken op.
+Met de nieuwe JSX: na 40 updates precies een tekstblok en geen React-keywaarschuwingen.
+Deze weergavefout voegde geen tekst toe aan het opgeslagen topic. Er is daarom geen
+opschoonscript nodig. Mocht tekst zelf al dubbel opgeslagen zijn, gebruik dan Bewerken.
 
-RAPPORTEREN EN BEHEREN
-- Ingelogde gebruikers kunnen een topicbericht of reactie rapporteren, met reden.
-- Maximaal een rapportage per account per bericht. Herhaald klikken veroorzaakt geen dubbele adminmelding.
-- Alle huidige admins ontvangen een melding in hun bestaande meldingenoverzicht.
-- Via Talk about > Forumbeheer kunnen admins de oudste 100 open rapportages bekijken.
-- Admins kunnen rapportages afwijzen of inhoud verbergen. Het verbergen vereist een extra bevestiging.
-- Een verborgen topic verbergt ook zijn reacties. Een verborgen reactie laat andere reacties bestaan.
-- Verborgen inhoud is ook via de gewone databaseleesrechten afgeschermd, niet alleen in de interface.
-- Rapportages van hetzelfde bericht worden samen afgehandeld.
-- Verborgen inhoud blijft bewaard in de database; deze versie heeft geen aparte herstelknop.
-- Admins kunnen vanuit een topic dit sluiten/heropenen en vastzetten/losmaken.
-- Een gesloten topic blijft leesbaar. Ook een al geopend formulier kan er geen reactie meer plaatsen.
-- Exclusive-gebruikers krijgen hiermee geen moderatierechten.
+BEWERKEN
+- Eigen topicberichten en reacties krijgen Bewerken zolang het topic open is.
+- Tekst en spoilerwaarschuwing kunnen worden aangepast; bij een topic ook de titel.
+- Na opslaan verschijnt het label Bewerkt.
+- Annuleren slaat niets op. Bij fouten blijft de ingevoerde tekst in het formulier staan.
+- De database controleert eigenaarschap, tekstlengte en gesloten/verborgen topics.
+- Ook admins kunnen via deze functie niet andermans tekst herschrijven.
+- Bewerken veroorzaakt geen nieuwe reactiemelding.
+- Na wijziging wordt spoilertekst weer afgeschermd totdat de lezer Bekijken kiest.
 
 CONTROLES
-- npx tsc --noEmit: geslaagd.
-- npm run build: geslaagd.
-- Tijdelijke lokale PostgreSQL-testdatabase (PGlite): migratie tweemaal uitgevoerd; 19 controles geslaagd.
-  Getest: gastrechten, adminrechten, cross-topic reacties, zelfmeldingen, reactielinks,
-  spoilerarme meldingen, dubbele rapportages, verborgen inhoud, sluiten/heropenen,
-  vastzetten en paginering van reacties.
-- De bestaande Next.js-waarschuwing over middleware/proxy blijft staan.
-- Jouw live Supabase-database is niet gewijzigd en de koppeling met echte accounts is nog niet live getest.
-
-NA INSTALLATIE
-Test met twee accounts: A plaatst een bericht, B reageert via Reageren, A opent de melding.
-Rapporteer daarna het bericht en controleer bij een admin het belletje en Forumbeheer.
-Sluit het topic als admin: een gewone gebruiker mag geen nieuwe reactie meer plaatsen.
+TypeScript en productiebuild: geslaagd.
+React-regressietest op de daadwerkelijke topic-JSX: 40 updates geslaagd.
+Lokale PostgreSQL-testdatabase (PGlite): 24 controles geslaagd, inclusief bewerken,
+eigenaarschap, gesloten topics en bestaande forumrechten en meldingen.
+Bestaande Next.js-waarschuwing over middleware/proxy blijft aanwezig.
+Niet uitgevoerd op jouw live Supabase-database.
