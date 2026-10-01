@@ -12,6 +12,7 @@ import {
 } from "@/lib/supabase/socialFeatures";
 
 function eventLabel(type: string) {
+  if (type === "talk_followed") return "Gevolgd topic";
   if (type === "talk_reply") return "Forumreactie";
   if (type === "talk_report") return "Forumrapportage";
   if (type === "connection_request") return "Contactverzoek";
@@ -26,7 +27,7 @@ function eventLabel(type: string) {
 }
 
 function eventIcon(type: string) {
-  if (type === "talk_reply") return "💬";
+  if (type === "talk_reply" || type === "talk_followed") return "💬";
   if (type === "talk_report") return "🛡️";
   if (type === "connection_request" || type === "connection_accepted") return "👥";
   if (type === "book_shared") return "📚";
