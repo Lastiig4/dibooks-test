@@ -1,5 +1,8 @@
 "use client";
 
+import EffectNodeSettings from "@/components/EffectNodeSettings";
+import ReaderEffects from "@/components/ReaderEffects";
+import { readVisualEffects, activeVisualEffects, isEffectBoundary, type EffectNodeData } from "@/lib/visualEffects";
 import ScratchpadEditor from "@/components/ScratchpadEditor";
 import StoryCheckModal from "@/components/StoryCheckModal";
 import { checkStory } from "@/lib/storyCheck";
@@ -119,7 +122,7 @@ const FontSize = Extension.create({
   },
 });
 
-type DiNodeType = "text" | "special" | "chapter" | "cutscene" | "image" | "choice" | "minigame" | "function" | "condition" | "scratchpad";
+type DiNodeType = "text" | "special" | "chapter" | "cutscene" | "image" | "choice" | "minigame" | "function" | "condition" | "scratchpad" | "effect";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 
@@ -220,7 +223,7 @@ type ChoiceOption = {
   effects?: FunctionAction[];
 };
 
-type DiNodeData = {
+type DiNodeData = EffectNodeData & {
   intentionalEnd?: boolean;
   label: string;
   type: DiNodeType;
@@ -320,6 +323,7 @@ const nodeColors: Record<DiNodeType, string> = {
   minigame: "#9333ea",
   function: "#06b6d4",
   condition: "#14b8a6",
+  effect: "#ec4899",
   scratchpad: "#f8fafc",
 };
 
@@ -333,6 +337,7 @@ const nodeLabels: Record<DiNodeType, string> = {
   minigame: "Mini game",
   function: "Functie",
   condition: "Voorwaarde / IF",
+  effect: "Special effect",
   scratchpad: "Kladblok",
 };
 
@@ -368,12 +373,12 @@ function createDefaultChoices(): ChoiceOption[] {
 }
 
 
-function isScratchpadNode(node: Node<DiNodeData> | undefined | null) {
-  return node?.data?.type === "scratchpad";
+function isNonStoryNode(node: Node<DiNodeData> | undefined | null) {
+  return node?.data?.type === "scratchpad" || node?.data?.type === "effect";
 }
 
 function getStoryNodes(currentNodes: Node<DiNodeData>[]) {
-  return currentNodes.filter((node) => !isScratchpadNode(node));
+  return currentNodes.filter((node) => !isNonStoryNode(node));
 }
 
 function countLimitedStoryNodes(currentNodes: Node<DiNodeData>[]) {
@@ -1135,7 +1140,7 @@ function BulletNode({ data }: NodeProps<Node<DiNodeData>>) {
         {data.label}
       </div>
 
-      {data.type !== "scratchpad" && (
+      {data.type !== "scratchpad" && data.type !== "effect" && (
         <>
           <Handle
             id="in"
@@ -2878,6 +2883,11 @@ export default function Home() {
   );
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
+  const [previewEffectHistory, setPreviewEffectHistory] = useState<string[]>([]);
+  useEffect(() => {
+    if (!previewOpen) { setPreviewEffectHistory([]); return; }
+    if (previewNodeId) setPreviewEffectHistory(history => history.at(-1) === previewNodeId ? history : [...history, previewNodeId]);
+  }, [previewOpen, previewNodeId]);
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [previewPageCount, setPreviewPageCount] = useState(1);
   const [previewGlobalPageOffset, setPreviewGlobalPageOffset] = useState(0);
@@ -2924,7 +2934,7 @@ export default function Home() {
   // verhaalnode-limieten of de vereisten van een boek.
   const storyNodeCount =
     runtimeNodeCount - functionNodeCount - conditionNodeCount - chapterNodeCount;
-  const scratchpadNodeCount = nodes.length - runtimeNodeCount;
+  const scratchpadNodeCount = nodes.filter(n => n.data.type === "scratchpad").length;
   const nodeLimitReached = maxNodesForCurrentUser !== null && storyNodeCount >= maxNodesForCurrentUser;
   const autosaveReadyRef = useRef(false);
   const lastAutosavePayloadRef = useRef<string>("");
@@ -3395,7 +3405,7 @@ export default function Home() {
     if (chapterPaths.length !== 1) return;
 
     const nextTarget = nodes.find((node) => node.id === chapterPaths[0].target);
-    if (!nextTarget || isScratchpadNode(nextTarget)) return;
+    if (!nextTarget || isNonStoryNode(nextTarget)) return;
 
     setPreviewNodeId(nextTarget.id);
     setPreviewPageIndex(0);
@@ -3409,7 +3419,7 @@ export default function Home() {
     }
   }, [previewPageIndex, previewPageCount]);
 
-  const previewPaths = previewNode && !isScratchpadNode(previewNode)
+  const previewPaths = previewNode && !isNonStoryNode(previewNode)
     ? getStoryEdges(edges, nodes).filter((edge) => edge.source === previewNode.id)
     : [];
 
@@ -3480,12 +3490,12 @@ export default function Home() {
     };
   });
 
-  const selectedNodePaths = selectedNode && !isScratchpadNode(selectedNode)
+  const selectedNodePaths = selectedNode && !isNonStoryNode(selectedNode)
     ? getStoryEdges(edges, nodes).filter((edge) => edge.source === selectedNode.id)
     : [];
 
-  const availableTargetNodes = selectedNode && !isScratchpadNode(selectedNode)
-    ? [...nodes.filter((node) => node.id !== selectedNode.id && !isScratchpadNode(node))].sort((a, b) => {
+  const availableTargetNodes = selectedNode && !isNonStoryNode(selectedNode)
+    ? [...nodes.filter((node) => node.id !== selectedNode.id && !isNonStoryNode(node))].sort((a, b) => {
         const aHasIncomingPath = edges.some((edge) => edge.target === a.id);
         const bHasIncomingPath = edges.some((edge) => edge.target === b.id);
 
@@ -3683,7 +3693,7 @@ export default function Home() {
         };
       }
 
-      if (nextNode.data.type !== "text" && nextNode.data.type !== "special") {
+      if (isEffectBoundary(readVisualEffects({nodes}), nextNode.id) || (nextNode.data.type !== "text" && nextNode.data.type !== "special")) {
         return {
           textNodes,
           html: htmlParts.join(""),
@@ -4332,8 +4342,8 @@ ${formatSaveError(error)}`);
 
     const startNode = nodes.find((node) => node.id === startNodeId);
 
-    if (!startNode || isScratchpadNode(startNode)) {
-      alert("Start-node niet gevonden of is een kladblok-node. Kies een verhaalnode als start.");
+    if (!startNode || isNonStoryNode(startNode)) {
+      alert("Start-node niet gevonden of is een kladblok/effect-node. Kies een verhaalnode als start.");
       return;
     }
 
@@ -4364,8 +4374,8 @@ ${formatSaveError(error)}`);
   ) {
     const targetNode = nodes.find((node) => node.id === nodeId);
 
-    if (!targetNode || isScratchpadNode(targetNode)) {
-      alert("Deze doel-node bestaat niet meer of is een kladblok-node.");
+    if (!targetNode || isNonStoryNode(targetNode)) {
+      alert("Deze doel-node bestaat niet meer of is een kladblok/effect-node.");
       return;
     }
 
@@ -4390,6 +4400,7 @@ ${formatSaveError(error)}`);
 
     const maxNodes = getMaxNodesForUser(user);
     const isUtilityNode =
+      type === "effect" ||
       type === "scratchpad" ||
       type === "function" ||
       type === "condition" ||
@@ -4427,6 +4438,7 @@ ${formatSaveError(error)}`);
       type: "bullet",
       position: nextPosition,
       data: {
+        effectKind: type === "effect" ? "fog" : undefined,
         label: nodeLabels[type],
         type,
         text: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
@@ -4701,8 +4713,8 @@ ${formatSaveError(error)}`);
     const sourceNode = nodes.find((node) => node.id === selectedNodeId);
     const targetNode = nodes.find((node) => node.id === targetNodeId);
 
-    if (isScratchpadNode(sourceNode) || isScratchpadNode(targetNode)) {
-      alert("Kladblok-nodes zijn alleen voor notities en kunnen niet met paths worden verbonden.");
+    if (isNonStoryNode(sourceNode) || isNonStoryNode(targetNode)) {
+      alert("Kladblok- en effect-nodes kunnen niet met paths worden verbonden.");
       return;
     }
 
@@ -5383,6 +5395,7 @@ ${formatSaveError(error)}`);
     const safeStartNodeId = getSafeStartNodeId(storyNodes, startNodeId);
 
     return {
+      effects: readVisualEffects({nodes}),
       bookTitle: dashboardSaveForm.title.trim() || "Nieuw DiBooks verhaal",
       startNodeId: safeStartNodeId,
       variables: storyVariables,
@@ -5716,6 +5729,13 @@ ${formatSaveError(error)}`);
               className="bg-emerald-600 text-white hover:bg-emerald-500"
               icon={<VideoIcon />}
             >
+              <SidebarMenuItem
+                title="Special effect"
+                description="Mist, schermschudden of alarmlichten tussen twee nodes."
+                accentClass="bg-pink-600 text-white"
+                icon={<span aria-hidden>✦</span>}
+                onClick={() => { setSidebarGroupOpen(null); createNode("effect"); }}
+              />
               <SidebarMenuItem
                 title="Cutscene"
                 description="Video of filmfragment tussen verhaalonderdelen."
@@ -6433,7 +6453,9 @@ ${formatSaveError(error)}`);
           suspended={!!editingTextNode || variablesOpen}
           onClose={() => setNodeSettingsOpen(false)}
         >
-          {selectedNode.data.type === "scratchpad" ? (
+          {selectedNode.data.type === "effect" ? (
+            <EffectNodeSettings key={selectedNode.id} data={selectedNode.data} nodes={getStoryNodes(nodes).map(n => ({id:n.id,label:n.data.label}))} onChange={patch => {if (!editorLocked) setNodes(current => current.map(n => n.id === selectedNode.id ? {...n,data:{...n.data,...patch}} : n));}} onDelete={deleteSelectedNode} />
+          ) : selectedNode.data.type === "scratchpad" ? (
 <ScratchpadEditor key={selectedNode.id} title={selectedNode.data.label} html={selectedNode.data.textHtml ?? ""} text={selectedNode.data.text ?? ""} locked={editorLocked} onTitleChange={updateSelectedNodeLabel} onChange={(html, text) => { if (!editorLocked) updateNodeRichText(selectedNode.id, html, text); }} />
 ) : (
 <div className="grid gap-5">
@@ -8648,7 +8670,8 @@ ${formatSaveError(error)}`);
         />
       )}
       {previewOpen && previewNode && (
-        <div className="fixed inset-0 z-50 flex min-h-screen flex-col bg-neutral-950 text-white">
+        <div className="fixed inset-0 z-50 flex min-h-screen flex-col overflow-hidden bg-neutral-950 text-white">
+          <ReaderEffects effects={activeVisualEffects(readVisualEffects({nodes}), [...previewEffectHistory, previewNode.id], new Set(getStoryNodes(nodes).map(n => n.id)))} />
           <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-6">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">
@@ -8680,7 +8703,7 @@ ${formatSaveError(error)}`);
             </button>
           </div>
 
-          <div className="min-h-0 flex-1">
+          <div data-sfx-surface className="min-h-0 flex-1">
             {(previewNode.data.type === "text" ||
               previewNode.data.type === "special") && (
               <BookPageReader

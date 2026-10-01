@@ -104,3 +104,10 @@ body {
   content: "";
   margin-top: 0.75rem;
 }
+@keyframes dibooks-fog-drift { from { transform:translateX(-2%); } to { transform:translateX(2%); } }
+@keyframes dibooks-alarm-pulse { 0%,100% { filter:opacity(.12); } 50% { filter:opacity(1); } }
+@keyframes dibooks-screen-shake { 0%,100%{transform:translate(0,0)} 25%{transform:translate(1px,-1px)} 50%{transform:translate(-1px,1px)} 75%{transform:translate(1px,1px)} }
+.dibooks-fog { animation:dibooks-fog-drift 12s ease-in-out infinite alternate; }
+.dibooks-alarm { animation:dibooks-alarm-pulse 3s ease-in-out infinite; }
+.dibooks-effects-shake [data-sfx-surface] { animation:dibooks-screen-shake .7s linear infinite; }
+@media (prefers-reduced-motion:reduce) { .dibooks-fog,.dibooks-alarm{display:none;} .dibooks-effects-shake [data-sfx-surface]{animation:none;} }

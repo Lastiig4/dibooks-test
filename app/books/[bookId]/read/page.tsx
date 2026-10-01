@@ -1,5 +1,7 @@
 "use client";
 
+import ReaderEffects from "@/components/ReaderEffects";
+import { readVisualEffects, activeVisualEffects, isEffectBoundary, type VisualEffect } from "@/lib/visualEffects";
 import type React from "react";
 import BookCompletion from "@/components/BookCompletion";
 import { isTutorialMetadata, canOfferBookReview } from "@/lib/bookCompletion";
@@ -25,6 +27,7 @@ type ReaderNodeType =
   | "minigame"
   | "function"
   | "condition"
+  | "effect"
   | "scratchpad";
 
 type StoryVariableType = "boolean" | "number" | "text";
@@ -137,6 +140,7 @@ type ReaderEdge = {
 };
 
 type ReaderBook = {
+  effects: VisualEffect[];
   coverImage?: string;
   reviewEligible?: boolean;
   id: string;
@@ -361,7 +365,7 @@ function normalizeNode(rawNode: any): ReaderNode {
 
 function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBook {
   const nodes: ReaderNode[] = Array.isArray(rawProject?.nodes)
-    ? rawProject.nodes.map(normalizeNode).filter((node: ReaderNode) => node.type !== "scratchpad")
+    ? rawProject.nodes.map(normalizeNode).filter((node: ReaderNode) => node.type !== "scratchpad" && node.type !== "effect")
     : [];
   const nodeIds = new Set(nodes.map((node: ReaderNode) => node.id));
   const edges = Array.isArray(rawProject?.edges)
@@ -403,6 +407,7 @@ function normalizeBook(rawProject: any, fallback: Partial<ReaderBook>): ReaderBo
     : [];
 
   return {
+    effects: readVisualEffects(rawProject ?? {}),
     id: fallback.id ?? rawProject?.bookId ?? "unknown-book",
     coverImage: fallback.coverImage,
     reviewEligible: fallback.reviewEligible === true,
@@ -2673,7 +2678,7 @@ export default function ReadBookPage() {
       const maybeNext = book.nodes.find((item) => item.id === outgoing[0].target);
       if (!maybeNext) break;
 
-      const mayAutoChainNextNode = chainMode === "text" && maybeNext.type === "text";
+      const mayAutoChainNextNode = chainMode === "text" && maybeNext.type === "text" && !isEffectBoundary(book.effects, maybeNext.id);
       if (!mayAutoChainNextNode) {
         nextNodeAfterChain = maybeNext;
         break;
@@ -3801,6 +3806,7 @@ export default function ReadBookPage() {
       ref={readerShellRef}
       className={`relative flex h-dvh flex-col overflow-hidden ${readerShellClass}`}
     >
+      <ReaderEffects effects={activeVisualEffects(book.effects, [...runHistory.slice(0, replayStepIndex === null ? undefined : replayStepIndex + 1).map(step => step.nodeId), node.id], new Set(book.nodes.map(n => n.id)))} />
       {quietReading && isTextNode && <button type="button" onClick={() => setQuietReading(false)} aria-label="Leesbediening tonen" className="absolute right-2 top-2 z-40 rounded-full border border-current/20 bg-neutral-900/80 px-3 py-2 text-xs text-white opacity-60 hover:opacity-100 focus:opacity-100">☰ Bediening</button>}
       {bookmarkMessage && <div role="status" className="absolute bottom-20 right-4 z-50 flex max-w-xs items-center gap-3 rounded-xl border border-amber-300/30 bg-neutral-950 p-3 text-sm text-amber-100">{bookmarkMessage}<button type="button" aria-label="Melding sluiten" onClick={() => setBookmarkMessage("")}>✕</button></div>}
       {!hideReaderChromeForCutscene && (
@@ -4136,7 +4142,7 @@ export default function ReadBookPage() {
         </div>
       )}
 
-      <section
+      <section data-sfx-surface
         className={`min-h-0 flex-1 overflow-hidden ${isTextNode ? "touch-pan-y" : ""}`}
         onClick={event => {
           if (quietReading && isTextNode && !(event.target as HTMLElement).closest("button,a,input,select,video") && !window.getSelection()?.toString()) setQuietReading(false);

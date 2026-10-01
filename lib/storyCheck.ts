@@ -1,4 +1,5 @@
 export type CheckNode = { id: string; data: {
+  effectStart?: string; effectEnd?: string;
   type: string; label: string; intentionalEnd?: boolean;
   imageUrl?: string; videoUrl?: string; videoStoragePath?: string;
   choices?: { label: string; targetNodeId?: string }[];
@@ -8,15 +9,20 @@ export type CheckNode = { id: string; data: {
 export type StoryIssue = { id: string; severity: "error" | "warning"; message: string; nodeId?: string; canMarkEnd?: boolean };
 
 export function checkStory(nodes: CheckNode[], edges: { source: string; target: string }[], startId: string | null): StoryIssue[] {
-  const story = nodes.filter(n => n.data.type !== "scratchpad");
+  const story = nodes.filter(n => n.data.type !== "scratchpad" && n.data.type !== "effect");
   const ids = new Set(story.map(n => n.id));
   const issues: StoryIssue[] = [];
   const graph = new Map<string, string[]>();
   const add = (id: string, severity: StoryIssue["severity"], message: string, nodeId?: string, canMarkEnd = false) => issues.push({ id, severity, message, nodeId, canMarkEnd });
+  for (const node of nodes.filter(n => n.data.type === "effect")) {
+    const {effectStart, effectEnd} = node.data;
+    if (!effectStart || !effectEnd || !ids.has(effectStart) || !ids.has(effectEnd) || effectStart === effectEnd)
+      add(node.id + ":effect", "error", "Kies twee verschillende, bestaande verhaalnodes als begin en einde van het effect.", node.id);
+  }
   if (!startId || !ids.has(startId)) add("start", "error", "Een geldige start-node ontbreekt.");
   for (const edge of edges) {
     if (!ids.has(edge.source) || !ids.has(edge.target)) {
-      add(`edge:${edge.source}:${edge.target}`, "error", "Een path verwijst naar een ontbrekende node of een kladblok.", ids.has(edge.source) ? edge.source : ids.has(edge.target) ? edge.target : undefined);
+      add(`edge:${edge.source}:${edge.target}`, "error", "Een path verwijst naar een ontbrekende node of een kladblok/effect-node.", ids.has(edge.source) ? edge.source : ids.has(edge.target) ? edge.target : undefined);
     }
   }
   for (const node of story) {

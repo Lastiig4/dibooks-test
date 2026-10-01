@@ -217,7 +217,7 @@ function isScratchpadPublishNode(node: any) {
 }
 
 function getPublishableNodes(projectData: any) {
-  return getProjectNodes(projectData).filter((node: any) => !isScratchpadPublishNode(node));
+  return getProjectNodes(projectData).filter((node: any) => !isScratchpadPublishNode(node) && getNodeType(node) !== "effect");
 }
 
 function getScratchpadNodeCount(projectData: any) {
