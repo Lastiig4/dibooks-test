@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import CommunityProfileEditor from "@/components/CommunityProfileEditor";
 import AppNav from "@/components/AppNav";
 import { useEffect, useMemo, useState } from "react";
 import AuthModal from "@/components/AuthModal";
@@ -330,7 +331,7 @@ function RevisionItemCard({
   );
 }
 
-export default function AccountPage() {
+function AccountContent() {
   const {
     user,
     isLoggedIn,
@@ -684,7 +685,7 @@ export default function AccountPage() {
             <p className="text-[10px] font-black uppercase tracking-[0.34em] text-blue-300">
               Account
             </p>
-            <h1 className="mt-2 text-4xl font-black sm:text-5xl">Mijn DiBooks</h1>
+            <h1 className="mt-2 text-4xl font-black sm:text-5xl">Mijn DiBooks</h1><p className="mt-3 text-sm text-neutral-400">Jouw privé-instellingen. Bezoekers zien alleen je openbare profiel.</p>
           </div>
           {isLoggedIn && (
             <Link
@@ -732,7 +733,7 @@ export default function AccountPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-black uppercase tracking-[0.32em] text-neutral-500">
-                        Profielgegevens
+                        Naam en auteursnaam
                       </p>
                       <h2 className="mt-1 truncate text-2xl font-black">
                         {user.name || "DiBooks gebruiker"}
@@ -787,6 +788,7 @@ export default function AccountPage() {
                   </button>
                 </div>
 
+                <CommunityProfileEditor key={user.id} userId={user.id} name={user.name}/>
                 <div className="mt-7 border-t border-white/10 pt-6">
                   <p className="text-xs font-black uppercase tracking-widest text-neutral-500">
                     E-mailadres
@@ -1191,3 +1193,5 @@ export default function AccountPage() {
     </main>
   );
 }
+
+export default function AccountPage() { const {user}=useDemoAuth(); return <AccountContent key={user?.id ?? "guest"}/>; }
