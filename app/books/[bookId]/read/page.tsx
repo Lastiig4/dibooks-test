@@ -1,5 +1,6 @@
 "use client";
 
+import IllustrationSpread, {type IllustrationData} from "@/components/IllustrationSpread";
 import ReaderEffects from "@/components/ReaderEffects";
 import { readVisualEffects, activeVisualEffects, isEffectBoundary, type VisualEffect } from "@/lib/visualEffects";
 import type React from "react";
@@ -27,6 +28,7 @@ type ReaderNodeType =
   | "minigame"
   | "function"
   | "condition"
+  | "illustration"
   | "effect"
   | "scratchpad";
 
@@ -94,7 +96,7 @@ type ConditionOperator =
   | "less_or_equal"
   | "contains";
 
-type ReaderNode = {
+type ReaderNode = IllustrationData & {
   intentionalEnd?: boolean;
   id: string;
   type: ReaderNodeType;
@@ -330,6 +332,10 @@ function normalizeNode(rawNode: any): ReaderNode {
     videoStoragePath: data.videoStoragePath ?? content.videoStoragePath ?? rawNode?.videoStoragePath ?? "",
     videoFileName: data.videoFileName ?? content.videoFileName ?? rawNode?.videoFileName ?? "",
     videoDuration: data.videoDuration ?? content.videoDuration ?? rawNode?.videoDuration ?? 0,
+    illustrationSide: data.illustrationSide ?? content.illustrationSide,
+    illustrationMotion: data.illustrationMotion ?? content.illustrationMotion,
+    illustrationFocusX: data.illustrationFocusX ?? content.illustrationFocusX,
+    illustrationFocusY: data.illustrationFocusY ?? content.illustrationFocusY,
     imageUrl: data.imageUrl ?? content.imageUrl ?? rawNode?.imageUrl ?? "",
     imageAlt: data.imageAlt ?? content.imageAlt ?? rawNode?.imageAlt ?? "",
     imageCaption:
@@ -639,8 +645,7 @@ function isReaderReplayVisibleNode(node: ReaderNode | undefined | null) {
   if (!node) return false;
 
   return (
-    node.type === "text" ||
-    node.type === "special" ||
+    node.type === "text" || node.type === "special" || node.type === "illustration" ||
     node.type === "choice" ||
     node.type === "minigame" ||
     node.type === "cutscene" ||
@@ -696,7 +701,7 @@ function getReaderRunStepPageCount(
   if (!step) return 0;
 
   const node = book.nodes.find((item) => item.id === step.nodeId);
-  if (!node || (node.type !== "text" && node.type !== "special")) {
+  if (!node || (node.type !== "text" && node.type !== "special" && node.type !== "illustration")) {
     return 0;
   }
 
@@ -742,7 +747,7 @@ function withCurrentReaderPageMetrics(
     if (step?.nodeId !== currentNodeId) continue;
 
     const node = book.nodes.find((item) => item.id === step.nodeId);
-    if (!node || (node.type !== "text" && node.type !== "special")) {
+    if (!node || (node.type !== "text" && node.type !== "special" && node.type !== "illustration")) {
       return nextHistory;
     }
 
@@ -1315,8 +1320,7 @@ function calculateBookProgressPercent(
 
   const safePageCount = Math.max(1, pageCount);
   const currentFraction =
-    currentNode.type === "text" ||
-    currentNode.type === "special"
+    currentNode.type === "text" || currentNode.type === "special" || currentNode.type === "illustration"
       ? Math.max(
           0,
           Math.min(
@@ -2652,7 +2656,7 @@ export default function ReadBookPage() {
     // en mogen niet samen met gewone tekst op dezelfde reader-pagina komen.
     const chainMode = node.type;
 
-    while (cursor && (cursor.type === "text" || cursor.type === "special") && !visited.has(cursor.id)) {
+    while (cursor && (cursor.type === "text" || cursor.type === "special" || cursor.type === "illustration") && !visited.has(cursor.id)) {
       visited.add(cursor.id);
       textNodes.push(cursor);
 
@@ -2713,7 +2717,7 @@ export default function ReadBookPage() {
   }, [reader?.node.id, reader?.initialSceneInfo]);
 
   useEffect(() => {
-    if (!reader || reader.node.type !== "text" && reader.node.type !== "special") {
+    if (!reader || reader.node.type !== "text" && reader.node.type !== "special" && reader.node.type !== "illustration") {
       return;
     }
 
@@ -3120,7 +3124,7 @@ export default function ReadBookPage() {
       (item) => item.id === activeNodeId,
     );
     const activeStepIsText =
-      activeNode?.type === "text" || activeNode?.type === "special";
+      activeNode?.type === "text" || activeNode?.type === "special" || activeNode?.type === "illustration";
 
     nextHistory[currentStepIndex] = {
       ...currentStep,
@@ -3669,7 +3673,7 @@ export default function ReadBookPage() {
   }
 
   const { book, node } = reader;
-  const isTextNode = node.type === "text" || node.type === "special";
+  const isTextNode = node.type === "text" || node.type === "special" || node.type === "illustration";
   const isCutsceneNode = node.type === "cutscene";
   const isImageNode = node.type === "image";
   const isReadOnlyReplay = replayStepIndex !== null;
@@ -4151,7 +4155,7 @@ export default function ReadBookPage() {
         onTouchEnd={isTextNode ? handleReaderTouchEnd : undefined}
       >
         {isTextNode && (
-          <BookPageReader
+          <IllustrationSpread key={node.id} data={node.type === "illustration" ? node : undefined} pageMode={pageMode}><BookPageReader
             onAnchorConsumed={setRequestedBookmarkAnchor}
             onTextOffset={setReaderTextOffset}
             requestedAnchor={requestedBookmarkAnchor?.nodeId === currentNodeId ? requestedBookmarkAnchor : undefined}
@@ -4162,7 +4166,7 @@ export default function ReadBookPage() {
             onPageCountChange={setReaderPageCount}
             onVisiblePageCountChange={setReaderVisiblePageCount}
             textSize={textSize}
-            pageMode={pageMode}
+            pageMode={node.type === "illustration" ? "single" : pageMode}
             theme={theme}
             lineSpacing={lineSpacing}
             fontFamily={fontFamily}
@@ -4170,7 +4174,7 @@ export default function ReadBookPage() {
             isSpecialPage={node.type === "special"}
             initialSceneInfo={reader.initialSceneInfo}
             onSceneInfoChange={setActiveSceneInfo}
-          />
+          /></IllustrationSpread>
         )}
 
         {isImageNode && (

@@ -1,5 +1,7 @@
 "use client";
 
+import IllustrationSettings from "@/components/IllustrationSettings";
+import IllustrationSpread, {type IllustrationData} from "@/components/IllustrationSpread";
 import EffectNodeSettings from "@/components/EffectNodeSettings";
 import ReaderEffects from "@/components/ReaderEffects";
 import { readVisualEffects, activeVisualEffects, isEffectBoundary, type EffectNodeData } from "@/lib/visualEffects";
@@ -122,7 +124,7 @@ const FontSize = Extension.create({
   },
 });
 
-type DiNodeType = "text" | "special" | "chapter" | "cutscene" | "image" | "choice" | "minigame" | "function" | "condition" | "scratchpad" | "effect";
+type DiNodeType = "text" | "special" | "chapter" | "cutscene" | "image" | "choice" | "minigame" | "function" | "condition" | "scratchpad" | "effect" | "illustration";
 
 type MiniGameDifficulty = "easy" | "normal" | "hard";
 
@@ -223,7 +225,7 @@ type ChoiceOption = {
   effects?: FunctionAction[];
 };
 
-type DiNodeData = EffectNodeData & {
+type DiNodeData = EffectNodeData & IllustrationData & {
   intentionalEnd?: boolean;
   label: string;
   type: DiNodeType;
@@ -323,6 +325,7 @@ const nodeColors: Record<DiNodeType, string> = {
   minigame: "#9333ea",
   function: "#06b6d4",
   condition: "#14b8a6",
+  illustration: "#f59e0b",
   effect: "#ec4899",
   scratchpad: "#f8fafc",
 };
@@ -337,6 +340,7 @@ const nodeLabels: Record<DiNodeType, string> = {
   minigame: "Mini game",
   function: "Functie",
   condition: "Voorwaarde / IF",
+  illustration: "Illustratiespread",
   effect: "Special effect",
   scratchpad: "Kladblok",
 };
@@ -1238,6 +1242,7 @@ async function resolveProjectCutsceneUrls(projectData: any) {
 function isNodeComplete(node: Node<DiNodeData> | undefined) {
   if (!node) return false;
 
+  if (node.data.type === "illustration") return !!node.data.imageUrl && !!(node.data.text || node.data.textHtml);
   if (node.data.type === "text" || node.data.type === "special") {
     const plainText = node.data.text ?? stripHtml(node.data.textHtml ?? "");
     return plainText.trim().length > 0;
@@ -1742,6 +1747,7 @@ function paginateHtml(html: string, maxCharacters: number) {
 }
 
 function BookPageReader({
+  forceSingle = false,
   html,
   pageIndex,
   setPageIndex,
@@ -1751,6 +1757,7 @@ function BookPageReader({
   initialSceneInfo = "",
   onSceneInfoChange,
 }: {
+  forceSingle?: boolean;
   html: string;
   pageIndex: number;
   setPageIndex: React.Dispatch<React.SetStateAction<number>>;
@@ -1769,7 +1776,7 @@ function BookPageReader({
 
   useEffect(() => {
     setPageIndex(0);
-  }, [html, setPageIndex]);
+  }, [forceSingle, html, setPageIndex]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -1781,7 +1788,7 @@ function BookPageReader({
 
       if (viewportWidth <= 0 || viewportHeight <= 0) return;
 
-      const nextVisiblePageCount = viewportWidth >= 1100 ? 2 : 1;
+      const nextVisiblePageCount = !forceSingle && viewportWidth >= 1100 ? 2 : 1;
       setVisiblePageCount(nextVisiblePageCount);
       onVisiblePageCountChange(nextVisiblePageCount);
 
@@ -3350,7 +3357,7 @@ export default function Home() {
     : null;
 
   const textChain =
-    previewNode?.data.type === "text" || previewNode?.data.type === "special"
+    previewNode?.data.type === "text" || previewNode?.data.type === "special" || previewNode?.data.type === "illustration"
       ? collectTextChain(previewNode.id)
       : {
           textNodes: [] as Node<DiNodeData>[],
@@ -3362,7 +3369,7 @@ export default function Home() {
   const estimatedTotalBookPages = useMemo(() => {
     const totalCharacters = nodes
       .filter(
-        (node) => node.data.type === "text" || node.data.type === "special",
+        (node) => node.data.type === "text" || node.data.type === "special" || node.data.type === "illustration",
       )
       .reduce((total, node) => {
         const rawText = stripHtml(node.data.textHtml || node.data.text || "");
@@ -3388,8 +3395,7 @@ export default function Home() {
     if (!previewOpen || !previewNode) return;
 
     setPreviewSceneInfo(
-      previewNode.data.type === "text" ||
-      previewNode.data.type === "special"
+      previewNode.data.type === "text" || previewNode.data.type === "special" || previewNode.data.type === "illustration"
         ? getEditorNodeSceneInfo(previewNode)
         : "",
     );
@@ -3424,7 +3430,7 @@ export default function Home() {
     : [];
 
   const textChainBranchPaths =
-    previewNode?.data.type === "text" || previewNode?.data.type === "special"
+    previewNode?.data.type === "text" || previewNode?.data.type === "special" || previewNode?.data.type === "illustration"
       ? getStoryEdges(edges, nodes).filter((edge) => {
           const lastTextNode = textChain.textNodes[textChain.textNodes.length - 1];
           return !!lastTextNode && edge.source === lastTextNode.id;
@@ -3632,7 +3638,7 @@ export default function Home() {
 
     while (
       currentNode &&
-      (currentNode.data.type === "text" || currentNode.data.type === "special")
+      (currentNode.data.type === "text" || currentNode.data.type === "special" || currentNode.data.type === "illustration")
     ) {
       if (visited.has(currentNode.id)) break;
 
@@ -3693,7 +3699,7 @@ export default function Home() {
         };
       }
 
-      if (isEffectBoundary(readVisualEffects({nodes}), nextNode.id) || (nextNode.data.type !== "text" && nextNode.data.type !== "special")) {
+      if (currentNode.data.type === "illustration" || nextNode.data.type === "illustration" || isEffectBoundary(readVisualEffects({nodes}), nextNode.id) || (nextNode.data.type !== "text" && nextNode.data.type !== "special")) {
         return {
           textNodes,
           html: htmlParts.join(""),
@@ -3711,8 +3717,7 @@ export default function Home() {
       initialSceneInfo,
       nextNodeAfterChain:
         currentNode &&
-        currentNode.data.type !== "text" &&
-        currentNode.data.type !== "special"
+        currentNode.data.type !== "text" && currentNode.data.type !== "special" && currentNode.data.type !== "illustration"
           ? currentNode
           : null,
     };
@@ -4441,11 +4446,11 @@ ${formatSaveError(error)}`);
         effectKind: type === "effect" ? "fog" : undefined,
         label: nodeLabels[type],
         type,
-        text: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
-        textHtml: type === "text" || type === "special" || type === "scratchpad" ? "" : undefined,
+        text: type === "text" || type === "special" || type === "illustration" || type === "scratchpad" ? "" : undefined,
+        textHtml: type === "text" || type === "special" || type === "illustration" || type === "scratchpad" ? "" : undefined,
         specialSubtype: type === "special" ? "Logboek" : undefined,
         sceneInfo:
-          type === "text" || type === "special" ? "" : undefined,
+          type === "text" || type === "special" || type === "illustration" ? "" : undefined,
         chapterNumber: type === "chapter" ? "" : undefined,
         chapterTitle: type === "chapter" ? "" : undefined,
         chapterSubtitle: type === "chapter" ? "" : undefined,
@@ -4546,7 +4551,7 @@ ${formatSaveError(error)}`);
     setNodes((currentNodes) =>
       currentNodes.map((node) =>
         node.id === selectedNodeId &&
-        (node.data.type === "text" || node.data.type === "special")
+        (node.data.type === "text" || node.data.type === "special" || node.data.type === "illustration")
           ? {
               ...node,
               data: {
@@ -5405,6 +5410,13 @@ ${formatSaveError(error)}`);
         title: node.data.label,
         position: node.position,
         content: {
+          imageUrl: node.data.imageUrl,
+          imageAlt: node.data.imageAlt,
+          imageCaption: node.data.imageCaption,
+          illustrationSide: node.data.illustrationSide,
+          illustrationMotion: node.data.illustrationMotion,
+          illustrationFocusX: node.data.illustrationFocusX,
+          illustrationFocusY: node.data.illustrationFocusY,
           intentionalEnd: node.data.intentionalEnd === true,
           text: node.data.text ?? "",
           textHtml: node.data.textHtml ?? node.data.text ?? "",
@@ -5729,6 +5741,13 @@ ${formatSaveError(error)}`);
               className="bg-emerald-600 text-white hover:bg-emerald-500"
               icon={<VideoIcon />}
             >
+              <SidebarMenuItem
+                title="Illustratiespread"
+                description="Tekst naast een langzaam bewegende illustratie."
+                accentClass="bg-amber-500 text-black"
+                icon={<span aria-hidden>▣</span>}
+                onClick={() => {setSidebarGroupOpen(null);createNode("illustration");}}
+              />
               <SidebarMenuItem
                 title="Special effect"
                 description="Mist, schermschudden of alarmlichten tussen twee nodes."
@@ -6563,8 +6582,7 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
-              {(selectedNode.data.type === "text" ||
-                selectedNode.data.type === "special") && (
+              {(selectedNode.data.type === "text" || selectedNode.data.type === "special" || selectedNode.data.type === "illustration") && (
                 <div className="grid gap-1">
                   <label className="mb-2 block text-sm font-black text-blue-100">
                     Scène-info <span className="text-neutral-500">(optioneel)</span>
@@ -6587,8 +6605,7 @@ ${formatSaveError(error)}`);
               )}
 
 </section>
-              {(selectedNode.data.type === "text" ||
-                selectedNode.data.type === "special") && (
+              {(selectedNode.data.type === "text" || selectedNode.data.type === "special" || selectedNode.data.type === "illustration") && (
                 <div>
                   <label className="mb-2 block text-sm font-bold">
                     Tekst / inhoud
@@ -6619,7 +6636,7 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
-              {selectedNode.data.type === "image" && (
+              {(selectedNode.data.type === "image" || selectedNode.data.type === "illustration") && (
                 <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3">
                   <div className="mb-4">
                     <h3 className="font-black text-sky-300">Afbeelding</h3>
@@ -6773,6 +6790,7 @@ ${formatSaveError(error)}`);
                 </div>
               )}
 
+              {selectedNode.data.type === "illustration" && <IllustrationSettings data={selectedNode.data} text={selectedNode.data.text??""} onChange={patch=>{if(!editorLocked)setNodes(current=>current.map(n=>n.id===selectedNode.id?{...n,data:{...n.data,...patch}}:n));}}/>}
               {selectedNode.data.type === "cutscene" && (
                 <div className="rounded-xl bg-neutral-900 p-3">
                   <div className="mb-4">
@@ -8328,8 +8346,7 @@ ${formatSaveError(error)}`);
       )}
 
       {!reviewMode && editingTextNode &&
-        (editingTextNode.data.type === "text" ||
-          editingTextNode.data.type === "special" ||
+        (editingTextNode.data.type === "text" || editingTextNode.data.type === "special" || editingTextNode.data.type === "illustration" ||
           editingTextNode.data.type === "scratchpad") && (
           <RichTextEditorModal
             title={editingTextNode.data.label}
@@ -8337,8 +8354,7 @@ ${formatSaveError(error)}`);
               editingTextNode.data.textHtml || editingTextNode.data.text || ""
             }
             allowManualPageBreak={
-              editingTextNode.data.type === "text" ||
-              editingTextNode.data.type === "special"
+              editingTextNode.data.type === "text" || editingTextNode.data.type === "special" || editingTextNode.data.type === "illustration"
             }
             onSave={(html, plainText) =>
               updateNodeRichText(editingTextNode.id, html, plainText)
@@ -8533,8 +8549,7 @@ ${formatSaveError(error)}`);
                     Volledige node-inhoud
                   </p>
 
-                  {(selectedNode.data.type === "text" ||
-                    selectedNode.data.type === "special" ||
+                  {(selectedNode.data.type === "text" || selectedNode.data.type === "special" || selectedNode.data.type === "illustration" ||
                     selectedNode.data.type === "scratchpad") && (
                     <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-5 sm:p-6">
                       <div
@@ -8678,8 +8693,7 @@ ${formatSaveError(error)}`);
                 Reader mode
               </p>
               <h2 className="text-xl font-black sm:text-2xl">
-                {previewNode.data.type === "text" ||
-                previewNode.data.type === "special"
+                {previewNode.data.type === "text" || previewNode.data.type === "special" || previewNode.data.type === "illustration"
                   ? dashboardSaveForm.title.trim() || "Naamloos boek"
                   : previewNode.data.label}
               </h2>
@@ -8704,9 +8718,8 @@ ${formatSaveError(error)}`);
           </div>
 
           <div data-sfx-surface className="min-h-0 flex-1">
-            {(previewNode.data.type === "text" ||
-              previewNode.data.type === "special") && (
-              <BookPageReader
+            {(previewNode.data.type === "text" || previewNode.data.type === "special" || previewNode.data.type === "illustration") && (
+              <IllustrationSpread key={previewNode.id} data={previewNode.data.type === "illustration" ? previewNode.data : undefined}><BookPageReader forceSingle={previewNode.data.type === "illustration"}
                 html={textChain.html}
                 pageIndex={previewPageIndex}
                 setPageIndex={setPreviewPageIndex}
@@ -8715,7 +8728,7 @@ ${formatSaveError(error)}`);
                 globalPageOffset={previewGlobalPageOffset}
                 initialSceneInfo={textChain.initialSceneInfo}
                 onSceneInfoChange={setPreviewSceneInfo}
-              />
+              /></IllustrationSpread>
             )}
 
             {previewNode.data.type === "image" && (
@@ -9010,8 +9023,7 @@ ${formatSaveError(error)}`);
           </div>
 
           <div className="shrink-0 border-t border-neutral-800 px-4 py-3 sm:px-6">
-            {(previewNode.data.type === "text" ||
-              previewNode.data.type === "special") && (
+            {(previewNode.data.type === "text" || previewNode.data.type === "special" || previewNode.data.type === "illustration") && (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <button
                   onClick={() =>
@@ -9115,8 +9127,7 @@ ${formatSaveError(error)}`);
               </div>
             )}
 
-            {previewNode.data.type !== "text" &&
-              previewNode.data.type !== "special" &&
+            {previewNode.data.type !== "text" && previewNode.data.type !== "special" && previewNode.data.type !== "illustration" &&
               previewNode.data.type !== "choice" &&
               previewNode.data.type !== "minigame" &&
               previewNode.data.type !== "function" &&

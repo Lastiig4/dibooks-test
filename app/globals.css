@@ -111,3 +111,9 @@ body {
 .dibooks-alarm { animation:dibooks-alarm-pulse 3s ease-in-out infinite; }
 .dibooks-effects-shake [data-sfx-surface] { animation:dibooks-screen-shake .7s linear infinite; }
 @media (prefers-reduced-motion:reduce) { .dibooks-fog,.dibooks-alarm{display:none;} .dibooks-effects-shake [data-sfx-surface]{animation:none;} }
+@keyframes dibooks-illustration-drift {
+ from { transform: scale(1.015); }
+ to { transform: scale(1.075); }
+}
+.dibooks-illustration-motion { animation: dibooks-illustration-drift 40s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .dibooks-illustration-motion { animation: none; } }

@@ -44,7 +44,7 @@ export function checkStory(nodes: CheckNode[], edges: { source: string; target: 
       if (!route.target || !ids.has(route.target)) add(`${node.id}:route:${i}`, "error", `${route.label} heeft geen geldige bestemming.`, node.id);
     }
     graph.set(node.id, routes.flatMap(r => r.target && ids.has(r.target) ? [r.target] : []));
-    if (d.type === "image" && !d.imageUrl?.trim()) add(`${node.id}:image`, "error", "Deze afbeeldingsnode heeft geen afbeelding.", node.id);
+    if ((d.type === "image" || d.type === "illustration") && !d.imageUrl?.trim()) add(`${node.id}:image`, "error", "Deze afbeeldingsnode heeft geen afbeelding.", node.id);
     if (d.type === "cutscene" && !d.videoUrl?.trim() && !d.videoStoragePath?.trim()) add(`${node.id}:video`, "error", "Deze cutscene heeft geen video.", node.id);
   }
   if (startId && ids.has(startId)) {

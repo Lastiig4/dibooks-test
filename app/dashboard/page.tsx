@@ -274,7 +274,8 @@ function getMiniGameTarget(node: any, route: "success" | "fail") {
 function isCompletePublishNode(node: any) {
   const nodeType = getNodeType(node);
 
-  if (nodeType === "text" || nodeType === "special") {
+  if (nodeType === "illustration") return !!getNodeImageUrl(node).trim() && !!getNodeText(node).trim();
+  if (nodeType === "text" || nodeType === "special" || nodeType === "illustration") {
     return getNodeText(node).trim().length > 0;
   }
 
@@ -382,7 +383,7 @@ function validateBookBeforePublish(book: DashboardBook, user: ReturnType<typeof 
 
   const textNodes = nodes.filter((node: any) => {
     const type = getNodeType(node);
-    return type === "text" || type === "special";
+    return type === "text" || type === "special" || type === "illustration";
   });
 
   const filledTextNodes = textNodes.filter((node: any) => getNodeText(node).trim().length > 0);
