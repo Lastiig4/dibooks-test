@@ -115,5 +115,5 @@ body {
  from { transform: scale(1.015); }
  to { transform: scale(1.075); }
 }
-.dibooks-illustration-motion { animation: dibooks-illustration-drift 40s ease-in-out infinite alternate; }
+.dibooks-illustration-motion { animation: dibooks-illustration-drift 18s ease-in-out infinite alternate; }
 @media (prefers-reduced-motion: reduce) { .dibooks-illustration-motion { animation: none; } }
