@@ -7,6 +7,7 @@ import ReaderEffects from "@/components/ReaderEffects";
 import { readVisualEffects, activeVisualEffects, isEffectBoundary, type EffectNodeData } from "@/lib/visualEffects";
 import ScratchpadEditor from "@/components/ScratchpadEditor";
 import StoryCheckModal from "@/components/StoryCheckModal";
+import StudioGuideUpdates from "@/components/StudioGuideUpdates";
 import { checkStory } from "@/lib/storyCheck";
 import EditorMiniMapNode from "@/components/EditorMiniMapNode";
 import NodeSettingsModal from "@/components/NodeSettingsModal";
@@ -7599,6 +7600,7 @@ ${formatSaveError(error)}`);
             <div className="overflow-y-auto p-5 sm:p-7">
               {helpView === "overview" ? (
                 <div className="grid gap-5">
+                  <StudioGuideUpdates />
                   <section className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.055] p-5">
                     <div className="mb-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">
@@ -7696,7 +7698,7 @@ ${formatSaveError(error)}`);
                         <span className="text-sm text-neutral-300">
                           <strong className="text-white">Keuzemenu</strong>
                           <br />
-                          Laat de lezer kiezen uit maximaal drie verhaalroutes en kan variabelen aanpassen.
+                          Laat de lezer kiezen uit maximaal 99 verhaalroutes en kan variabelen aanpassen.
                         </span>
                       </div>
                     </div>
@@ -7849,7 +7851,7 @@ ${formatSaveError(error)}`);
                     </h3>
                     <p className="mx-auto mt-2 max-w-2xl text-sm font-semibold leading-6 text-neutral-400">
                       Hier leggen we niet alleen uit wat de knoppen zijn, maar ook hoe nodes,
-                      paths, keuzes, variabelen, Function en IF samen één interactief verhaal vormen.
+                      paths, keuzes, variabelen, illustraties en special effects samen één interactief verhaal vormen.
                     </p>
                     <button
                       type="button"
@@ -7937,7 +7939,7 @@ ${formatSaveError(error)}`);
                     </h3>
                     <div className="mt-4 grid gap-4 text-sm font-semibold leading-7 text-neutral-300">
                       <p>
-                        Een keuzemenu kan maximaal drie opties bevatten. Iedere optie krijgt zijn eigen doel-node.
+                        Een keuzemenu begint met drie opties en kan maximaal 99 opties bevatten. Iedere optie krijgt zijn eigen doel-node.
                         Daardoor kan één verhaalpunt zich opsplitsen in verschillende routes.
                       </p>
                       <p>
@@ -8114,6 +8116,8 @@ ${formatSaveError(error)}`);
                       </p>
                     </div>
                   </section>
+
+                  <StudioGuideUpdates full />
 
                   <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-6 text-center sm:p-8">
                     <p className="text-xs font-black uppercase tracking-[0.28em] text-neutral-500">
